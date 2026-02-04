@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(claude mcp list:*)",
+      "Bash(claude mcp remove:*)",
+      "Bash(claude mcp add -e GOOGLE_APPLICATION_CREDENTIALS=\"C:\\\\Users\\\\kkoki\\\\.claude\\\\project\\\\z-cms\\\\server\\\\credentials\\\\z-cms-486204-5d17d0bbb6af.json\" gsheets -- npx -y mcp-gsheets@latest)",
+      "Bash(claude mcp add -e \"GOOGLE_APPLICATION_CREDENTIALS=C:/Users/kkoki/.claude/project/z-cms/server/credentials/z-cms-486204-5d17d0bbb6af.json\" gsheets -- npx -y mcp-gsheets@latest)",
+      "Bash(claude mcp add-json:*)",
+      "WebSearch",
+      "Bash(node:*)",
+      "Bash(move analyze-sheets.js analyze-sheets.cjs)"
+    ]
+  }
+}
