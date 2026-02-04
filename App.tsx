@@ -37,6 +37,16 @@ import {
     DailyPerformanceMetric, BudgetItem, ExpenseSummary, StaffingSuggestion
 } from './types.ts';
 import { syncAllEcountData, DataAvailability } from './services/ecountService.ts';
+import {
+    syncGoogleSheetData,
+    GoogleSheetSyncResult,
+    DailySalesData,
+    SalesDetailData,
+    ProductionData,
+    PurchaseData,
+    UtilityData,
+    ChannelProfitItem
+} from './services/googleSheetService.ts';
 
 type ViewType = 'home' | 'profit' | 'waste' | 'inventory' | 'stocktake' | 'monthly' | 'settings' | 'order' | 'costreport' | 'costmgmt' | 'bomaudit' | 'priceimpact' | 'dailyperformance' | 'budgetexpense' | 'statorder';
 
@@ -56,6 +66,14 @@ const App = () => {
   const [bottomProfitItems, setBottomProfitItems] = useState<ProfitRankItem[]>([]);
   const [stocktakeAnomalies, setStocktakeAnomalies] = useState<StocktakeAnomalyItem[]>([]);
   const [orderSuggestions, setOrderSuggestions] = useState<OrderSuggestion[]>([]);
+
+  // Google Sheet Data State
+  const [gsDailySales, setGsDailySales] = useState<DailySalesData[]>([]);
+  const [gsSalesDetail, setGsSalesDetail] = useState<SalesDetailData[]>([]);
+  const [gsProduction, setGsProduction] = useState<ProductionData[]>([]);
+  const [gsPurchases, setGsPurchases] = useState<PurchaseData[]>([]);
+  const [gsUtilities, setGsUtilities] = useState<UtilityData[]>([]);
+  const [gsChannelProfit, setGsChannelProfit] = useState<ChannelProfitItem[]>([]);
 
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
@@ -82,11 +100,7 @@ const App = () => {
   // AI Sidebar State
   const [isAISidebarOpen, setIsAISidebarOpen] = useState(true);
 
-  useEffect(() => {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setIsDarkMode(true);
-    }
-  }, []);
+  // 기본값: 라이트 모드 고정 (시스템 다크모드 자동 감지 비활성화)
 
   useEffect(() => {
     if (isDarkMode) {
@@ -110,44 +124,91 @@ const App = () => {
       setIsModalOpen(true);
   };
 
-  // --- ECOUNT ERP Sync Logic ---
+  // --- ECOUNT ERP & Google Sheet Sync Logic ---
   const handleEcountSync = async () => {
       setIsSyncing(true);
       try {
-          const result = await syncAllEcountData();
+          // ECOUNT 데이터와 Google Sheet 데이터를 병렬로 가져오기
+          const [ecountResult, gsResult] = await Promise.all([
+              syncAllEcountData().catch(e => {
+                  console.warn('ECOUNT sync failed:', e);
+                  return null;
+              }),
+              syncGoogleSheetData().catch(e => {
+                  console.warn('Google Sheet sync failed:', e);
+                  return null;
+              }),
+          ]);
 
-          setProfitData(result.profitTrend);
-          setTopProfitItems(result.topProfit);
-          setBottomProfitItems(result.bottomProfit);
+          // ECOUNT 데이터 적용 (재고)
+          if (ecountResult) {
+              setInventoryData(ecountResult.inventory);
+              setStocktakeAnomalies(ecountResult.anomalies);
+              setOrderSuggestions(ecountResult.suggestions);
+              setBomItems(ecountResult.bomItems);
+              setDataAvailability(ecountResult.dataAvailability);
+          }
 
-          setInventoryData(result.inventory);
-          setStocktakeAnomalies(result.anomalies);
-          setOrderSuggestions(result.suggestions);
+          // Google Sheet 데이터 적용 (매출, 생산, 구매 등)
+          if (gsResult) {
+              setGsDailySales(gsResult.dailySales);
+              setGsSalesDetail(gsResult.salesDetail);
+              setGsProduction(gsResult.production);
+              setGsPurchases(gsResult.purchases);
+              setGsUtilities(gsResult.utilities);
+              setGsChannelProfit(gsResult.profitTrend);
 
-          setBomItems(result.bomItems);
-          setWasteTrendData(result.wasteTrend);
+              // 매출/수익 데이터는 Google Sheet 기준으로 설정
+              setProfitData(gsResult.profitTrend.map(p => ({
+                  date: p.date,
+                  revenue: p.revenue,
+                  profit: p.profit,
+                  marginRate: p.marginRate
+              })));
+              setTopProfitItems(gsResult.topProfit);
+              setBottomProfitItems(gsResult.bottomProfit);
 
-          setLastSyncTime(result.lastSynced);
-          setDataAvailability(result.dataAvailability);
-          setSyncMessage(result.message || '');
+              // 폐기율 트렌드 - Google Sheet 생산 데이터에서 가져오기
+              const wasteTrend = gsResult.production.slice(0, 30).map(p => ({
+                  day: p.date.replace(/-/g, '/').slice(5), // MM/DD 형식
+                  avg: 2.5,
+                  actual: p.wasteFinishedPct || 0,
+              }));
+              setWasteTrendData(wasteTrend);
+          }
 
-          // Recalculate Summary from Real Data
-          const totalRev = result.profitTrend.reduce((sum, item) => sum + item.revenue, 0);
-          const totalProfit = result.profitTrend.reduce((sum, item) => sum + item.profit, 0);
-          const avgMargin = totalRev > 0 ? (totalProfit / totalRev) * 100 : 0;
+          // 동기화 시간 및 메시지 설정
+          const now = new Date().toLocaleTimeString();
+          setLastSyncTime(now);
 
-          setDashboardSummary(prev => ({
-              ...prev,
-              totalRevenue: totalRev,
-              avgMargin: parseFloat(avgMargin.toFixed(1)),
-              riskItems: result.inventory.filter(i => i.status !== 'Normal').length,
-              anomalyCount: result.anomalies.length
-          }));
+          const messages = [];
+          if (ecountResult?.inventory?.length > 0) messages.push(`재고 ${ecountResult.inventory.length}건`);
+          if (gsResult?.counts) {
+              if (gsResult.counts.dailySales > 0) messages.push(`매출 ${gsResult.counts.dailySales}건`);
+              if (gsResult.counts.salesDetail > 0) messages.push(`판매상세 ${gsResult.counts.salesDetail}건`);
+              if (gsResult.counts.production > 0) messages.push(`생산 ${gsResult.counts.production}건`);
+              if (gsResult.counts.purchases > 0) messages.push(`구매 ${gsResult.counts.purchases}건`);
+          }
+          setSyncMessage(messages.length > 0 ? messages.join(', ') + ' 연동됨' : '');
+
+          // 대시보드 요약 계산 - Google Sheet 데이터 기준
+          if (gsResult && gsResult.profitTrend.length > 0) {
+              const totalRev = gsResult.profitTrend.reduce((sum, item) => sum + item.revenue, 0);
+              const totalProfit = gsResult.profitTrend.reduce((sum, item) => sum + item.profit, 0);
+              const avgMargin = totalRev > 0 ? (totalProfit / totalRev) * 100 : 0;
+
+              setDashboardSummary(prev => ({
+                  ...prev,
+                  totalRevenue: totalRev,
+                  avgMargin: parseFloat(avgMargin.toFixed(1)),
+                  riskItems: ecountResult?.inventory?.filter(i => i.status !== 'Normal').length || 0,
+                  anomalyCount: ecountResult?.anomalies?.length || 0
+              }));
+          }
 
       } catch (e) {
           console.error(e);
-          // Don't alert on initial auto-load to avoid annoying popups if API is down
-          if (initialLoadDone) alert("동기화 실패: ECOUNT API 연결을 확인하세요.");
+          if (initialLoadDone) alert("동기화 실패: 백엔드 서버 연결을 확인하세요.");
       } finally {
           setIsSyncing(false);
           setInitialLoadDone(true);
@@ -406,7 +467,7 @@ const App = () => {
             <div className="space-y-4">
                 <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-md mb-4 border border-indigo-100 dark:border-indigo-800">
                     <h4 className="font-bold text-indigo-800 dark:text-indigo-200">실사 이력 분석: {selectedItem.materialName}</h4>
-                    <p className="text-xs text-indigo-600 dark:text-indigo-300">최근 3회 연속 전산 재고가 실사 재고보다 높게 나타나는 'Loss' 패턴입니다.</p>
+                    <p className="text-xs text-indigo-600 dark:text-indigo-300">최근 3회 연속 전산 재고가 실사 재고보다 높게 나타나는 &apos;Loss&apos; 패턴입니다.</p>
                 </div>
                 <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">

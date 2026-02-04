@@ -423,7 +423,7 @@ const StatisticalOrderingView: React.FC = () => {
                         <div className="text-center py-10 text-gray-500">
                             <span className="material-icons-outlined text-4xl mb-2">calendar_today</span>
                             <p>식단 계획 데이터가 없습니다.</p>
-                            <p className="text-sm mt-1">Google Sheets의 '식단_히스토리' 시트를 확인해주세요.</p>
+                            <p className="text-sm mt-1">Google Sheets의 &apos;식단_히스토리&apos; 시트를 확인해주세요.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

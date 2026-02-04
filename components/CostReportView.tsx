@@ -123,10 +123,6 @@ export const CostReportView: React.FC<Props> = () => {
   // 로컬 목표 상태 (저장 문제 해결)
   const [localTargets, setLocalTargets] = useState<Record<string, Partial<CostTarget>>>({});
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     setIsLoading(true);
     setError(null);
@@ -160,6 +156,10 @@ export const CostReportView: React.FC<Props> = () => {
     setSummaryData(data);
     setIsLoading(false);
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   // 목표 저장 (로컬 상태 업데이트)
   const handleTargetSave = useCallback((month: string, target: Partial<CostTarget>) => {

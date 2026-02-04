@@ -54,10 +54,6 @@ export const CostManagementDashboard: React.FC = () => {
   const [costSummary, setCostSummary] = useState<CostAnalysisSummary | null>(null);
   const [insights, setInsights] = useState<AgentInsight[]>([]);
 
-  useEffect(() => {
-    loadAllData();
-  }, []);
-
   const loadAllData = async () => {
     setIsLoading(true);
 
@@ -89,6 +85,10 @@ export const CostManagementDashboard: React.FC = () => {
 
     setIsLoading(false);
   };
+
+  useEffect(() => {
+    loadAllData();
+  }, []);
 
   // Generate mock data if no ECOUNT data available
   const getMockSummary = (): CostAnalysisSummary => ({

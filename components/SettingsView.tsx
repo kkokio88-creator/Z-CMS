@@ -473,7 +473,7 @@ export const SettingsView: React.FC = () => {
                                 Google Sheets 사용 시 필수 권한 설정
                             </p>
                             <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                                아래 서비스 계정에 스프레드시트 <strong>"편집자"</strong> 권한을 공유해야 합니다:
+                                아래 서비스 계정에 스프레드시트 <strong>&quot;편집자&quot;</strong> 권한을 공유해야 합니다:
                             </p>
                             <div className="mt-2 flex items-center gap-2">
                                 <code className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded text-xs font-mono text-yellow-900 dark:text-yellow-100">

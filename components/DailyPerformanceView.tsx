@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, RadialBarChart, RadialBar, Legend,
-    ComposedChart, Bar, ReferenceLine
+    ComposedChart, Bar, ReferenceLine, Cell
 } from 'recharts';
 import { DailyPerformanceMetric, PerformanceStatus, StaffingSuggestion } from '../types';
 
@@ -410,7 +410,7 @@ const DailyPerformanceView: React.FC<Props> = ({
                                         <ReferenceLine y={100} stroke="#9CA3AF" strokeDasharray="5 5" label="목표" />
                                         <Bar dataKey="efficiency" name="효율" radius={[4, 4, 0, 0]}>
                                             {efficiencyBarData.map((entry, index) => (
-                                                <cell key={index} fill={getStatusColor(entry.status)} />
+                                                <Cell key={index} fill={getStatusColor(entry.status)} />
                                             ))}
                                         </Bar>
                                     </ComposedChart>
