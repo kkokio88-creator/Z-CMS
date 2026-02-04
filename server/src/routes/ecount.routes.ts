@@ -88,19 +88,22 @@ router.post('/sync', async (req: Request, res: Response) => {
 
 // Transform ECOUNT raw data to frontend format
 function transformEcountData(data: any) {
-  // Transform inventory data
-  const inventory = data.inventory.map((item: any, idx: number) => ({
+  // Transform inventory data - use inventoryByLocation if inventory is empty
+  const inventorySource = data.inventory.length > 0 ? data.inventory : (data.inventoryByLocation || []);
+  const inventory = inventorySource.map((item: any, idx: number) => ({
     id: item.PROD_CD || `inv-${idx}`,
     skuName: item.PROD_DES || item.PROD_CD || `품목 ${idx + 1}`,
-    currentStock: parseFloat(item.QTY || item.BALANCE_QTY || 0),
+    currentStock: parseFloat(item.BAL_QTY || item.QTY || item.BALANCE_QTY || 0),
     safetyStock: parseFloat(item.SAFE_QTY || 100), // Default safety stock if not provided
     status: determineStockStatus(
-      parseFloat(item.QTY || item.BALANCE_QTY || 0),
+      parseFloat(item.BAL_QTY || item.QTY || item.BALANCE_QTY || 0),
       parseFloat(item.SAFE_QTY || 100)
     ),
     turnoverRate: 0, // Calculate if data available
     warehouse: item.WH_CD || 'Main',
+    warehouseName: item.WH_DES || '',
     category: item.CLASS_CD || '일반',
+    sizeDesc: item.PROD_SIZE_DES || '',
   }));
 
   // Transform sales data to profit trend
