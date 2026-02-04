@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { agentRoutes } from './routes/agent.routes.js';
 import { ecountRoutes } from './routes/ecount.routes.js';
+import { googleSheetRoutes } from './routes/googlesheet.routes.js';
 import { sseRoutes } from './routes/sse.routes.js';
 import { feedbackRoutes } from './routes/feedback.routes.js';
 import { costReportRoutes } from './routes/costReport.routes.js';
@@ -41,10 +42,12 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'],
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // Initialize shared services
@@ -56,7 +59,7 @@ const learningRegistry = new LearningRegistry();
 const wipManager = new WipManager('./wip');
 const debateManager = new DebateManager(wipManager, {
   maxActiveDebates: 10,
-  maxHistorySize: 100
+  maxHistorySize: 100,
 });
 
 // Initialize WIP folder
@@ -71,12 +74,12 @@ const bomWasteAgent = new BomWasteAgent(eventBus, stateManager, learningRegistry
 const inventoryAgent = new InventoryAgent(eventBus, stateManager, learningRegistry);
 const profitabilityAgent = new ProfitabilityAgent(eventBus, stateManager, learningRegistry);
 const costManagementAgent = new CostManagementAgent(eventBus, stateManager, learningRegistry);
-const coordinatorAgent = new CoordinatorAgent(
-  eventBus,
-  stateManager,
-  learningRegistry,
-  [bomWasteAgent, inventoryAgent, profitabilityAgent, costManagementAgent]
-);
+const coordinatorAgent = new CoordinatorAgent(eventBus, stateManager, learningRegistry, [
+  bomWasteAgent,
+  inventoryAgent,
+  profitabilityAgent,
+  costManagementAgent,
+]);
 
 // Start legacy agents
 bomWasteAgent.start();
@@ -130,17 +133,17 @@ chiefOrchestrator.registerDomainTeams({
   bomWaste: bomWasteTeam,
   inventory: inventoryTeam,
   profitability: profitabilityTeam,
-  cost: costTeam
+  cost: costTeam,
 });
 chiefOrchestrator.registerGovernanceAgents({
   qaSpecialist,
-  complianceAuditor
+  complianceAuditor,
 });
 chiefOrchestrator.registerLegacyAgents([
   bomWasteAgent,
   inventoryAgent,
   profitabilityAgent,
-  costManagementAgent
+  costManagementAgent,
 ]);
 
 // Start Chief Orchestrator
@@ -156,10 +159,10 @@ app.locals.debateManager = debateManager;
 app.locals.agents = {
   // 레거시 에이전트
   'bom-waste': bomWasteAgent,
-  'inventory': inventoryAgent,
-  'profitability': profitabilityAgent,
+  inventory: inventoryAgent,
+  profitability: profitabilityAgent,
   'cost-management': costManagementAgent,
-  'coordinator': coordinatorAgent,
+  coordinator: coordinatorAgent,
   // 새 에이전트
   'chief-orchestrator': chiefOrchestrator,
   'qa-specialist': qaSpecialist,
@@ -169,6 +172,7 @@ app.locals.agents = {
 // Routes
 app.use('/api/agents', agentRoutes);
 app.use('/api/ecount', ecountRoutes);
+app.use('/api/googlesheet', googleSheetRoutes);
 app.use('/api/stream', sseRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/cost-report', costReportRoutes);
@@ -178,7 +182,10 @@ app.use('/api/sheets', sheetsRoutes);
 
 // 새 라우트: 토론 및 거버넌스
 app.use('/api/debates', createDebateRoutes(debateManager, wipManager, chiefOrchestrator));
-app.use('/api/governance', createGovernanceRoutes(debateManager, eventBus, qaSpecialist, complianceAuditor));
+app.use(
+  '/api/governance',
+  createGovernanceRoutes(debateManager, eventBus, qaSpecialist, complianceAuditor)
+);
 
 // Google Sheets 연결 테스트
 app.get('/api/sheets/test', async (_req, res) => {
@@ -188,7 +195,7 @@ app.get('/api/sheets/test', async (_req, res) => {
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -204,13 +211,13 @@ app.get('/api/sheets/cost-data', async (_req, res) => {
         salesCount: data.sales.length,
         purchaseCount: data.purchases.length,
         bomCount: data.bom.length,
-        fetchedAt: data.fetchedAt
-      }
+        fetchedAt: data.fetchedAt,
+      },
     });
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -225,24 +232,26 @@ app.post('/api/cost-analysis/convene', async (req, res) => {
     // 2. 데이터 요약 생성
     const dataSummary = {
       period: {
-        sales: costData.sales.length > 0
-          ? `${costData.sales[0]?.date || 'N/A'} ~ ${costData.sales[costData.sales.length - 1]?.date || 'N/A'}`
-          : '데이터 없음',
-        purchases: costData.purchases.length > 0
-          ? `${costData.purchases[0]?.date || 'N/A'} ~ ${costData.purchases[costData.purchases.length - 1]?.date || 'N/A'}`
-          : '데이터 없음'
+        sales:
+          costData.sales.length > 0
+            ? `${costData.sales[0]?.date || 'N/A'} ~ ${costData.sales[costData.sales.length - 1]?.date || 'N/A'}`
+            : '데이터 없음',
+        purchases:
+          costData.purchases.length > 0
+            ? `${costData.purchases[0]?.date || 'N/A'} ~ ${costData.purchases[costData.purchases.length - 1]?.date || 'N/A'}`
+            : '데이터 없음',
       },
       counts: {
         sales: costData.sales.length,
         purchases: costData.purchases.length,
-        bomItems: costData.bom.length
+        bomItems: costData.bom.length,
       },
       // 주요 품목 요약
       topItems: {
         sales: [...new Set(costData.sales.map(s => s.itemName))].slice(0, 10),
         purchases: [...new Set(costData.purchases.map(p => p.itemName))].slice(0, 10),
-        bom: costData.bom.map(b => b.parentItemName).slice(0, 10)
-      }
+        bom: costData.bom.map(b => b.parentItemName).slice(0, 10),
+      },
     };
 
     console.log('[CostAnalysis] 데이터 요약:', JSON.stringify(dataSummary, null, 2));
@@ -256,9 +265,9 @@ app.post('/api/cost-analysis/convene', async (req, res) => {
         dataSummary,
         rawDataAvailable: true,
         analysisType: 'comprehensive-cost-review',
-        fetchedAt: costData.fetchedAt
+        fetchedAt: costData.fetchedAt,
       },
-      priority: 'high'
+      priority: 'high',
     });
 
     // 4. BOM 팀 토론도 시작 (원가와 연관)
@@ -268,9 +277,9 @@ app.post('/api/cost-analysis/convene', async (req, res) => {
       contextData: {
         bomItems: dataSummary.topItems.bom,
         bomCount: dataSummary.counts.bomItems,
-        purchaseItems: dataSummary.topItems.purchases
+        purchaseItems: dataSummary.topItems.purchases,
       },
-      priority: 'high'
+      priority: 'high',
     });
 
     res.json({
@@ -279,14 +288,14 @@ app.post('/api/cost-analysis/convene', async (req, res) => {
       dataSummary,
       debates: {
         costDebateId: debateId,
-        bomDebateId: bomDebateId
-      }
+        bomDebateId: bomDebateId,
+      },
     });
   } catch (error: any) {
     console.error('[CostAnalysis] 오류:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -305,20 +314,20 @@ app.post('/api/dashboard-planning/convene', async (req, res) => {
         fields: costData.sales.length > 0 ? Object.keys(costData.sales[0]) : [],
         sampleItems: costData.sales.slice(0, 5).map(s => s.itemName),
         uniqueItems: [...new Set(costData.sales.map(s => s.itemName))].length,
-        totalAmount: costData.sales.reduce((sum, s) => sum + s.amount, 0)
+        totalAmount: costData.sales.reduce((sum, s) => sum + s.amount, 0),
       },
       purchases: {
         count: costData.purchases.length,
         fields: costData.purchases.length > 0 ? Object.keys(costData.purchases[0]) : [],
         sampleItems: costData.purchases.slice(0, 5).map(p => p.itemName),
         uniqueItems: [...new Set(costData.purchases.map(p => p.itemName))].length,
-        totalAmount: costData.purchases.reduce((sum, p) => sum + p.amount, 0)
+        totalAmount: costData.purchases.reduce((sum, p) => sum + p.amount, 0),
       },
       bom: {
         count: costData.bom.length,
         fields: costData.bom.length > 0 ? Object.keys(costData.bom[0]) : [],
-        sampleParents: [...new Set(costData.bom.map(b => b.parentItemName))].slice(0, 5)
-      }
+        sampleParents: [...new Set(costData.bom.map(b => b.parentItemName))].slice(0, 5),
+      },
     };
 
     // 3. 분석 가능한 지표 정의
@@ -327,18 +336,14 @@ app.post('/api/dashboard-planning/convene', async (req, res) => {
         '품목별 매입단가 추이 분석',
         '판매금액 대비 원가율 계산',
         'BOM 기반 제품별 원가 산출',
-        '공급업체별 매입 비교'
+        '공급업체별 매입 비교',
       ],
       profitAnalysis: [
         '품목별 마진율 분석',
         '고마진/저마진 품목 식별',
-        '판매량 vs 수익성 매트릭스'
+        '판매량 vs 수익성 매트릭스',
       ],
-      efficiencyAnalysis: [
-        'BOM 효율성 분석',
-        '원자재 사용량 최적화',
-        '대체 원자재 비용 비교'
-      ]
+      efficiencyAnalysis: ['BOM 효율성 분석', '원자재 사용량 최적화', '대체 원자재 비용 비교'],
     };
 
     console.log('[DashboardPlanning] 데이터 구조:', JSON.stringify(dataStructure, null, 2));
@@ -351,15 +356,16 @@ app.post('/api/dashboard-planning/convene', async (req, res) => {
       contextData: {
         dataStructure,
         analysisOpportunities,
-        userGoal: '사용자가 직관적으로 원가 현황을 파악하고 원가 절감 활동을 수행할 수 있는 대시보드 설계',
+        userGoal:
+          '사용자가 직관적으로 원가 현황을 파악하고 원가 절감 활동을 수행할 수 있는 대시보드 설계',
         requirements: [
           '실시간 원가 현황 모니터링',
           '품목별/기간별 원가 추이 시각화',
           '원가 절감 기회 자동 식별',
-          '실행 가능한 권고사항 제시'
-        ]
+          '실행 가능한 권고사항 제시',
+        ],
       },
-      priority: 'critical'
+      priority: 'critical',
     });
 
     // 5. BOM 팀 토론 - BOM 기반 분석
@@ -368,13 +374,9 @@ app.post('/api/dashboard-planning/convene', async (req, res) => {
       topic: 'BOM 기반 원가 분석 대시보드 설계',
       contextData: {
         bomStructure: dataStructure.bom,
-        analysisGoals: [
-          'BOM 구조 시각화',
-          '원자재 비용 영향도 분석',
-          '대체 원자재 시뮬레이션'
-        ]
+        analysisGoals: ['BOM 구조 시각화', '원자재 비용 영향도 분석', '대체 원자재 시뮬레이션'],
       },
-      priority: 'high'
+      priority: 'high',
     });
 
     // 6. 수익성 팀 토론 - 마진 분석
@@ -384,13 +386,9 @@ app.post('/api/dashboard-planning/convene', async (req, res) => {
       contextData: {
         salesData: dataStructure.sales,
         purchaseData: dataStructure.purchases,
-        analysisGoals: [
-          '품목별 마진율 시각화',
-          '수익성 기반 품목 분류',
-          '가격 조정 시뮬레이션'
-        ]
+        analysisGoals: ['품목별 마진율 시각화', '수익성 기반 품목 분류', '가격 조정 시뮬레이션'],
       },
-      priority: 'high'
+      priority: 'high',
     });
 
     res.json({
@@ -401,14 +399,14 @@ app.post('/api/dashboard-planning/convene', async (req, res) => {
       debates: {
         costDebateId,
         bomDebateId,
-        profitDebateId
-      }
+        profitDebateId,
+      },
     });
   } catch (error: any) {
     console.error('[DashboardPlanning] 오류:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -445,7 +443,9 @@ app.get('/api/health', (_req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Z-CMS Agent Server running on port ${PORT}`);
   console.log(`📡 SSE endpoint: http://localhost:${PORT}/api/stream`);
-  console.log(`🤖 레거시 에이전트: Coordinator, BOM/Waste, Inventory, Profitability, CostManagement`);
+  console.log(
+    `🤖 레거시 에이전트: Coordinator, BOM/Waste, Inventory, Profitability, CostManagement`
+  );
   console.log(`🎯 Trio 팀 (정-반-합): BOM/Waste, Inventory, Profitability, Cost (12 에이전트)`);
   console.log(`🛡️ 거버넌스: QA Specialist, Compliance Auditor`);
   console.log(`👑 Chief Orchestrator: 활성화됨`);

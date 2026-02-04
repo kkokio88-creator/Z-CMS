@@ -26,12 +26,14 @@ npm run preview      # Preview production build
 ## Architecture
 
 ### State Management
+
 - App.tsx serves as the root component managing global state via React hooks
 - No routing library - view switching handled via `currentView` state in App.tsx
 - Date range filtering (7days, 30days, month) affects all relevant data views
 - ECOUNT config persisted in localStorage, session ID kept in memory
 
 ### Data Flow
+
 1. `syncAllEcountData()` in App.tsx fetches all data on mount
 2. `ecountService.ts` handles API calls with automatic session management
 3. Raw ECOUNT responses transformed to typed interfaces
@@ -39,12 +41,14 @@ npm run preview      # Preview production build
 5. Mock data fallback (in constants.ts) when API unavailable
 
 ### ECOUNT API Integration (services/ecountService.ts)
+
 - `callEcountApi()` wrapper with automatic re-login on session expiry (error code "999")
 - Parallel API calls for efficiency using Promise.all
 - Endpoints: `/Login`, `/Sale/GetList`, `/Purchase/GetList`, `/Inventory/GetBalance`, `/Production/GetList`, `/BOM/GetList`
 - Config stored in localStorage as `ECOUNT_CONFIG` with zone (default: "CD")
 
 ### View Components (components/)
+
 - `DashboardHomeView.tsx` - Summary KPIs and trends
 - `ChannelProfitView.tsx` - Daily profit analysis with CSV export
 - `WasteBomView.tsx` - Waste tracking and BOM difference analysis with AI reasoning
@@ -55,6 +59,7 @@ npm run preview      # Preview production build
 - `SettingsView.tsx` - ECOUNT API configuration
 
 ### Type Definitions (types.ts)
+
 Core entities: `ChannelProfitData`, `BomDiffItem`, `InventorySafetyItem`, `StocktakeAnomalyItem`, `ProfitRankItem`, `WasteTrendData`, `OrderSuggestion`, `Notification`
 
 ECOUNT raw types: `EcountSaleRaw`, `EcountInventoryRaw`, `EcountProductionRaw`, `EcountBomRaw`, `EcountPurchaseRaw`

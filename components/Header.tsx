@@ -1,23 +1,23 @@
 import React from 'react';
 
 interface HeaderProps {
-    toggleDarkMode: () => void;
-    isDarkMode: boolean;
-    dateRange: string;
-    setDateRange: (range: string) => void;
-    onNotificationClick: () => void;
-    hasUnreadNotifications: boolean;
-    onExport: () => void; // New Prop
+  toggleDarkMode: () => void;
+  isDarkMode: boolean;
+  dateRange: string;
+  setDateRange: (range: string) => void;
+  onNotificationClick: () => void;
+  hasUnreadNotifications: boolean;
+  onExport: () => void; // New Prop
 }
 
-export const Header: React.FC<HeaderProps> = ({ 
-    toggleDarkMode, 
-    isDarkMode, 
-    dateRange, 
-    setDateRange, 
-    onNotificationClick,
-    hasUnreadNotifications,
-    onExport
+export const Header: React.FC<HeaderProps> = ({
+  toggleDarkMode,
+  isDarkMode,
+  dateRange,
+  setDateRange,
+  onNotificationClick,
+  hasUnreadNotifications,
+  onExport,
 }) => {
   return (
     <header className="bg-surface-light dark:bg-surface-dark border-b border-gray-200 dark:border-gray-700 h-16 flex items-center justify-between px-6 shrink-0 z-10 transition-colors duration-200">
@@ -25,22 +25,26 @@ export const Header: React.FC<HeaderProps> = ({
         <button className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400">
           <span className="material-icons-outlined">menu</span>
         </button>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white hidden md:block">폐기 및 BOM 차이 분석</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white hidden md:block">
+          폐기 및 BOM 차이 분석
+        </h1>
       </div>
 
       <div className="flex items-center space-x-4">
         {/* Global Date Filter */}
         <div className="flex items-center bg-gray-50 dark:bg-gray-700 rounded-md px-3 py-1.5 border border-gray-200 dark:border-gray-600">
-            <span className="material-icons-outlined text-gray-500 dark:text-gray-300 text-sm mr-2">calendar_today</span>
-            <select 
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                className="bg-transparent text-sm text-gray-700 dark:text-gray-200 focus:outline-none border-none p-0 cursor-pointer"
-            >
-                <option value="7days">최근 7일</option>
-                <option value="30days">최근 30일</option>
-                <option value="month">이번 달</option>
-            </select>
+          <span className="material-icons-outlined text-gray-500 dark:text-gray-300 text-sm mr-2">
+            calendar_today
+          </span>
+          <select
+            value={dateRange}
+            onChange={e => setDateRange(e.target.value)}
+            className="bg-transparent text-sm text-gray-700 dark:text-gray-200 focus:outline-none border-none p-0 cursor-pointer"
+          >
+            <option value="7days">최근 7일</option>
+            <option value="30days">최근 30일</option>
+            <option value="month">이번 달</option>
+          </select>
         </div>
 
         <div className="relative hidden sm:block">
@@ -54,18 +58,16 @@ export const Header: React.FC<HeaderProps> = ({
           />
         </div>
 
-        <button 
-            onClick={toggleDarkMode}
-            className="p-1 rounded-full text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none"
+        <button
+          onClick={toggleDarkMode}
+          className="p-1 rounded-full text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none"
         >
-            <span className="material-icons-outlined">
-                {isDarkMode ? 'light_mode' : 'dark_mode'}
-            </span>
+          <span className="material-icons-outlined">{isDarkMode ? 'light_mode' : 'dark_mode'}</span>
         </button>
 
-        <button 
-            onClick={onNotificationClick}
-            className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary relative"
+        <button
+          onClick={onNotificationClick}
+          className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary relative"
         >
           <span className="material-icons-outlined">notifications</span>
           {hasUnreadNotifications && (
@@ -73,9 +75,9 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
-        <button 
-            onClick={onExport}
-            className="bg-primary hover:bg-primary-hover text-white text-sm px-4 py-2 rounded shadow-sm flex items-center transition-colors active:transform active:scale-95"
+        <button
+          onClick={onExport}
+          className="bg-primary hover:bg-primary-hover text-white text-sm px-4 py-2 rounded shadow-sm flex items-center transition-colors active:transform active:scale-95"
         >
           <span className="material-icons-outlined text-sm mr-2">download</span>
           내보내기

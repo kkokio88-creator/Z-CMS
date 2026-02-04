@@ -15,7 +15,9 @@ router.get('/', (req: Request, res: Response) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   // Send initial connection message
-  res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`);
+  res.write(
+    `data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`
+  );
 
   // Subscribe to all agent messages
   const unsubscribe = eventBus.subscribeAll((message: AgentMessage) => {
@@ -36,7 +38,9 @@ router.get('/', (req: Request, res: Response) => {
 
   // Send heartbeat every 30 seconds
   const heartbeat = setInterval(() => {
-    res.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+    res.write(
+      `event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`
+    );
   }, 30000);
 
   // Cleanup on client disconnect

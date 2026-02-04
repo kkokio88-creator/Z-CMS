@@ -80,7 +80,7 @@ export function createBomWasteTeam(
       optimist.injectDependencies(debateManager, geminiAdapter);
       pessimist.injectDependencies(debateManager, geminiAdapter);
       mediator.injectDependencies(debateManager, geminiAdapter);
-    }
+    },
   };
 }
 

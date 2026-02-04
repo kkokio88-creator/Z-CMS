@@ -27,7 +27,7 @@ export function createGovernanceRoutes(
 
       // 히스토리에서 거버넌스 검토 수집
       const history = debateManager.getDebateHistory({
-        limit: parseInt(limit as string) * 2 // 검토가 있는 것만 필터링하므로 더 많이 조회
+        limit: parseInt(limit as string) * 2, // 검토가 있는 것만 필터링하므로 더 많이 조회
       });
 
       let reviews: unknown[] = [];
@@ -43,7 +43,7 @@ export function createGovernanceRoutes(
               ...review,
               debateTopic: debate.topic,
               debateDomain: debate.domain,
-              debateTeam: debate.team
+              debateTeam: debate.team,
             });
           }
         }
@@ -58,14 +58,14 @@ export function createGovernanceRoutes(
         success: true,
         data: reviews,
         meta: {
-          total: reviews.length
-        }
+          total: reviews.length,
+        },
       });
     } catch (error) {
       console.error('[GovernanceRoutes] 검토 목록 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -102,19 +102,19 @@ export function createGovernanceRoutes(
           totalReviews,
           approvedCount,
           rejectedCount: totalReviews - approvedCount,
-          approvalRate: totalReviews > 0 ? (approvedCount / totalReviews * 100).toFixed(1) : 0,
+          approvalRate: totalReviews > 0 ? ((approvedCount / totalReviews) * 100).toFixed(1) : 0,
           averageScore: totalReviews > 0 ? (totalScore / totalReviews).toFixed(1) : 0,
           byReviewer: {
             'qa-specialist': qaReviews,
-            'compliance-auditor': complianceReviews
-          }
-        }
+            'compliance-auditor': complianceReviews,
+          },
+        },
       });
     } catch (error) {
       console.error('[GovernanceRoutes] 통계 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -130,7 +130,7 @@ export function createGovernanceRoutes(
       if (!debateId) {
         return res.status(400).json({
           success: false,
-          error: 'debateId는 필수입니다.'
+          error: 'debateId는 필수입니다.',
         });
       }
 
@@ -144,7 +144,7 @@ export function createGovernanceRoutes(
       if (!debate) {
         return res.status(404).json({
           success: false,
-          error: '토론을 찾을 수 없습니다.'
+          error: '토론을 찾을 수 없습니다.',
         });
       }
 
@@ -153,20 +153,30 @@ export function createGovernanceRoutes(
 
       // 검토 요청 전송
       if (reviewers.includes('qa')) {
-        sender.send('qa-specialist', 'GOVERNANCE_REVIEW_REQUEST', {
-          debateId,
-          debate,
-          reason
-        }, 'high');
+        sender.send(
+          'qa-specialist',
+          'GOVERNANCE_REVIEW_REQUEST',
+          {
+            debateId,
+            debate,
+            reason,
+          },
+          'high'
+        );
         requests.push('qa-specialist');
       }
 
       if (reviewers.includes('compliance')) {
-        sender.send('compliance-auditor', 'GOVERNANCE_REVIEW_REQUEST', {
-          debateId,
-          debate,
-          reason
-        }, 'high');
+        sender.send(
+          'compliance-auditor',
+          'GOVERNANCE_REVIEW_REQUEST',
+          {
+            debateId,
+            debate,
+            reason,
+          },
+          'high'
+        );
         requests.push('compliance-auditor');
       }
 
@@ -175,14 +185,14 @@ export function createGovernanceRoutes(
         data: {
           debateId,
           requestedReviewers: requests,
-          message: '거버넌스 검토가 요청되었습니다.'
-        }
+          message: '거버넌스 검토가 요청되었습니다.',
+        },
       });
     } catch (error) {
       console.error('[GovernanceRoutes] 에스컬레이션 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -200,14 +210,14 @@ export function createGovernanceRoutes(
         success: true,
         data: {
           ...status,
-          capabilities
-        }
+          capabilities,
+        },
       });
     } catch (error) {
       console.error('[GovernanceRoutes] QA 상태 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -232,15 +242,15 @@ export function createGovernanceRoutes(
             id: r.id,
             name: r.name,
             category: r.category,
-            severity: r.severity
-          }))
-        }
+            severity: r.severity,
+          })),
+        },
       });
     } catch (error) {
       console.error('[GovernanceRoutes] 컴플라이언스 상태 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -256,7 +266,7 @@ export function createGovernanceRoutes(
       if (!id || !name || !description || !category || !severity) {
         return res.status(400).json({
           success: false,
-          error: 'id, name, description, category, severity는 필수입니다.'
+          error: 'id, name, description, category, severity는 필수입니다.',
         });
       }
 
@@ -267,7 +277,7 @@ export function createGovernanceRoutes(
         description,
         category,
         severity,
-        check: () => true // 기본 통과
+        check: () => true, // 기본 통과
       });
 
       res.status(201).json({
@@ -275,14 +285,14 @@ export function createGovernanceRoutes(
         data: {
           id,
           name,
-          message: '규칙이 추가되었습니다.'
-        }
+          message: '규칙이 추가되었습니다.',
+        },
       });
     } catch (error) {
       console.error('[GovernanceRoutes] 규칙 추가 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -298,7 +308,7 @@ export function createGovernanceRoutes(
       if (!debateId) {
         return res.status(400).json({
           success: false,
-          error: 'debateId는 필수입니다.'
+          error: 'debateId는 필수입니다.',
         });
       }
 
@@ -312,7 +322,7 @@ export function createGovernanceRoutes(
       if (!debate) {
         return res.status(404).json({
           success: false,
-          error: '토론을 찾을 수 없습니다.'
+          error: '토론을 찾을 수 없습니다.',
         });
       }
 
@@ -323,14 +333,14 @@ export function createGovernanceRoutes(
         success: true,
         data: {
           debateId,
-          review
-        }
+          review,
+        },
       });
     } catch (error) {
       console.error('[GovernanceRoutes] QA 검토 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -346,7 +356,7 @@ export function createGovernanceRoutes(
       if (!debateId) {
         return res.status(400).json({
           success: false,
-          error: 'debateId는 필수입니다.'
+          error: 'debateId는 필수입니다.',
         });
       }
 
@@ -360,7 +370,7 @@ export function createGovernanceRoutes(
       if (!debate) {
         return res.status(404).json({
           success: false,
-          error: '토론을 찾을 수 없습니다.'
+          error: '토론을 찾을 수 없습니다.',
         });
       }
 
@@ -371,14 +381,14 @@ export function createGovernanceRoutes(
         success: true,
         data: {
           debateId,
-          review
-        }
+          review,
+        },
       });
     } catch (error) {
       console.error('[GovernanceRoutes] 컴플라이언스 검토 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });

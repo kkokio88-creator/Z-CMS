@@ -11,7 +11,7 @@ import type {
   DebateRound,
   DebateContent,
   InsightDomain,
-  DomainTeam
+  DomainTeam,
 } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager } from '../../services/StateManager.js';
@@ -29,7 +29,7 @@ export class MediatorPersona extends TrioPersona {
     const config: TrioPersonaConfig = {
       role: 'mediator',
       team,
-      domain
+      domain,
     };
     super(id, config, eventBus, stateManager, learningRegistry);
   }
@@ -75,7 +75,7 @@ export class MediatorPersona extends TrioPersona {
     const verbosityGuide = {
       concise: '핵심 결론만 명확하게',
       normal: '균형 잡힌 분석과 함께',
-      detailed: '모든 관점을 종합하여 상세하게'
+      detailed: '모든 관점을 종합하여 상세하게',
     };
 
     let debateContext = '';
@@ -153,7 +153,7 @@ JSON만 반환하세요.`;
         reasoning: parsed.reasoning || '양측의 관점을 종합하여 최적의 결론을 도출했습니다.',
         evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
         confidence: this.getAdjustedConfidence(parsed.confidence || 78),
-        suggestedActions: parsed.suggestedActions || []
+        suggestedActions: parsed.suggestedActions || [],
       };
     } catch (error) {
       console.error(`[${this.id}] 응답 파싱 실패:`, error);
@@ -170,50 +170,53 @@ JSON만 반환하세요.`;
     thesis?: DebateRound,
     antithesis?: DebateRound
   ): DebateContent {
-    const domainSynthesis: Record<InsightDomain, {
-      position: string;
-      actions: string[];
-    }> = {
+    const domainSynthesis: Record<
+      InsightDomain,
+      {
+        position: string;
+        actions: string[];
+      }
+    > = {
       bom: {
         position: '원가 최적화와 품질 유지의 균형점을 찾아 단계적으로 개선을 추진해야 합니다.',
         actions: [
           '파일럿 테스트로 대체 원자재 검증',
           '리스크 완화 계획과 함께 점진적 도입',
-          '주간 모니터링 및 품질 지표 추적'
-        ]
+          '주간 모니터링 및 품질 지표 추적',
+        ],
       },
       waste: {
         position: '폐기물 감소 목표를 현실적으로 조정하고 단계별 실행 계획을 수립해야 합니다.',
         actions: [
           '현재 폐기물 발생 원인 정밀 분석',
           '비용 대비 효과가 큰 개선안부터 시행',
-          '월간 폐기율 추적 및 목표 조정'
-        ]
+          '월간 폐기율 추적 및 목표 조정',
+        ],
       },
       inventory: {
         position: '안전재고 수준을 데이터 기반으로 최적화하고 공급망 유연성을 확보해야 합니다.',
         actions: [
           '수요 예측 모델 정확도 개선',
           'ABC 분석 기반 차등적 재고 관리',
-          '비상 공급 루트 확보'
-        ]
+          '비상 공급 루트 확보',
+        ],
       },
       profitability: {
         position: '수익성 개선과 리스크 관리를 병행하는 균형 잡힌 전략이 필요합니다.',
         actions: [
           '고수익 채널 우선 강화',
           '가격 변경 시 시장 반응 모니터링',
-          '비용 구조 지속적 최적화'
-        ]
+          '비용 구조 지속적 최적화',
+        ],
       },
       general: {
         position: '기회를 포착하되 리스크를 관리하는 신중한 접근이 바람직합니다.',
         actions: [
           '우선순위 기반 단계적 실행',
           '주기적 성과 검토 및 조정',
-          '이해관계자 지속적 커뮤니케이션'
-        ]
-      }
+          '이해관계자 지속적 커뮤니케이션',
+        ],
+      },
     };
 
     const synthesis = domainSynthesis[this.domain];
@@ -222,9 +225,7 @@ JSON만 반환하세요.`;
     let synthesisConfidence = 78;
     if (thesis && antithesis) {
       synthesisConfidence = Math.round(
-        (thesis.content.confidence * 0.4) +
-        (antithesis.content.confidence * 0.4) +
-        20 // 중재자의 기본 신뢰도 보정
+        thesis.content.confidence * 0.4 + antithesis.content.confidence * 0.4 + 20 // 중재자의 기본 신뢰도 보정
       );
     }
 
@@ -233,7 +234,9 @@ JSON만 반환하세요.`;
       evidenceSummary.push(`낙관론 핵심: ${thesis.content.evidence[0] || thesis.content.position}`);
     }
     if (antithesis) {
-      evidenceSummary.push(`비관론 핵심: ${antithesis.content.evidence[0] || antithesis.content.position}`);
+      evidenceSummary.push(
+        `비관론 핵심: ${antithesis.content.evidence[0] || antithesis.content.position}`
+      );
     }
     evidenceSummary.push('양측 관점을 종합한 균형 잡힌 접근 권고');
 
@@ -242,7 +245,7 @@ JSON만 반환하세요.`;
       reasoning: `낙관론자의 기회 요소와 비관론자의 위험 요소를 모두 고려하여 분석했습니다. ${this.domain} 영역에서 실현 가능하고 리스크를 관리할 수 있는 최적의 방안을 도출했습니다.`,
       evidence: evidenceSummary,
       confidence: this.getAdjustedConfidence(synthesisConfidence),
-      suggestedActions: synthesis.actions
+      suggestedActions: synthesis.actions,
     };
   }
 
@@ -254,22 +257,16 @@ JSON만 반환하세요.`;
     content: DebateContent,
     debateId: string
   ): Promise<void> {
-    this.publishInsight(
-      this.domain,
-      `[토론 종합] ${topic}`,
-      content.position,
-      {
-        highlight: content.reasoning.slice(0, 100),
-        level: content.confidence >= 80 ? 'info' :
-               content.confidence >= 60 ? 'warning' : 'critical',
-        confidence: content.confidence / 100,
-        data: {
-          debateId,
-          synthesisDetails: content
-        },
-        actionable: true,
-        suggestedActions: content.suggestedActions
-      }
-    );
+    this.publishInsight(this.domain, `[토론 종합] ${topic}`, content.position, {
+      highlight: content.reasoning.slice(0, 100),
+      level: content.confidence >= 80 ? 'info' : content.confidence >= 60 ? 'warning' : 'critical',
+      confidence: content.confidence / 100,
+      data: {
+        debateId,
+        synthesisDetails: content,
+      },
+      actionable: true,
+      suggestedActions: content.suggestedActions,
+    });
   }
 }

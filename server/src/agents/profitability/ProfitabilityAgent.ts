@@ -1,23 +1,19 @@
 import { Agent } from '../base/Agent.js';
 import { geminiAdapter } from '../../adapters/GeminiAdapter.js';
-import type {
-  Task,
-  TaskResult,
-  CoachingMessage,
-} from '../../types/index.js';
+import type { Task, TaskResult, CoachingMessage } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
-import type { StateManager, ChannelProfitData, ProfitRankItem } from '../../services/StateManager.js';
+import type {
+  StateManager,
+  ChannelProfitData,
+  ProfitRankItem,
+} from '../../services/StateManager.js';
 import type { LearningRegistry } from '../../services/LearningRegistry.js';
 
 export class ProfitabilityAgent extends Agent {
   private marginThreshold = 15; // Alert when margin below 15%
   private trendSensitivity = 0.8;
 
-  constructor(
-    eventBus: EventBus,
-    stateManager: StateManager,
-    learningRegistry: LearningRegistry
-  ) {
+  constructor(eventBus: EventBus, stateManager: StateManager, learningRegistry: LearningRegistry) {
     super('profitability-agent', eventBus, stateManager, learningRegistry);
   }
 
@@ -77,10 +73,18 @@ export class ProfitabilityAgent extends Agent {
     }
 
     // Aggregate by channel
-    const channelStats = new Map<string, { revenue: number; cost: number; profit: number; count: number }>();
+    const channelStats = new Map<
+      string,
+      { revenue: number; cost: number; profit: number; count: number }
+    >();
 
     for (const data of profitData) {
-      const current = channelStats.get(data.channel) || { revenue: 0, cost: 0, profit: 0, count: 0 };
+      const current = channelStats.get(data.channel) || {
+        revenue: 0,
+        cost: 0,
+        profit: 0,
+        count: 0,
+      };
       channelStats.set(data.channel, {
         revenue: current.revenue + data.revenue,
         cost: current.cost + data.cost,
@@ -112,22 +116,13 @@ export class ProfitabilityAgent extends Agent {
         trend: '하락',
       });
 
-      this.publishInsight(
-        'profitability',
-        `수익성 개선 필요: ${worst.channel}`,
-        analysis,
-        {
-          highlight: `마진율: ${worst.margin.toFixed(1)}%`,
-          level: worst.margin < 10 ? 'critical' : 'warning',
-          confidence: 0.85 * this.trendSensitivity,
-          data: underperforming,
-          suggestedActions: [
-            '가격 정책 재검토',
-            '비용 구조 분석',
-            '고마진 상품 푸시',
-          ],
-        }
-      );
+      this.publishInsight('profitability', `수익성 개선 필요: ${worst.channel}`, analysis, {
+        highlight: `마진율: ${worst.margin.toFixed(1)}%`,
+        level: worst.margin < 10 ? 'critical' : 'warning',
+        confidence: 0.85 * this.trendSensitivity,
+        data: underperforming,
+        suggestedActions: ['가격 정책 재검토', '비용 구조 분석', '고마진 상품 푸시'],
+      });
     }
 
     return {
@@ -163,10 +158,7 @@ export class ProfitabilityAgent extends Agent {
           level: 'warning',
           confidence: 0.8,
           data: decliningTop,
-          suggestedActions: [
-            '판매 촉진 검토',
-            '경쟁사 가격 분석',
-          ],
+          suggestedActions: ['판매 촉진 검토', '경쟁사 가격 분석'],
         }
       );
     }
@@ -210,19 +202,24 @@ export class ProfitabilityAgent extends Agent {
     const profitData = state.profitTrend;
 
     // Calculate daily margin trends
-    const dailyMargins = profitData.reduce((acc, d) => {
-      if (!acc[d.date]) {
-        acc[d.date] = { revenue: 0, profit: 0 };
-      }
-      acc[d.date].revenue += d.revenue;
-      acc[d.date].profit += d.profit;
-      return acc;
-    }, {} as Record<string, { revenue: number; profit: number }>);
+    const dailyMargins = profitData.reduce(
+      (acc, d) => {
+        if (!acc[d.date]) {
+          acc[d.date] = { revenue: 0, profit: 0 };
+        }
+        acc[d.date].revenue += d.revenue;
+        acc[d.date].profit += d.profit;
+        return acc;
+      },
+      {} as Record<string, { revenue: number; profit: number }>
+    );
 
-    const marginTrend = Object.entries(dailyMargins).map(([date, data]) => ({
-      date,
-      margin: (data.profit / data.revenue) * 100,
-    })).sort((a, b) => a.date.localeCompare(b.date));
+    const marginTrend = Object.entries(dailyMargins)
+      .map(([date, data]) => ({
+        date,
+        margin: (data.profit / data.revenue) * 100,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     // Check for declining trend
     if (marginTrend.length >= 7) {
@@ -239,11 +236,7 @@ export class ProfitabilityAgent extends Agent {
             level: previousMargin - recentMargin > 3 ? 'critical' : 'warning',
             confidence: 0.9,
             data: { recentMargin, previousMargin, marginTrend: marginTrend.slice(-14) },
-            suggestedActions: [
-              '비용 증가 요인 파악',
-              '가격 정책 검토',
-              '고마진 상품 확대',
-            ],
+            suggestedActions: ['비용 증가 요인 파악', '가격 정책 검토', '고마진 상품 확대'],
           }
         );
       }

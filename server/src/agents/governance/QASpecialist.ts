@@ -21,7 +21,7 @@ import type {
   GovernanceReview,
   GovernanceIssue,
   DebateRecord,
-  DebateRound
+  DebateRound,
 } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager } from '../../services/StateManager.js';
@@ -38,21 +38,14 @@ export class QASpecialist extends Agent {
   private minEvidenceCount = 2;
   private maxRoundDuration = 60000; // 1분
 
-  constructor(
-    eventBus: EventBus,
-    stateManager: StateManager,
-    learningRegistry: LearningRegistry
-  ) {
+  constructor(eventBus: EventBus, stateManager: StateManager, learningRegistry: LearningRegistry) {
     super('qa-specialist', eventBus, stateManager, learningRegistry);
   }
 
   /**
    * 의존성 주입
    */
-  injectDependencies(
-    debateManager: DebateManager,
-    geminiAdapter: GeminiAdapter
-  ): void {
+  injectDependencies(debateManager: DebateManager, geminiAdapter: GeminiAdapter): void {
     this.debateManager = debateManager;
     this.geminiAdapter = geminiAdapter;
   }
@@ -95,7 +88,7 @@ export class QASpecialist extends Agent {
       sender.reply(message, 'GOVERNANCE_REVIEW_RESULT', {
         debateId: payload.debateId,
         review,
-        reviewType: 'qa'
+        reviewType: 'qa',
       });
 
       this.processedTasks++;
@@ -106,7 +99,6 @@ export class QASpecialist extends Agent {
       if (!review.approved || review.issues?.some(i => i.severity === 'critical')) {
         this.publishQAInsight(payload.debate, review);
       }
-
     } catch (error) {
       console.error('[QASpecialist] 검토 오류:', error);
       this.status = 'error';
@@ -163,7 +155,7 @@ export class QASpecialist extends Agent {
       issues: issues.length > 0 ? issues : undefined,
       recommendations: recommendations.length > 0 ? recommendations : undefined,
       score,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
   }
 
@@ -178,7 +170,7 @@ export class QASpecialist extends Agent {
         type: 'quality',
         severity: 'critical',
         description: '정(Thesis) 라운드가 누락되었습니다.',
-        affectedRound: 'thesis'
+        affectedRound: 'thesis',
       });
     }
 
@@ -187,7 +179,7 @@ export class QASpecialist extends Agent {
         type: 'quality',
         severity: 'critical',
         description: '반(Antithesis) 라운드가 누락되었습니다.',
-        affectedRound: 'antithesis'
+        affectedRound: 'antithesis',
       });
     }
 
@@ -196,7 +188,7 @@ export class QASpecialist extends Agent {
         type: 'quality',
         severity: 'critical',
         description: '합(Synthesis) 라운드가 누락되었습니다.',
-        affectedRound: 'synthesis'
+        affectedRound: 'synthesis',
       });
     }
 
@@ -216,7 +208,7 @@ export class QASpecialist extends Agent {
           type: 'logic',
           severity: 'high',
           description: '반론이 정론과 동일합니다. 실질적인 반박이 이루어지지 않았습니다.',
-          affectedRound: 'antithesis'
+          affectedRound: 'antithesis',
         });
       }
     }
@@ -224,19 +216,21 @@ export class QASpecialist extends Agent {
     if (debate.synthesis) {
       // 종합이 양측을 모두 고려했는지 확인
       const synthesisText = debate.synthesis.content.reasoning.toLowerCase();
-      const mentionsOptimist = synthesisText.includes('낙관') ||
-                               synthesisText.includes('기회') ||
-                               synthesisText.includes('긍정');
-      const mentionsPessimist = synthesisText.includes('비관') ||
-                                synthesisText.includes('리스크') ||
-                                synthesisText.includes('위험');
+      const mentionsOptimist =
+        synthesisText.includes('낙관') ||
+        synthesisText.includes('기회') ||
+        synthesisText.includes('긍정');
+      const mentionsPessimist =
+        synthesisText.includes('비관') ||
+        synthesisText.includes('리스크') ||
+        synthesisText.includes('위험');
 
       if (!mentionsOptimist && !mentionsPessimist) {
         issues.push({
           type: 'logic',
           severity: 'medium',
           description: '종합이 양측 관점을 명시적으로 참조하지 않습니다.',
-          affectedRound: 'synthesis'
+          affectedRound: 'synthesis',
         });
       }
     }
@@ -249,10 +243,14 @@ export class QASpecialist extends Agent {
    */
   private validateConfidence(debate: DebateRecord): GovernanceIssue[] {
     const issues: GovernanceIssue[] = [];
-    const rounds: { name: string; round?: DebateRound; affectedRound: 'thesis' | 'antithesis' | 'synthesis' }[] = [
+    const rounds: {
+      name: string;
+      round?: DebateRound;
+      affectedRound: 'thesis' | 'antithesis' | 'synthesis';
+    }[] = [
       { name: '정(Thesis)', round: debate.thesis, affectedRound: 'thesis' },
       { name: '반(Antithesis)', round: debate.antithesis, affectedRound: 'antithesis' },
-      { name: '합(Synthesis)', round: debate.synthesis, affectedRound: 'synthesis' }
+      { name: '합(Synthesis)', round: debate.synthesis, affectedRound: 'synthesis' },
     ];
 
     for (const { name, round, affectedRound } of rounds) {
@@ -261,7 +259,7 @@ export class QASpecialist extends Agent {
           type: 'quality',
           severity: 'medium',
           description: `${name} 라운드의 신뢰도(${round.content.confidence}%)가 기준치(${this.minConfidenceThreshold}%) 미만입니다.`,
-          affectedRound
+          affectedRound,
         });
       }
     }
@@ -274,10 +272,14 @@ export class QASpecialist extends Agent {
    */
   private validateEvidence(debate: DebateRecord): GovernanceIssue[] {
     const issues: GovernanceIssue[] = [];
-    const rounds: { name: string; round?: DebateRound; affectedRound: 'thesis' | 'antithesis' | 'synthesis' }[] = [
+    const rounds: {
+      name: string;
+      round?: DebateRound;
+      affectedRound: 'thesis' | 'antithesis' | 'synthesis';
+    }[] = [
       { name: '정(Thesis)', round: debate.thesis, affectedRound: 'thesis' },
       { name: '반(Antithesis)', round: debate.antithesis, affectedRound: 'antithesis' },
-      { name: '합(Synthesis)', round: debate.synthesis, affectedRound: 'synthesis' }
+      { name: '합(Synthesis)', round: debate.synthesis, affectedRound: 'synthesis' },
     ];
 
     for (const { name, round, affectedRound } of rounds) {
@@ -286,7 +288,7 @@ export class QASpecialist extends Agent {
           type: 'data',
           severity: 'low',
           description: `${name} 라운드의 근거(${round.content.evidence.length}개)가 권장 수준(${this.minEvidenceCount}개) 미만입니다.`,
-          affectedRound
+          affectedRound,
         });
       }
     }
@@ -308,16 +310,13 @@ export class QASpecialist extends Agent {
           type: 'quality',
           severity: 'medium',
           description: '종합 결과에 구체적인 실행 항목이 없습니다.',
-          affectedRound: 'synthesis'
+          affectedRound: 'synthesis',
         });
       }
 
       // 실행 항목이 너무 모호한지 확인
-      const vagueActions = actions.filter(a =>
-        a.length < 10 ||
-        a.includes('등') ||
-        a.includes('기타') ||
-        a.includes('필요시')
+      const vagueActions = actions.filter(
+        a => a.length < 10 || a.includes('등') || a.includes('기타') || a.includes('필요시')
       );
 
       if (vagueActions.length > actions.length / 2) {
@@ -325,7 +324,7 @@ export class QASpecialist extends Agent {
           type: 'quality',
           severity: 'low',
           description: '실행 항목 중 일부가 구체적이지 않습니다.',
-          affectedRound: 'synthesis'
+          affectedRound: 'synthesis',
         });
       }
     }
@@ -346,7 +345,9 @@ export class QASpecialist extends Agent {
     }
 
     if (issueTypes.has('logic')) {
-      recommendations.push('논리적 일관성 향상을 위해 상대 관점을 명시적으로 반박/수용해야 합니다.');
+      recommendations.push(
+        '논리적 일관성 향상을 위해 상대 관점을 명시적으로 반박/수용해야 합니다.'
+      );
     }
 
     if (issueTypes.has('data')) {
@@ -363,9 +364,15 @@ export class QASpecialist extends Agent {
   /**
    * QA 인사이트 발행
    */
-  private publishQAInsight(debate: DebateRecord, review: Omit<GovernanceReview, 'id' | 'debateId'>): void {
-    const level: InsightLevel = review.approved ? 'info' :
-                                review.score >= 50 ? 'warning' : 'critical';
+  private publishQAInsight(
+    debate: DebateRecord,
+    review: Omit<GovernanceReview, 'id' | 'debateId'>
+  ): void {
+    const level: InsightLevel = review.approved
+      ? 'info'
+      : review.score >= 50
+        ? 'warning'
+        : 'critical';
 
     this.publishInsight(
       debate.domain,
@@ -377,10 +384,10 @@ export class QASpecialist extends Agent {
         data: {
           debateId: debate.id,
           issues: review.issues,
-          recommendations: review.recommendations
+          recommendations: review.recommendations,
         },
         actionable: !review.approved,
-        suggestedActions: review.recommendations
+        suggestedActions: review.recommendations,
       }
     );
   }
@@ -394,7 +401,7 @@ export class QASpecialist extends Agent {
       agentId: this.id,
       success: true,
       output: { message: 'QA review processed' },
-      processingTime: 0
+      processingTime: 0,
     };
   }
 
@@ -407,16 +414,14 @@ export class QASpecialist extends Agent {
       'logic_validation',
       'evidence_verification',
       'actionability_review',
-      'governance_approval'
+      'governance_approval',
     ];
   }
 
   /**
    * 코칭 적용
    */
-  protected async applyCoaching(
-    feedback: CoachingMessage['payload']['feedback']
-  ): Promise<void> {
+  protected async applyCoaching(feedback: CoachingMessage['payload']['feedback']): Promise<void> {
     console.log(`[QASpecialist] 코칭 적용: ${feedback.suggestion}`);
 
     if (feedback.metric === 'accuracy' && feedback.score < feedback.benchmark) {

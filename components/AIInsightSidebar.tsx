@@ -35,9 +35,8 @@ export const AIInsightSidebar: React.FC<AIInsightSidebarProps> = ({
 
   const [activeFilter, setActiveFilter] = useState<InsightDomain | 'all'>('all');
 
-  const filteredInsights = activeFilter === 'all'
-    ? insights
-    : insights.filter(i => i.domain === activeFilter);
+  const filteredInsights =
+    activeFilter === 'all' ? insights : insights.filter(i => i.domain === activeFilter);
 
   const criticalCount = insights.filter(i => i.level === 'critical').length;
   const warningCount = insights.filter(i => i.level === 'warning').length;
@@ -83,7 +82,9 @@ export const AIInsightSidebar: React.FC<AIInsightSidebarProps> = ({
         {/* Connection Status */}
         <div className="flex items-center justify-between text-xs mb-3">
           <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <div
+              className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}
+            />
             <span className="text-gray-600 dark:text-gray-400">
               {isConnected ? '연결됨' : '연결 끊김'}
             </span>
@@ -120,7 +121,7 @@ export const AIInsightSidebar: React.FC<AIInsightSidebarProps> = ({
 
         {/* Domain Filter */}
         <div className="flex gap-1">
-          {DOMAIN_FILTERS.map((filter) => (
+          {DOMAIN_FILTERS.map(filter => (
             <button
               key={filter.id}
               onClick={() => setActiveFilter(filter.id)}
@@ -147,15 +148,17 @@ export const AIInsightSidebar: React.FC<AIInsightSidebarProps> = ({
             <p className="text-xs mt-1">분석 실행 버튼을 눌러주세요</p>
           </div>
         ) : (
-          filteredInsights.slice(0, 20).map((insight) => (
-            <AgentInsightBanner
-              key={insight.id}
-              insight={insight}
-              onFeedback={handleFeedback}
-              onDetailClick={onInsightClick}
-              hasFeedback={feedbackSubmitted.has(insight.id)}
-            />
-          ))
+          filteredInsights
+            .slice(0, 20)
+            .map(insight => (
+              <AgentInsightBanner
+                key={insight.id}
+                insight={insight}
+                onFeedback={handleFeedback}
+                onDetailClick={onInsightClick}
+                hasFeedback={feedbackSubmitted.has(insight.id)}
+              />
+            ))
         )}
       </div>
 
@@ -165,21 +168,25 @@ export const AIInsightSidebar: React.FC<AIInsightSidebarProps> = ({
           에이전트 상태
         </h3>
         <div className="space-y-2">
-          {agentStatuses.map((status) => (
+          {agentStatuses.map(status => (
             <div key={status.id} className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${
-                  status.status === 'processing' ? 'bg-blue-500 animate-pulse' :
-                  status.status === 'error' ? 'bg-red-500' :
-                  status.status === 'idle' ? 'bg-green-500' : 'bg-gray-400'
-                }`} />
+                <div
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    status.status === 'processing'
+                      ? 'bg-blue-500 animate-pulse'
+                      : status.status === 'error'
+                        ? 'bg-red-500'
+                        : status.status === 'idle'
+                          ? 'bg-green-500'
+                          : 'bg-gray-400'
+                  }`}
+                />
                 <span className="text-gray-700 dark:text-gray-300">
                   {AGENT_NAMES[status.id] || status.id}
                 </span>
               </div>
-              <span className="text-gray-500">
-                {status.processedTasks}건
-              </span>
+              <span className="text-gray-500">{status.processedTasks}건</span>
             </div>
           ))}
         </div>

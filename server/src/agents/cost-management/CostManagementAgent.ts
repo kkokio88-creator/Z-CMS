@@ -1,10 +1,6 @@
 import { Agent } from '../base/Agent.js';
 import { geminiAdapter } from '../../adapters/GeminiAdapter.js';
-import type {
-  Task,
-  TaskResult,
-  CoachingMessage,
-} from '../../types/index.js';
+import type { Task, TaskResult, CoachingMessage } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager } from '../../services/StateManager.js';
 import type { LearningRegistry } from '../../services/LearningRegistry.js';
@@ -43,11 +39,7 @@ export class CostManagementAgent extends Agent {
   private laborCostRatio = 0.25; // 노무비 목표 비율 (매출 대비)
   private overtimeAlertThreshold = 20; // 초과근무 경고 임계값 (%)
 
-  constructor(
-    eventBus: EventBus,
-    stateManager: StateManager,
-    learningRegistry: LearningRegistry
-  ) {
+  constructor(eventBus: EventBus, stateManager: StateManager, learningRegistry: LearningRegistry) {
     super('cost-management-agent', eventBus, stateManager, learningRegistry);
   }
 
@@ -108,8 +100,11 @@ export class CostManagementAgent extends Agent {
       };
     }
 
-    const totalCost = costData.rawMaterialCost + costData.subMaterialCost +
-      costData.laborCost + costData.expenseAmount;
+    const totalCost =
+      costData.rawMaterialCost +
+      costData.subMaterialCost +
+      costData.laborCost +
+      costData.expenseAmount;
     const profitRatio = costData.salesAmount > 0 ? costData.salesAmount / totalCost : 0;
 
     // Calculate cost ratios
@@ -121,8 +116,12 @@ export class CostManagementAgent extends Agent {
     };
 
     // Determine trend based on target comparison
-    const trend = profitRatio < this.costThreshold ? 'deteriorating' :
-      profitRatio > this.costThreshold * 1.1 ? 'improving' : 'stable';
+    const trend =
+      profitRatio < this.costThreshold
+        ? 'deteriorating'
+        : profitRatio > this.costThreshold * 1.1
+          ? 'improving'
+          : 'stable';
 
     // Get AI analysis
     const analysis = await geminiAdapter.analyzeCostStructure({
@@ -137,31 +136,21 @@ export class CostManagementAgent extends Agent {
 
     // Publish insight based on analysis
     if (profitRatio < this.costThreshold) {
-      this.publishInsight(
-        'profitability',
-        '원가 비율 경고',
-        analysis.analysis,
-        {
-          highlight: `생산매출/원가 비율: ${profitRatio.toFixed(2)}`,
-          level: profitRatio < 1.0 ? 'critical' : 'warning',
-          confidence: 0.85,
-          data: { costData, ratios, recommendations: analysis.recommendations },
-          suggestedActions: analysis.recommendations,
-        }
-      );
+      this.publishInsight('profitability', '원가 비율 경고', analysis.analysis, {
+        highlight: `생산매출/원가 비율: ${profitRatio.toFixed(2)}`,
+        level: profitRatio < 1.0 ? 'critical' : 'warning',
+        confidence: 0.85,
+        data: { costData, ratios, recommendations: analysis.recommendations },
+        suggestedActions: analysis.recommendations,
+      });
     } else {
-      this.publishInsight(
-        'profitability',
-        '원가 구조 분석 완료',
-        analysis.analysis,
-        {
-          highlight: `생산매출/원가 비율: ${profitRatio.toFixed(2)}`,
-          level: 'info',
-          confidence: 0.9,
-          data: { costData, ratios },
-          suggestedActions: analysis.recommendations,
-        }
-      );
+      this.publishInsight('profitability', '원가 구조 분석 완료', analysis.analysis, {
+        highlight: `생산매출/원가 비율: ${profitRatio.toFixed(2)}`,
+        level: 'info',
+        confidence: 0.9,
+        data: { costData, ratios },
+        suggestedActions: analysis.recommendations,
+      });
     }
 
     return {
@@ -185,8 +174,8 @@ export class CostManagementAgent extends Agent {
   private async analyzeLaborEfficiency(task: Task): Promise<TaskResult> {
     const startTime = Date.now();
     const attendanceData = task.payload?.attendanceData as AttendanceData[] | undefined;
-    const laborCost = task.payload?.laborCost as number || 0;
-    const productionVolume = task.payload?.productionVolume as number || 0;
+    const laborCost = (task.payload?.laborCost as number) || 0;
+    const productionVolume = (task.payload?.productionVolume as number) || 0;
 
     if (!attendanceData || attendanceData.length === 0) {
       return {
@@ -225,23 +214,18 @@ export class CostManagementAgent extends Agent {
     // Check for overtime alerts
     const overtimeRatio = (avgOvertimePerEmployee / 8) * 100; // 기본 근무시간 8시간 기준
     if (overtimeRatio > this.overtimeAlertThreshold) {
-      this.publishInsight(
-        'profitability',
-        '초과근무 비율 경고',
-        analysis.analysis,
-        {
-          highlight: `평균 초과근무: ${avgOvertimePerEmployee.toFixed(1)}시간/인`,
-          level: overtimeRatio > 30 ? 'critical' : 'warning',
-          confidence: 0.8,
-          data: {
-            totalOvertimeHours,
-            avgOvertimePerEmployee,
-            shiftStats: Object.fromEntries(shiftStats),
-            efficiencyScore: analysis.efficiencyScore,
-          },
-          suggestedActions: analysis.suggestions,
-        }
-      );
+      this.publishInsight('profitability', '초과근무 비율 경고', analysis.analysis, {
+        highlight: `평균 초과근무: ${avgOvertimePerEmployee.toFixed(1)}시간/인`,
+        level: overtimeRatio > 30 ? 'critical' : 'warning',
+        confidence: 0.8,
+        data: {
+          totalOvertimeHours,
+          avgOvertimePerEmployee,
+          shiftStats: Object.fromEntries(shiftStats),
+          efficiencyScore: analysis.efficiencyScore,
+        },
+        suggestedActions: analysis.suggestions,
+      });
     }
 
     return {
@@ -309,24 +293,19 @@ export class CostManagementAgent extends Agent {
 
     // Publish insight if risk is detected
     if (analysis.riskLevel !== 'low') {
-      this.publishInsight(
-        'inventory',
-        '발주 패턴 주의 필요',
-        analysis.analysis,
-        {
-          highlight: `긴급발주: ${urgentOrders}건 (${((urgentOrders / purchaseOrders.length) * 100).toFixed(0)}%)`,
-          level: analysis.riskLevel === 'high' ? 'warning' : 'info',
-          confidence: 0.75,
-          data: {
-            totalAmount,
-            orderCount: purchaseOrders.length,
-            urgentOrders,
-            topSuppliers,
-            riskLevel: analysis.riskLevel,
-          },
-          suggestedActions: analysis.suggestions,
-        }
-      );
+      this.publishInsight('inventory', '발주 패턴 주의 필요', analysis.analysis, {
+        highlight: `긴급발주: ${urgentOrders}건 (${((urgentOrders / purchaseOrders.length) * 100).toFixed(0)}%)`,
+        level: analysis.riskLevel === 'high' ? 'warning' : 'info',
+        confidence: 0.75,
+        data: {
+          totalAmount,
+          orderCount: purchaseOrders.length,
+          urgentOrders,
+          topSuppliers,
+          riskLevel: analysis.riskLevel,
+        },
+        suggestedActions: analysis.suggestions,
+      });
     }
 
     return {
@@ -451,8 +430,11 @@ export class CostManagementAgent extends Agent {
       };
     }
 
-    const totalCost = costData.rawMaterialCost + costData.subMaterialCost +
-      costData.laborCost + costData.expenseAmount;
+    const totalCost =
+      costData.rawMaterialCost +
+      costData.subMaterialCost +
+      costData.laborCost +
+      costData.expenseAmount;
     const profitRatio = costData.salesAmount > 0 ? costData.salesAmount / totalCost : 0;
 
     // Calculate cost breakdown percentages
@@ -464,8 +446,7 @@ export class CostManagementAgent extends Agent {
     };
 
     // Find the largest cost driver
-    const largestCostDriver = Object.entries(breakdown)
-      .sort((a, b) => b[1] - a[1])[0];
+    const largestCostDriver = Object.entries(breakdown).sort((a, b) => b[1] - a[1])[0];
 
     const driverNames: Record<string, string> = {
       rawMaterial: '원재료비',
@@ -482,9 +463,10 @@ export class CostManagementAgent extends Agent {
         level: profitRatio < this.costThreshold ? 'warning' : 'info',
         confidence: 0.9,
         data: { totalCost, profitRatio, breakdown },
-        suggestedActions: profitRatio < this.costThreshold
-          ? [`${driverNames[largestCostDriver[0]]} 절감 방안 검토`, '원가 구조 개선 필요']
-          : ['현 원가 구조 유지', '추가 최적화 기회 모색'],
+        suggestedActions:
+          profitRatio < this.costThreshold
+            ? [`${driverNames[largestCostDriver[0]]} 절감 방안 검토`, '원가 구조 개선 필요']
+            : ['현 원가 구조 유지', '추가 최적화 기회 모색'],
       }
     );
 

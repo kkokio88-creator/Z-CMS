@@ -95,7 +95,9 @@ export class CoordinatorAgent extends Agent {
   /**
    * Orchestrate analysis across all domain agents
    */
-  async orchestrateAnalysis(input?: { priority?: 'low' | 'medium' | 'high' | 'critical' }): Promise<void> {
+  async orchestrateAnalysis(input?: {
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+  }): Promise<void> {
     const correlationId = uuidv4();
     const sender = this.eventBus.createSender(this.id);
 
@@ -218,8 +220,9 @@ export class CoordinatorAgent extends Agent {
     const successfulResults = results.filter(r => r.success);
 
     // Get recent insights from buffer
-    const recentInsights = Array.from(this.insightBuffer.values())
-      .filter(i => Date.now() - i.timestamp.getTime() < 60000); // Last minute
+    const recentInsights = Array.from(this.insightBuffer.values()).filter(
+      i => Date.now() - i.timestamp.getTime() < 60000
+    ); // Last minute
 
     if (recentInsights.length === 0 && successfulResults.length === 0) {
       return;
@@ -241,26 +244,22 @@ export class CoordinatorAgent extends Agent {
     const criticalCount = recentInsights.filter(i => i.level === 'critical').length;
     const warningCount = recentInsights.filter(i => i.level === 'warning').length;
 
-    this.publishInsight(
-      'general',
-      '종합 분석 완료',
-      summary,
-      {
-        highlight: criticalCount > 0
+    this.publishInsight('general', '종합 분석 완료', summary, {
+      highlight:
+        criticalCount > 0
           ? `긴급 ${criticalCount}건, 주의 ${warningCount}건`
           : warningCount > 0
             ? `주의 ${warningCount}건`
             : '정상 운영 중',
-        level: criticalCount > 0 ? 'critical' : warningCount > 0 ? 'warning' : 'info',
-        confidence: 0.9,
-        data: {
-          analysisCount: successfulResults.length,
-          insightCount: recentInsights.length,
-          criticalCount,
-          warningCount,
-        },
-      }
-    );
+      level: criticalCount > 0 ? 'critical' : warningCount > 0 ? 'warning' : 'info',
+      confidence: 0.9,
+      data: {
+        analysisCount: successfulResults.length,
+        insightCount: recentInsights.length,
+        criticalCount,
+        warningCount,
+      },
+    });
 
     // Clear processed insights from buffer
     for (const insight of recentInsights) {
@@ -337,7 +336,9 @@ export class CoordinatorAgent extends Agent {
           const sender = this.eventBus.createSender(this.id);
           sender.send(perf.agentId, 'COACHING_FEEDBACK', { feedback }, 'medium');
 
-          console.log(`Sent coaching to ${perf.agentId}: ${feedback.metric} (score: ${feedback.score})`);
+          console.log(
+            `Sent coaching to ${perf.agentId}: ${feedback.metric} (score: ${feedback.score})`
+          );
         }
       }
     }

@@ -20,7 +20,7 @@ import type {
   InsightLevel,
   GovernanceReview,
   GovernanceIssue,
-  DebateRecord
+  DebateRecord,
 } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager } from '../../services/StateManager.js';
@@ -50,16 +50,16 @@ export class ComplianceAuditor extends Agent {
       description: '토론 내용에 개인 식별 정보가 포함되어서는 안 됩니다.',
       category: 'data_privacy',
       severity: 'critical',
-      check: (debate) => {
+      check: debate => {
         const content = JSON.stringify(debate);
         // 이메일, 전화번호, 주민번호 패턴 검사
         const piiPatterns = [
           /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/,
           /\b01[0-9]-?\d{3,4}-?\d{4}\b/,
-          /\b\d{6}-?[1-4]\d{6}\b/
+          /\b\d{6}-?[1-4]\d{6}\b/,
         ];
         return !piiPatterns.some(pattern => pattern.test(content));
-      }
+      },
     },
     {
       id: 'BR001',
@@ -67,16 +67,17 @@ export class ComplianceAuditor extends Agent {
       description: '재무 관련 수치는 검증 가능한 출처가 있어야 합니다.',
       category: 'business_rule',
       severity: 'high',
-      check: (debate) => {
+      check: debate => {
         // 금액 관련 수치가 있을 때 근거도 있는지 확인
         const hasFinancialData = /[₩\$]\d+|억|만원/.test(JSON.stringify(debate));
         if (!hasFinancialData) return true;
 
-        const hasEvidence = debate.thesis?.content.evidence?.length > 0 ||
-                           debate.antithesis?.content.evidence?.length > 0 ||
-                           debate.synthesis?.content.evidence?.length > 0;
+        const hasEvidence =
+          debate.thesis?.content.evidence?.length > 0 ||
+          debate.antithesis?.content.evidence?.length > 0 ||
+          debate.synthesis?.content.evidence?.length > 0;
         return hasEvidence;
-      }
+      },
     },
     {
       id: 'RM001',
@@ -84,14 +85,15 @@ export class ComplianceAuditor extends Agent {
       description: '모든 토론에는 리스크 분석이 포함되어야 합니다.',
       category: 'risk_management',
       severity: 'medium',
-      check: (debate) => {
+      check: debate => {
         // 비관론자(antithesis)가 리스크를 언급했는지 확인
         if (!debate.antithesis) return false;
         const riskKeywords = ['리스크', '위험', '우려', '문제', '장애', '실패', 'risk'];
-        const content = debate.antithesis.content.reasoning.toLowerCase() +
-                       debate.antithesis.content.position.toLowerCase();
+        const content =
+          debate.antithesis.content.reasoning.toLowerCase() +
+          debate.antithesis.content.position.toLowerCase();
         return riskKeywords.some(keyword => content.includes(keyword));
-      }
+      },
     },
     {
       id: 'RM002',
@@ -99,14 +101,12 @@ export class ComplianceAuditor extends Agent {
       description: '식별된 리스크에 대한 완화 방안이 제시되어야 합니다.',
       category: 'risk_management',
       severity: 'medium',
-      check: (debate) => {
+      check: debate => {
         if (!debate.synthesis) return false;
         const mitigationKeywords = ['완화', '대응', '방지', '예방', '관리', '조치'];
         const actions = debate.synthesis.content.suggestedActions || [];
-        return actions.some(action =>
-          mitigationKeywords.some(keyword => action.includes(keyword))
-        );
-      }
+        return actions.some(action => mitigationKeywords.some(keyword => action.includes(keyword)));
+      },
     },
     {
       id: 'RG001',
@@ -114,19 +114,19 @@ export class ComplianceAuditor extends Agent {
       description: '토론 내용이 지정된 도메인과 관련되어야 합니다.',
       category: 'regulatory',
       severity: 'low',
-      check: (debate) => {
+      check: debate => {
         const domainKeywords: Record<string, string[]> = {
           bom: ['BOM', '원자재', '생산', '제조', '부품'],
           waste: ['폐기물', '손실', '불량', '스크랩'],
           inventory: ['재고', '창고', '보관', '안전재고', '발주'],
           profitability: ['수익', '마진', '매출', '이익', '채널'],
-          general: ['원가', '비용', '경영', '전략']
+          general: ['원가', '비용', '경영', '전략'],
         };
 
         const keywords = domainKeywords[debate.domain] || domainKeywords.general;
         const content = JSON.stringify(debate).toLowerCase();
         return keywords.some(keyword => content.toLowerCase().includes(keyword.toLowerCase()));
-      }
+      },
     },
     {
       id: 'BR002',
@@ -134,32 +134,25 @@ export class ComplianceAuditor extends Agent {
       description: '최종 결론은 명확하고 실행 가능해야 합니다.',
       category: 'business_rule',
       severity: 'medium',
-      check: (debate) => {
+      check: debate => {
         if (!debate.synthesis) return false;
         const position = debate.synthesis.content.position;
         const actions = debate.synthesis.content.suggestedActions || [];
 
         // 결론이 최소 길이 이상이고 실행 항목이 있는지
         return position.length >= 20 && actions.length >= 1;
-      }
-    }
+      },
+    },
   ];
 
-  constructor(
-    eventBus: EventBus,
-    stateManager: StateManager,
-    learningRegistry: LearningRegistry
-  ) {
+  constructor(eventBus: EventBus, stateManager: StateManager, learningRegistry: LearningRegistry) {
     super('compliance-auditor', eventBus, stateManager, learningRegistry);
   }
 
   /**
    * 의존성 주입
    */
-  injectDependencies(
-    debateManager: DebateManager,
-    geminiAdapter: GeminiAdapter
-  ): void {
+  injectDependencies(debateManager: DebateManager, geminiAdapter: GeminiAdapter): void {
     this.debateManager = debateManager;
     this.geminiAdapter = geminiAdapter;
   }
@@ -202,7 +195,7 @@ export class ComplianceAuditor extends Agent {
       sender.reply(message, 'GOVERNANCE_REVIEW_RESULT', {
         debateId: payload.debateId,
         review,
-        reviewType: 'compliance'
+        reviewType: 'compliance',
       });
 
       this.processedTasks++;
@@ -213,7 +206,6 @@ export class ComplianceAuditor extends Agent {
       if (!review.approved) {
         this.publishComplianceInsight(payload.debate, review);
       }
-
     } catch (error) {
       console.error('[ComplianceAuditor] 검토 오류:', error);
       this.status = 'error';
@@ -241,13 +233,13 @@ export class ComplianceAuditor extends Agent {
             low: 5,
             medium: 10,
             high: 20,
-            critical: 40
+            critical: 40,
           };
 
           issues.push({
             type: 'compliance',
             severity: rule.severity,
-            description: `[${rule.id}] ${rule.name}: ${rule.description}`
+            description: `[${rule.id}] ${rule.name}: ${rule.description}`,
           });
 
           score -= severityPenalty[rule.severity];
@@ -273,7 +265,7 @@ export class ComplianceAuditor extends Agent {
       issues: issues.length > 0 ? issues : undefined,
       recommendations: recommendations.length > 0 ? recommendations : undefined,
       score,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
   }
 
@@ -282,10 +274,12 @@ export class ComplianceAuditor extends Agent {
    */
   private generateRecommendations(issues: GovernanceIssue[]): string[] {
     const recommendations: string[] = [];
-    const categories = new Set(issues.map(i => {
-      const match = i.description.match(/\[(.*?)\]/);
-      return match ? match[1].substring(0, 2) : '';
-    }));
+    const categories = new Set(
+      issues.map(i => {
+        const match = i.description.match(/\[(.*?)\]/);
+        return match ? match[1].substring(0, 2) : '';
+      })
+    );
 
     if (issues.some(i => i.description.includes('DP'))) {
       recommendations.push('개인정보 보호를 위해 민감 데이터를 익명화하거나 제거하세요.');
@@ -318,8 +312,8 @@ export class ComplianceAuditor extends Agent {
     review: Omit<GovernanceReview, 'id' | 'debateId'>
   ): void {
     const criticalIssues = review.issues?.filter(i => i.severity === 'critical') || [];
-    const level: InsightLevel = criticalIssues.length > 0 ? 'critical' :
-                                review.score < 60 ? 'warning' : 'info';
+    const level: InsightLevel =
+      criticalIssues.length > 0 ? 'critical' : review.score < 60 ? 'warning' : 'info';
 
     this.publishInsight(
       debate.domain,
@@ -335,10 +329,10 @@ export class ComplianceAuditor extends Agent {
           violatedRules: review.issues?.map(i => {
             const match = i.description.match(/\[(.*?)\]/);
             return match ? match[1] : '';
-          })
+          }),
         },
         actionable: !review.approved,
-        suggestedActions: review.recommendations
+        suggestedActions: review.recommendations,
       }
     );
   }
@@ -367,7 +361,7 @@ export class ComplianceAuditor extends Agent {
       agentId: this.id,
       success: true,
       output: { message: 'Compliance review processed' },
-      processingTime: 0
+      processingTime: 0,
     };
   }
 
@@ -381,16 +375,14 @@ export class ComplianceAuditor extends Agent {
       'business_rule_validation',
       'risk_assessment_review',
       'regulatory_compliance',
-      'governance_approval'
+      'governance_approval',
     ];
   }
 
   /**
    * 코칭 적용
    */
-  protected async applyCoaching(
-    feedback: CoachingMessage['payload']['feedback']
-  ): Promise<void> {
+  protected async applyCoaching(feedback: CoachingMessage['payload']['feedback']): Promise<void> {
     console.log(`[ComplianceAuditor] 코칭 적용: ${feedback.suggestion}`);
 
     // 향후 규칙 가중치 조정 등에 활용 가능

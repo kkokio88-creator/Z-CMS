@@ -56,14 +56,14 @@ router.post('/test-connection', async (req: Request, res: Response) => {
     if (!spreadsheetUrl) {
       return res.json({
         success: false,
-        message: '스프레드시트 URL을 입력해주세요.'
+        message: '스프레드시트 URL을 입력해주세요.',
       });
     }
 
     if (!sheetName) {
       return res.json({
         success: false,
-        message: '시트 이름을 입력해주세요.'
+        message: '시트 이름을 입력해주세요.',
       });
     }
 
@@ -71,7 +71,7 @@ router.post('/test-connection', async (req: Request, res: Response) => {
     if (!spreadsheetId) {
       return res.json({
         success: false,
-        message: '유효한 Google Sheets URL이 아닙니다.'
+        message: '유효한 Google Sheets URL이 아닙니다.',
       });
     }
 
@@ -86,16 +86,14 @@ router.post('/test-connection', async (req: Request, res: Response) => {
     const availableSheets = metadataResponse.data.sheets?.map(s => s.properties?.title || '') || [];
 
     // 2. 지정된 시트가 존재하는지 확인
-    const sheetExists = availableSheets.some(
-      s => s.toLowerCase() === sheetName.toLowerCase()
-    );
+    const sheetExists = availableSheets.some(s => s.toLowerCase() === sheetName.toLowerCase());
 
     if (!sheetExists) {
       return res.json({
         success: false,
         message: `시트 "${sheetName}"을(를) 찾을 수 없습니다. 사용 가능한 시트: ${availableSheets.join(', ')}`,
         availableSheets,
-        spreadsheetTitle
+        spreadsheetTitle,
       });
     }
 
@@ -123,16 +121,16 @@ router.post('/test-connection', async (req: Request, res: Response) => {
       headers,
       rowCount,
       columnCount: headers.length,
-      availableSheets
+      availableSheets,
     });
-
   } catch (error: any) {
     console.error('Google Sheets 연결 테스트 실패:', error);
 
     let errorMessage = '연결 실패: ';
 
     if (error.code === 403) {
-      errorMessage += '접근 권한이 없습니다. 서비스 계정(z-cms-bot@z-cms-486204.iam.gserviceaccount.com)에 편집 권한을 공유해주세요.';
+      errorMessage +=
+        '접근 권한이 없습니다. 서비스 계정(z-cms-bot@z-cms-486204.iam.gserviceaccount.com)에 편집 권한을 공유해주세요.';
     } else if (error.code === 404) {
       errorMessage += '스프레드시트를 찾을 수 없습니다. URL을 확인해주세요.';
     } else if (error.message?.includes('credentials')) {
@@ -143,7 +141,7 @@ router.post('/test-connection', async (req: Request, res: Response) => {
 
     return res.json({
       success: false,
-      message: errorMessage
+      message: errorMessage,
     });
   }
 });
@@ -159,7 +157,7 @@ router.get('/list-sheets', async (req: Request, res: Response) => {
     if (!url || typeof url !== 'string') {
       return res.json({
         success: false,
-        message: 'URL 파라미터가 필요합니다.'
+        message: 'URL 파라미터가 필요합니다.',
       });
     }
 
@@ -167,7 +165,7 @@ router.get('/list-sheets', async (req: Request, res: Response) => {
     if (!spreadsheetId) {
       return res.json({
         success: false,
-        message: '유효한 Google Sheets URL이 아닙니다.'
+        message: '유효한 Google Sheets URL이 아닙니다.',
       });
     }
 
@@ -182,13 +180,12 @@ router.get('/list-sheets', async (req: Request, res: Response) => {
     return res.json({
       success: true,
       spreadsheetTitle: response.data.properties?.title,
-      sheets: sheetNames
+      sheets: sheetNames,
     });
-
   } catch (error: any) {
     return res.json({
       success: false,
-      message: error.message || '시트 목록을 가져오는데 실패했습니다.'
+      message: error.message || '시트 목록을 가져오는데 실패했습니다.',
     });
   }
 });
@@ -229,13 +226,12 @@ router.get('/preview', async (req: Request, res: Response) => {
       success: true,
       headers,
       data,
-      previewRows: data.length
+      previewRows: data.length,
     });
-
   } catch (error: any) {
     return res.json({
       success: false,
-      message: error.message || '데이터 미리보기에 실패했습니다.'
+      message: error.message || '데이터 미리보기에 실패했습니다.',
     });
   }
 });
@@ -252,7 +248,7 @@ router.post('/fetch-data', async (req: Request, res: Response) => {
       return res.json({
         success: false,
         data: [],
-        error: 'spreadsheetUrl과 sheetName이 필요합니다.'
+        error: 'spreadsheetUrl과 sheetName이 필요합니다.',
       });
     }
 
@@ -261,7 +257,7 @@ router.post('/fetch-data', async (req: Request, res: Response) => {
       return res.json({
         success: false,
         data: [],
-        error: '유효한 Google Sheets URL이 아닙니다.'
+        error: '유효한 Google Sheets URL이 아닙니다.',
       });
     }
 
@@ -278,7 +274,7 @@ router.post('/fetch-data', async (req: Request, res: Response) => {
       return res.json({
         success: true,
         data: [],
-        rowCount: 0
+        rowCount: 0,
       });
     }
 
@@ -304,9 +300,8 @@ router.post('/fetch-data', async (req: Request, res: Response) => {
       success: true,
       data,
       rowCount: data.length,
-      headers
+      headers,
     });
-
   } catch (error: any) {
     console.error('시트 데이터 조회 실패:', error);
 
@@ -322,7 +317,7 @@ router.post('/fetch-data', async (req: Request, res: Response) => {
     return res.json({
       success: false,
       data: [],
-      error: errorMessage
+      error: errorMessage,
     });
   }
 });
@@ -338,7 +333,7 @@ router.post('/fetch-all-configured', async (req: Request, res: Response) => {
     if (!config) {
       return res.json({
         success: false,
-        error: '데이터 소스 설정이 필요합니다.'
+        error: '데이터 소스 설정이 필요합니다.',
       });
     }
 
@@ -380,7 +375,7 @@ router.post('/fetch-all-configured', async (req: Request, res: Response) => {
                   return obj;
                 }),
                 rowCount: dataRows.length,
-                headers
+                headers,
               };
             } else {
               results[key] = { success: true, data: [], rowCount: 0 };
@@ -389,7 +384,7 @@ router.post('/fetch-all-configured', async (req: Request, res: Response) => {
             results[key] = {
               success: false,
               data: [],
-              error: err.message
+              error: err.message,
             };
           }
         }
@@ -399,13 +394,12 @@ router.post('/fetch-all-configured', async (req: Request, res: Response) => {
     return res.json({
       success: true,
       results,
-      fetchedAt: new Date().toISOString()
+      fetchedAt: new Date().toISOString(),
     });
-
   } catch (error: any) {
     return res.json({
       success: false,
-      error: error.message || '데이터 조회 중 오류 발생'
+      error: error.message || '데이터 조회 중 오류 발생',
     });
   }
 });

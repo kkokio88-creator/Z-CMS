@@ -80,7 +80,7 @@ export function createInventoryTeam(
       optimist.injectDependencies(debateManager, geminiAdapter);
       pessimist.injectDependencies(debateManager, geminiAdapter);
       mediator.injectDependencies(debateManager, geminiAdapter);
-    }
+    },
   };
 }
 

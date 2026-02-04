@@ -38,7 +38,7 @@ export const AgentStatusIndicator: React.FC<AgentStatusIndicatorProps> = ({
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
       >
         <div className="flex -space-x-1">
-          {statuses.slice(0, 4).map((status) => (
+          {statuses.slice(0, 4).map(status => (
             <div
               key={status.id}
               className={`w-2.5 h-2.5 rounded-full ${STATUS_COLORS[status.status]} ring-2 ring-white dark:ring-gray-800`}
@@ -51,8 +51,7 @@ export const AgentStatusIndicator: React.FC<AgentStatusIndicatorProps> = ({
             ? `${processingCount}개 분석 중`
             : errorCount > 0
               ? `${errorCount}개 오류`
-              : `${totalAgents}개 에이전트`
-          }
+              : `${totalAgents}개 에이전트`}
         </span>
       </button>
     );
@@ -66,7 +65,7 @@ export const AgentStatusIndicator: React.FC<AgentStatusIndicatorProps> = ({
       </h3>
 
       <div className="space-y-3">
-        {statuses.map((status) => (
+        {statuses.map(status => (
           <AgentStatusRow key={status.id} status={status} />
         ))}
       </div>
@@ -83,7 +82,8 @@ export const AgentStatusIndicator: React.FC<AgentStatusIndicatorProps> = ({
             <div className="text-lg font-semibold text-green-600 dark:text-green-400">
               {Math.round(
                 statuses.reduce((sum, s) => sum + s.successRate, 0) / (statuses.length || 1)
-              )}%
+              )}
+              %
             </div>
             <div className="text-xs text-gray-500">평균 성공률</div>
           </div>
@@ -91,7 +91,8 @@ export const AgentStatusIndicator: React.FC<AgentStatusIndicatorProps> = ({
             <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
               {Math.round(
                 statuses.reduce((sum, s) => sum + s.avgProcessingTime, 0) / (statuses.length || 1)
-              )}ms
+              )}
+              ms
             </div>
             <div className="text-xs text-gray-500">평균 처리 시간</div>
           </div>
@@ -108,9 +109,7 @@ const AgentStatusRow: React.FC<{ status: AgentState }> = ({ status }) => {
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[status.status]}`} />
-        <span className="text-sm text-gray-700 dark:text-gray-300">
-          {agentName}
-        </span>
+        <span className="text-sm text-gray-700 dark:text-gray-300">{agentName}</span>
       </div>
       <div className="flex items-center gap-3 text-xs text-gray-500">
         <span>{STATUS_TEXT[status.status]}</span>
@@ -134,11 +133,7 @@ export const AgentStatusMini: React.FC<{
     >
       <div
         className={`w-2 h-2 rounded-full ${
-          !isConnected
-            ? 'bg-gray-400'
-            : isProcessing
-              ? 'bg-blue-500 animate-pulse'
-              : 'bg-green-500'
+          !isConnected ? 'bg-gray-400' : isProcessing ? 'bg-blue-500 animate-pulse' : 'bg-green-500'
         }`}
       />
       <span className="text-gray-600 dark:text-gray-300">

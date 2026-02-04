@@ -1,10 +1,6 @@
 // Agent Types for Frontend
 
-export type AgentId =
-  | 'coordinator'
-  | 'bom-waste-agent'
-  | 'inventory-agent'
-  | 'profitability-agent';
+export type AgentId = 'coordinator' | 'bom-waste-agent' | 'inventory-agent' | 'profitability-agent';
 
 export type AgentStatus = 'idle' | 'processing' | 'error' | 'stopped';
 
@@ -57,7 +53,7 @@ export interface SSEMessage {
 
 // Agent name mapping for display
 export const AGENT_NAMES: Record<AgentId, string> = {
-  'coordinator': '총괄 감독자',
+  coordinator: '총괄 감독자',
   'bom-waste-agent': 'BOM/폐기물 분석',
   'inventory-agent': '재고 안전 관리',
   'profitability-agent': '수익성 분석',

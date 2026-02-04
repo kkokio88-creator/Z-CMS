@@ -3,10 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export interface CostReportData {
-  sales: SheetRow[];      // DB_매출
-  expenses: SheetRow[];   // DB_경비
-  labor: SheetRow[];      // DB_노무비
-  waste: SheetRow[];      // DB_폐기
+  sales: SheetRow[]; // DB_매출
+  expenses: SheetRow[]; // DB_경비
+  labor: SheetRow[]; // DB_노무비
+  waste: SheetRow[]; // DB_폐기
 }
 
 export interface SheetRow {
@@ -14,18 +14,18 @@ export interface SheetRow {
 }
 
 export interface MonthlyCostSummary {
-  month: string;           // YYYY-MM format
-  salesAmount: number;     // 매출액
-  expenseAmount: number;   // 경비
-  laborCost: number;       // 노무비
-  wasteCost: number;       // 폐기비용
-  totalCost: number;       // 총 원가 (경비 + 노무비 + 폐기)
-  profitRatio: number;     // 생산매출/원가액 비율
+  month: string; // YYYY-MM format
+  salesAmount: number; // 매출액
+  expenseAmount: number; // 경비
+  laborCost: number; // 노무비
+  wasteCost: number; // 폐기비용
+  totalCost: number; // 총 원가 (경비 + 노무비 + 폐기)
+  profitRatio: number; // 생산매출/원가액 비율
 }
 
 export interface CostTarget {
   month: string;
-  targetRatio: number;     // 목표 생산매출/원가액 비율
+  targetRatio: number; // 목표 생산매출/원가액 비율
   targetSales?: number;
   targetCost?: number;
 }
@@ -103,7 +103,9 @@ export class GoogleSheetsAdapter {
       return this.sheets;
     }
 
-    throw new Error('Google Sheets credentials not configured. Set GOOGLE_SERVICE_ACCOUNT_KEY_PATH or GOOGLE_API_KEY in .env');
+    throw new Error(
+      'Google Sheets credentials not configured. Set GOOGLE_SERVICE_ACCOUNT_KEY_PATH or GOOGLE_API_KEY in .env'
+    );
   }
 
   async fetchSheetData(sheetName: string): Promise<SheetRow[]> {
@@ -151,7 +153,9 @@ export class GoogleSheetsAdapter {
       this.fetchSheetData('DB_폐기'),
     ]);
 
-    console.log(`Fetched: 매출 ${sales.length}, 경비 ${expenses.length}, 노무비 ${labor.length}, 폐기 ${waste.length} rows`);
+    console.log(
+      `Fetched: 매출 ${sales.length}, 경비 ${expenses.length}, 노무비 ${labor.length}, 폐기 ${waste.length} rows`
+    );
 
     return { sales, expenses, labor, waste };
   }
@@ -269,9 +273,10 @@ export class GoogleSheetsAdapter {
     const summaries = Array.from(monthlyData.values()).map(summary => {
       summary.totalCost = summary.expenseAmount + summary.laborCost + summary.wasteCost;
       // 생산매출/원가액 비율 (목표: 이 값이 높을수록 좋음)
-      summary.profitRatio = summary.totalCost > 0
-        ? parseFloat((summary.salesAmount / summary.totalCost).toFixed(2))
-        : 0;
+      summary.profitRatio =
+        summary.totalCost > 0
+          ? parseFloat((summary.salesAmount / summary.totalCost).toFixed(2))
+          : 0;
       return summary;
     });
 
@@ -327,7 +332,7 @@ export interface PurchaseTransaction {
   itemCode: string;
   itemName: string;
   quantity: number;
-  unitPrice: number;  // 매입단가 = 원가 proxy
+  unitPrice: number; // 매입단가 = 원가 proxy
   amount: number;
   warehouse?: string;
 }
@@ -512,7 +517,9 @@ export class MultiSpreadsheetAdapter {
 
     // Try to find BOM sheet
     const possibleSheetNames = ['BOM', 'bom', '자재명세서', '소요량', 'DB_BOM'];
-    let bomSheet = sheets.find(s => possibleSheetNames.some(n => s.toLowerCase().includes(n.toLowerCase())));
+    let bomSheet = sheets.find(s =>
+      possibleSheetNames.some(n => s.toLowerCase().includes(n.toLowerCase()))
+    );
     if (!bomSheet && sheets.length > 0) {
       bomSheet = sheets[0];
     }
@@ -526,10 +533,18 @@ export class MultiSpreadsheetAdapter {
     const rawData = await this.fetchSheetData(this.bomSpreadsheetId, bomSheet);
 
     return rawData.map(row => ({
-      parentItemCode: String(row['모품목코드'] || row['완제품코드'] || row['생산품목코드'] || row['상위품목'] || ''),
-      parentItemName: String(row['모품목명'] || row['완제품명'] || row['생산품목'] || row['상위품명'] || ''),
-      childItemCode: String(row['자품목코드'] || row['원자재코드'] || row['소요품목코드'] || row['하위품목'] || ''),
-      childItemName: String(row['자품목명'] || row['원자재명'] || row['소요품목'] || row['하위품명'] || ''),
+      parentItemCode: String(
+        row['모품목코드'] || row['완제품코드'] || row['생산품목코드'] || row['상위품목'] || ''
+      ),
+      parentItemName: String(
+        row['모품목명'] || row['완제품명'] || row['생산품목'] || row['상위품명'] || ''
+      ),
+      childItemCode: String(
+        row['자품목코드'] || row['원자재코드'] || row['소요품목코드'] || row['하위품목'] || ''
+      ),
+      childItemName: String(
+        row['자품목명'] || row['원자재명'] || row['소요품목'] || row['하위품명'] || ''
+      ),
       requiredQuantity: Number(row['소요량'] || row['필요수량'] || row['수량'] || 1),
       unit: String(row['단위'] || ''),
       level: Number(row['레벨'] || row['단계'] || 1),
@@ -545,7 +560,9 @@ export class MultiSpreadsheetAdapter {
       this.fetchBomData(),
     ]);
 
-    console.log(`[MultiSpreadsheetAdapter] 수집 완료: 판매 ${sales.length}, 구매 ${purchases.length}, BOM ${bom.length} 건`);
+    console.log(
+      `[MultiSpreadsheetAdapter] 수집 완료: 판매 ${sales.length}, 구매 ${purchases.length}, BOM ${bom.length} 건`
+    );
 
     return {
       sales,

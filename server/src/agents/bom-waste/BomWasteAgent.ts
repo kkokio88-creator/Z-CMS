@@ -1,11 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from '../base/Agent.js';
 import { geminiAdapter } from '../../adapters/GeminiAdapter.js';
-import type {
-  Task,
-  TaskResult,
-  CoachingMessage,
-} from '../../types/index.js';
+import type { Task, TaskResult, CoachingMessage } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager, BomDiffItem } from '../../services/StateManager.js';
 import type { LearningRegistry } from '../../services/LearningRegistry.js';
@@ -14,21 +10,12 @@ export class BomWasteAgent extends Agent {
   private anomalyThreshold = 5; // Default 5% variance threshold
   private confidenceMultiplier = 1.0;
 
-  constructor(
-    eventBus: EventBus,
-    stateManager: StateManager,
-    learningRegistry: LearningRegistry
-  ) {
+  constructor(eventBus: EventBus, stateManager: StateManager, learningRegistry: LearningRegistry) {
     super('bom-waste-agent', eventBus, stateManager, learningRegistry);
   }
 
   getCapabilities(): string[] {
-    return [
-      'BOM 차이 분석',
-      '폐기물 원인 추론',
-      '표준량 업데이트 제안',
-      '이상 패턴 감지',
-    ];
+    return ['BOM 차이 분석', '폐기물 원인 추론', '표준량 업데이트 제안', '이상 패턴 감지'];
   }
 
   async process(task: Task): Promise<TaskResult> {
@@ -75,14 +62,13 @@ export class BomWasteAgent extends Agent {
     }
 
     // Find items with significant variance
-    const anomalies = bomItems.filter(
-      item => Math.abs(item.diffPercent) >= this.anomalyThreshold
-    );
+    const anomalies = bomItems.filter(item => Math.abs(item.diffPercent) >= this.anomalyThreshold);
 
     // Generate AI reasoning for each anomaly
     const analyzedItems: BomDiffItem[] = [];
 
-    for (const item of anomalies.slice(0, 5)) { // Limit to top 5
+    for (const item of anomalies.slice(0, 5)) {
+      // Limit to top 5
       const reasoning = await geminiAdapter.analyzeAnomaly({
         itemName: item.skuName,
         expected: item.stdQty,
@@ -118,11 +104,7 @@ export class BomWasteAgent extends Agent {
           level: topAnomaly.anomalyScore >= 80 ? 'critical' : 'warning',
           confidence: 0.85 * this.confidenceMultiplier,
           data: analyzedItems,
-          suggestedActions: [
-            '표준 BOM 수량 검토',
-            '작업 공정 점검',
-            '원자재 품질 확인',
-          ],
+          suggestedActions: ['표준 BOM 수량 검토', '작업 공정 점검', '원자재 품질 확인'],
         }
       );
     }
@@ -160,7 +142,8 @@ export class BomWasteAgent extends Agent {
     // Calculate trend direction
     const recentAvg = wasteTrend.slice(-7).reduce((sum, d) => sum + d.wastePercent, 0) / 7;
     const previousAvg = wasteTrend.slice(-14, -7).reduce((sum, d) => sum + d.wastePercent, 0) / 7;
-    const trend = recentAvg > previousAvg ? 'increasing' : recentAvg < previousAvg ? 'decreasing' : 'stable';
+    const trend =
+      recentAvg > previousAvg ? 'increasing' : recentAvg < previousAvg ? 'decreasing' : 'stable';
 
     // Check if exceeding target
     const latestWaste = wasteTrend[wasteTrend.length - 1];
@@ -173,14 +156,11 @@ export class BomWasteAgent extends Agent {
         `현재 폐기율 ${latestWaste.wastePercent.toFixed(1)}% (목표: ${latestWaste.targetPercent}%)`,
         {
           highlight: trend === 'increasing' ? '지난 주 대비 상승 추세' : undefined,
-          level: latestWaste.wastePercent > latestWaste.targetPercent * 1.2 ? 'critical' : 'warning',
+          level:
+            latestWaste.wastePercent > latestWaste.targetPercent * 1.2 ? 'critical' : 'warning',
           confidence: 0.9,
           data: { trend, recentAvg, previousAvg },
-          suggestedActions: [
-            '생산 라인별 폐기 원인 분석',
-            '작업자 교육 강화',
-            '원자재 품질 점검',
-          ],
+          suggestedActions: ['생산 라인별 폐기 원인 분석', '작업자 교육 강화', '원자재 품질 점검'],
         }
       );
     }

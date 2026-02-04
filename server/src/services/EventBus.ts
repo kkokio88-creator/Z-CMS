@@ -107,11 +107,7 @@ export class EventBus {
         });
       },
 
-      broadcast: (
-        type: MessageType,
-        payload: unknown,
-        priority: MessagePriority = 'medium'
-      ) => {
+      broadcast: (type: MessageType, payload: unknown, priority: MessagePriority = 'medium') => {
         return this.publish({
           source: sourceAgent,
           target: 'broadcast',
@@ -121,11 +117,7 @@ export class EventBus {
         });
       },
 
-      reply: (
-        originalMessage: AgentMessage,
-        type: MessageType,
-        payload: unknown
-      ) => {
+      reply: (originalMessage: AgentMessage, type: MessageType, payload: unknown) => {
         return this.publish({
           source: sourceAgent,
           target: originalMessage.source,
@@ -149,9 +141,7 @@ export class EventBus {
    * Get messages by type
    */
   getMessagesByType(type: MessageType, limit = 50): AgentMessage[] {
-    return this.messageHistory
-      .filter(m => m.type === type)
-      .slice(-limit);
+    return this.messageHistory.filter(m => m.type === type).slice(-limit);
   }
 
   /**

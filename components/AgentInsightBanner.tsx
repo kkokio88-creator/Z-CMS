@@ -48,22 +48,20 @@ export const AgentInsightBanner: React.FC<AgentInsightBannerProps> = ({
   const feedbackGiven = feedback || hasFeedback;
 
   return (
-    <div className={`${colors.bg} ${colors.border} border rounded-lg shadow-sm p-4 mb-4 transition-colors`}>
+    <div
+      className={`${colors.bg} ${colors.border} border rounded-lg shadow-sm p-4 mb-4 transition-colors`}
+    >
       <div className="flex items-start gap-3">
         {/* Icon */}
         <div className={`p-2 rounded-full ${colors.bg} shrink-0`}>
-          <span className={`material-icons-outlined ${colors.text}`}>
-            {levelIcon}
-          </span>
+          <span className={`material-icons-outlined ${colors.text}`}>{levelIcon}</span>
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className={`text-sm font-semibold ${colors.text}`}>
-              {insight.title}
-            </h3>
+            <h3 className={`text-sm font-semibold ${colors.text}`}>{insight.title}</h3>
 
             {/* Agent Badge */}
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
@@ -89,9 +87,7 @@ export const AgentInsightBanner: React.FC<AgentInsightBannerProps> = ({
           <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
             {insight.description}
             {insight.highlight && (
-              <span className={`font-semibold ml-1 ${colors.text}`}>
-                {insight.highlight}
-              </span>
+              <span className={`font-semibold ml-1 ${colors.text}`}>{insight.highlight}</span>
             )}
           </p>
 

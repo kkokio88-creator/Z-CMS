@@ -81,10 +81,7 @@ export class EcountAdapter {
     }
   }
 
-  private async callApi<T>(
-    endpoint: string,
-    params: Record<string, unknown> = {}
-  ): Promise<T[]> {
+  private async callApi<T>(endpoint: string, params: Record<string, unknown> = {}): Promise<T[]> {
     if (!this.sessionId) {
       const loginSuccess = await this.login();
       if (!loginSuccess) {
@@ -149,8 +146,14 @@ export class EcountAdapter {
     const endpoints = [
       { path: '/SaleIO/GetListSaleIO', params: { IO_DATE_FROM: dateFrom, IO_DATE_TO: dateTo } },
       { path: '/Sale/GetListSale', params: { SALE_DATE_FROM: dateFrom, SALE_DATE_TO: dateTo } },
-      { path: '/SaleSlip/GetListSaleSlip', params: { SALE_DATE_FROM: dateFrom, SALE_DATE_TO: dateTo } },
-      { path: '/SaleSlipIO/GetListSaleSlipIO', params: { IO_DATE_FROM: dateFrom, IO_DATE_TO: dateTo } },
+      {
+        path: '/SaleSlip/GetListSaleSlip',
+        params: { SALE_DATE_FROM: dateFrom, SALE_DATE_TO: dateTo },
+      },
+      {
+        path: '/SaleSlipIO/GetListSaleSlipIO',
+        params: { IO_DATE_FROM: dateFrom, IO_DATE_TO: dateTo },
+      },
       { path: '/Sale/GetSaleList', params: { FROM_DATE: dateFrom, TO_DATE: dateTo } },
     ];
     return this.tryEndpoints<EcountSaleRaw>(endpoints, '판매');
@@ -159,10 +162,22 @@ export class EcountAdapter {
   async fetchPurchases(dateFrom: string, dateTo: string): Promise<EcountPurchaseRaw[]> {
     // ECOUNT OAPI V2: 다양한 구매/발주 조회 엔드포인트 시도
     const endpoints = [
-      { path: '/PurchaseIO/GetListPurchaseIO', params: { IO_DATE_FROM: dateFrom, IO_DATE_TO: dateTo } },
-      { path: '/Purchases/GetListPurchases', params: { PURCHASE_DATE_FROM: dateFrom, PURCHASE_DATE_TO: dateTo } },
-      { path: '/PurchasesSlip/GetListPurchasesSlip', params: { PURCHASE_DATE_FROM: dateFrom, PURCHASE_DATE_TO: dateTo } },
-      { path: '/PurchaseOrder/GetListPurchaseOrder', params: { ORDER_DATE_FROM: dateFrom, ORDER_DATE_TO: dateTo } },
+      {
+        path: '/PurchaseIO/GetListPurchaseIO',
+        params: { IO_DATE_FROM: dateFrom, IO_DATE_TO: dateTo },
+      },
+      {
+        path: '/Purchases/GetListPurchases',
+        params: { PURCHASE_DATE_FROM: dateFrom, PURCHASE_DATE_TO: dateTo },
+      },
+      {
+        path: '/PurchasesSlip/GetListPurchasesSlip',
+        params: { PURCHASE_DATE_FROM: dateFrom, PURCHASE_DATE_TO: dateTo },
+      },
+      {
+        path: '/PurchaseOrder/GetListPurchaseOrder',
+        params: { ORDER_DATE_FROM: dateFrom, ORDER_DATE_TO: dateTo },
+      },
       { path: '/PO/GetListPO', params: { FROM_DATE: dateFrom, TO_DATE: dateTo } },
     ];
     return this.tryEndpoints<EcountPurchaseRaw>(endpoints, '구매');
@@ -171,18 +186,33 @@ export class EcountAdapter {
   async fetchInventory(): Promise<EcountInventoryRaw[]> {
     // ECOUNT OAPI V2: 재고 현황 조회 (창고+품목별) - 이미 작동함
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    return this.callApi<EcountInventoryRaw>('/InventoryBalance/GetListInventoryBalanceStatusByLocation', {
-      BASE_DATE: today,
-    });
+    return this.callApi<EcountInventoryRaw>(
+      '/InventoryBalance/GetListInventoryBalanceStatusByLocation',
+      {
+        BASE_DATE: today,
+      }
+    );
   }
 
   async fetchProduction(dateFrom: string, dateTo: string): Promise<EcountProductionRaw[]> {
     // ECOUNT OAPI V2: 다양한 생산 조회 엔드포인트 시도
     const endpoints = [
-      { path: '/ProductionIO/GetListProductionIO', params: { IO_DATE_FROM: dateFrom, IO_DATE_TO: dateTo } },
-      { path: '/Production/GetListProduction', params: { PROD_DATE_FROM: dateFrom, PROD_DATE_TO: dateTo } },
-      { path: '/ProductionSlip/GetListProductionSlip', params: { PROD_DATE_FROM: dateFrom, PROD_DATE_TO: dateTo } },
-      { path: '/ProductionOrder/GetListProductionOrder', params: { ORDER_DATE_FROM: dateFrom, ORDER_DATE_TO: dateTo } },
+      {
+        path: '/ProductionIO/GetListProductionIO',
+        params: { IO_DATE_FROM: dateFrom, IO_DATE_TO: dateTo },
+      },
+      {
+        path: '/Production/GetListProduction',
+        params: { PROD_DATE_FROM: dateFrom, PROD_DATE_TO: dateTo },
+      },
+      {
+        path: '/ProductionSlip/GetListProductionSlip',
+        params: { PROD_DATE_FROM: dateFrom, PROD_DATE_TO: dateTo },
+      },
+      {
+        path: '/ProductionOrder/GetListProductionOrder',
+        params: { ORDER_DATE_FROM: dateFrom, ORDER_DATE_TO: dateTo },
+      },
     ];
     return this.tryEndpoints<EcountProductionRaw>(endpoints, '생산');
   }
@@ -206,8 +236,14 @@ export class EcountAdapter {
   // 발주서 조회 (Purchase Orders)
   async fetchPurchaseOrders(dateFrom: string, dateTo: string): Promise<any[]> {
     const endpoints = [
-      { path: '/Purchases/GetPurchasesOrderList', params: { ORDER_DATE_FROM: dateFrom, ORDER_DATE_TO: dateTo } },
-      { path: '/PurchaseOrder/GetListPurchaseOrder', params: { ORDER_DATE_FROM: dateFrom, ORDER_DATE_TO: dateTo } },
+      {
+        path: '/Purchases/GetPurchasesOrderList',
+        params: { ORDER_DATE_FROM: dateFrom, ORDER_DATE_TO: dateTo },
+      },
+      {
+        path: '/PurchaseOrder/GetListPurchaseOrder',
+        params: { ORDER_DATE_FROM: dateFrom, ORDER_DATE_TO: dateTo },
+      },
       { path: '/PO/GetListPO', params: { FROM_DATE: dateFrom, TO_DATE: dateTo } },
     ];
     return this.tryEndpoints<any>(endpoints, '발주서');
@@ -217,7 +253,10 @@ export class EcountAdapter {
   async fetchInventoryByLocation(baseDate?: string): Promise<any[]> {
     const date = baseDate || new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const endpoints = [
-      { path: '/InventoryBalance/GetListInventoryBalanceStatusByLocation', params: { BASE_DATE: date } },
+      {
+        path: '/InventoryBalance/GetListInventoryBalanceStatusByLocation',
+        params: { BASE_DATE: date },
+      },
       { path: '/InventoryBalance/GetInventoryBalanceByWH', params: { BASE_DATE: date } },
       { path: '/Inventory/GetListInventoryByWarehouse', params: { BASE_DATE: date } },
     ];
@@ -229,7 +268,10 @@ export class EcountAdapter {
     const endpoints = [
       { path: '/TimeMgmt/GetAttendanceList', params: { FROM_DATE: dateFrom, TO_DATE: dateTo } },
       { path: '/TimeMgmt/GetListClockInOut', params: { FROM_DATE: dateFrom, TO_DATE: dateTo } },
-      { path: '/Attendance/GetListAttendance', params: { ATT_DATE_FROM: dateFrom, ATT_DATE_TO: dateTo } },
+      {
+        path: '/Attendance/GetListAttendance',
+        params: { ATT_DATE_FROM: dateFrom, ATT_DATE_TO: dateTo },
+      },
       { path: '/HR/GetAttendanceRecord', params: { FROM_DATE: dateFrom, TO_DATE: dateTo } },
     ];
     return this.tryEndpoints<any>(endpoints, '출퇴근');
@@ -275,7 +317,7 @@ export class EcountAdapter {
       purchaseOrders,
       inventoryByLocation,
       attendance,
-      customers
+      customers,
     ] = await Promise.all([
       this.fetchSales(dateFrom, dateTo),
       this.fetchPurchases(dateFrom, dateTo),

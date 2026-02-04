@@ -1,5 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { googleSheetsAdapter, MonthlyCostSummary, CostTarget } from '../adapters/GoogleSheetsAdapter.js';
+import {
+  googleSheetsAdapter,
+  MonthlyCostSummary,
+  CostTarget,
+} from '../adapters/GoogleSheetsAdapter.js';
 
 const router = Router();
 

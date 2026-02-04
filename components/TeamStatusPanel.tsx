@@ -39,30 +39,34 @@ const teamLabels: Record<string, { name: string; icon: string; color: string }> 
   'bom-waste-team': { name: 'BOM/Waste', icon: '🏭', color: 'blue' },
   'inventory-team': { name: '재고', icon: '📦', color: 'green' },
   'profitability-team': { name: '수익성', icon: '💰', color: 'yellow' },
-  'cost-team': { name: '원가', icon: '📊', color: 'purple' }
+  'cost-team': { name: '원가', icon: '📊', color: 'purple' },
 };
 
 const roleLabels: Record<string, { name: string; icon: string }> = {
   optimist: { name: '혁신가', icon: '💡' },
   pessimist: { name: '검증가', icon: '⚠️' },
-  mediator: { name: '조율자', icon: '⚖️' }
+  mediator: { name: '조율자', icon: '⚖️' },
 };
 
 const statusColors: Record<string, string> = {
   idle: 'bg-gray-400',
   processing: 'bg-blue-500 animate-pulse',
   error: 'bg-red-500',
-  stopped: 'bg-gray-600'
+  stopped: 'bg-gray-600',
 };
 
 export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
   apiBaseUrl = 'http://localhost:3001/api',
   refreshInterval = 5000,
   onTeamClick,
-  onStartDebate
+  onStartDebate,
 }) => {
   const [teams, setTeams] = useState<TeamStatus[]>([]);
-  const [debateStatus, setDebateStatus] = useState<DebateStatus>({ active: 0, pending: 0, completed: 0 });
+  const [debateStatus, setDebateStatus] = useState<DebateStatus>({
+    active: 0,
+    pending: 0,
+    completed: 0,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
@@ -96,7 +100,7 @@ export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
       const response = await fetch(`${apiBaseUrl}/debates/all-teams`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priority: 'medium' })
+        body: JSON.stringify({ priority: 'medium' }),
       });
 
       if (response.ok) {
@@ -108,14 +112,18 @@ export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
   };
 
   const getTeamOverallStatus = (team: TeamStatus): 'idle' | 'processing' | 'error' => {
-    if (team.optimist.status === 'error' ||
-        team.pessimist.status === 'error' ||
-        team.mediator.status === 'error') {
+    if (
+      team.optimist.status === 'error' ||
+      team.pessimist.status === 'error' ||
+      team.mediator.status === 'error'
+    ) {
       return 'error';
     }
-    if (team.optimist.status === 'processing' ||
-        team.pessimist.status === 'processing' ||
-        team.mediator.status === 'processing') {
+    if (
+      team.optimist.status === 'processing' ||
+      team.pessimist.status === 'processing' ||
+      team.mediator.status === 'processing'
+    ) {
       return 'processing';
     }
     return 'idle';
@@ -133,12 +141,12 @@ export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
       >
         <div className="relative">
           <span className="text-lg">{icon}</span>
-          <span className={`absolute -bottom-1 -right-1 w-2 h-2 rounded-full ${statusColors[agent.status]}`} />
+          <span
+            className={`absolute -bottom-1 -right-1 w-2 h-2 rounded-full ${statusColors[agent.status]}`}
+          />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-            {name}
-          </p>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{name}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {agent.processedTasks}건 • {agent.successRate}%
           </p>
@@ -164,10 +172,7 @@ export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
       <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 dark:text-red-400">
         <p className="font-medium">상태 조회 실패</p>
         <p className="text-sm">{error}</p>
-        <button
-          onClick={fetchStatus}
-          className="mt-2 text-sm underline hover:no-underline"
-        >
+        <button onClick={fetchStatus} className="mt-2 text-sm underline hover:no-underline">
           다시 시도
         </button>
       </div>
@@ -210,7 +215,7 @@ export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
             <p className="text-sm">서버가 실행 중인지 확인하세요</p>
           </div>
         ) : (
-          teams.map((team) => {
+          teams.map(team => {
             const info = teamLabels[team.team] || { name: team.team, icon: '👥', color: 'gray' };
             const overallStatus = getTeamOverallStatus(team);
             const isExpanded = expandedTeam === team.team;
@@ -247,8 +252,11 @@ export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
                         <div className="flex items-center gap-1 text-xs text-gray-500">
                           <span className={`w-2 h-2 rounded-full ${statusColors[overallStatus]}`} />
                           <span>
-                            {overallStatus === 'processing' ? '토론 진행중' :
-                             overallStatus === 'error' ? '오류 발생' : '대기중'}
+                            {overallStatus === 'processing'
+                              ? '토론 진행중'
+                              : overallStatus === 'error'
+                                ? '오류 발생'
+                                : '대기중'}
                           </span>
                         </div>
                       </div>
@@ -257,7 +265,7 @@ export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
                     <div className="flex items-center gap-2">
                       {onStartDebate && (
                         <button
-                          onClick={(e) => {
+                          onClick={e => {
                             e.stopPropagation();
                             onStartDebate(team.team);
                           }}

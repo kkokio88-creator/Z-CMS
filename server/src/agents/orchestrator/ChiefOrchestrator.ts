@@ -19,7 +19,7 @@ import type {
   DebateRecord,
   DebateRound,
   FinalDecision,
-  MessagePriority
+  MessagePriority,
 } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager } from '../../services/StateManager.js';
@@ -52,22 +52,21 @@ export class ChiefOrchestrator extends Agent {
   private debateManager?: DebateManager;
   private legacyAgents: Agent[] = []; // 기존 에이전트 (병행 운영)
 
-  private pendingDebates: Map<string, {
-    thesis?: DebateRound;
-    antithesis?: DebateRound;
-    synthesis?: DebateRound;
-    contextData: unknown;
-    priority: MessagePriority;
-  }> = new Map();
+  private pendingDebates: Map<
+    string,
+    {
+      thesis?: DebateRound;
+      antithesis?: DebateRound;
+      synthesis?: DebateRound;
+      contextData: unknown;
+      priority: MessagePriority;
+    }
+  > = new Map();
 
   private insightBuffer: Map<string, AgentInsight> = new Map();
   private coachingInterval: NodeJS.Timeout | null = null;
 
-  constructor(
-    eventBus: EventBus,
-    stateManager: StateManager,
-    learningRegistry: LearningRegistry
-  ) {
+  constructor(eventBus: EventBus, stateManager: StateManager, learningRegistry: LearningRegistry) {
     super('chief-orchestrator', eventBus, stateManager, learningRegistry);
   }
 
@@ -113,7 +112,7 @@ export class ChiefOrchestrator extends Agent {
       '거버넌스 에스컬레이션',
       '에이전트 코칭',
       '우선순위 관리',
-      '변증법적 토론 조율'
+      '변증법적 토론 조율',
     ];
   }
 
@@ -157,18 +156,22 @@ export class ChiefOrchestrator extends Agent {
     try {
       switch (task.type) {
         case 'orchestrate_debate':
-          await this.orchestrateDebate(task.input as {
-            team: DomainTeam;
-            topic: string;
-            contextData: unknown;
-            priority?: MessagePriority;
-          });
+          await this.orchestrateDebate(
+            task.input as {
+              team: DomainTeam;
+              topic: string;
+              contextData: unknown;
+              priority?: MessagePriority;
+            }
+          );
           return this.successResult(task, startTime, { initiated: true });
 
         case 'orchestrate_all_teams':
-          await this.orchestrateAllTeams(task.input as {
-            priority?: MessagePriority;
-          });
+          await this.orchestrateAllTeams(
+            task.input as {
+              priority?: MessagePriority;
+            }
+          );
           return this.successResult(task, startTime, { initiated: true });
 
         case 'synthesize_insights':
@@ -184,7 +187,7 @@ export class ChiefOrchestrator extends Agent {
         agentId: this.id,
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        processingTime: Date.now() - startTime
+        processingTime: Date.now() - startTime,
       };
     }
   }
@@ -195,7 +198,7 @@ export class ChiefOrchestrator extends Agent {
       agentId: this.id,
       success: true,
       output,
-      processingTime: Date.now() - startTime
+      processingTime: Date.now() - startTime,
     };
   }
 
@@ -220,7 +223,7 @@ export class ChiefOrchestrator extends Agent {
       topic,
       contextData,
       priority,
-      immediate: true
+      immediate: true,
     });
 
     if (debateId === 'queued') {
@@ -231,18 +234,23 @@ export class ChiefOrchestrator extends Agent {
     // 진행 중인 토론 추적
     this.pendingDebates.set(debateId, {
       contextData,
-      priority
+      priority,
     });
 
     // 팀의 Optimist에게 토론 시작 메시지 전송
     const optimistId = this.getTeamOptimistId(team);
     const sender = this.eventBus.createSender(this.id);
 
-    sender.send(optimistId, 'DEBATE_START', {
-      debateId,
-      topic,
-      contextData
-    }, priority);
+    sender.send(
+      optimistId,
+      'DEBATE_START',
+      {
+        debateId,
+        topic,
+        contextData,
+      },
+      priority
+    );
 
     console.log(`[ChiefOrchestrator] 토론 시작: ${debateId} - ${topic}`);
     return debateId;
@@ -256,7 +264,7 @@ export class ChiefOrchestrator extends Agent {
       'bom-waste-team': 'bom-waste-optimist',
       'inventory-team': 'inventory-optimist',
       'profitability-team': 'profitability-optimist',
-      'cost-management-team': 'cost-optimist'
+      'cost-management-team': 'cost-optimist',
     };
     return mapping[team];
   }
@@ -272,23 +280,23 @@ export class ChiefOrchestrator extends Agent {
       {
         team: 'bom-waste-team',
         topic: 'BOM 차이 및 폐기물 분석',
-        contextData: state.getBomWasteState()
+        contextData: state.getBomWasteState(),
       },
       {
         team: 'inventory-team',
         topic: '재고 수준 및 안전재고 분석',
-        contextData: state.getInventoryState()
+        contextData: state.getInventoryState(),
       },
       {
         team: 'profitability-team',
         topic: '채널별 수익성 분석',
-        contextData: state.getProfitabilityState()
+        contextData: state.getProfitabilityState(),
       },
       {
         team: 'cost-management-team',
         topic: '원가 구조 분석',
-        contextData: {} // 원가 데이터는 별도 조회 필요
-      }
+        contextData: {}, // 원가 데이터는 별도 조회 필요
+      },
     ];
 
     for (const { team, topic, contextData } of teams) {
@@ -326,9 +334,10 @@ export class ChiefOrchestrator extends Agent {
     pendingDebate.synthesis = payload.synthesis;
 
     // 거버넌스 검토 요청 (높은 우선순위나 낮은 신뢰도의 경우)
-    const needsGovernance = pendingDebate.priority === 'critical' ||
-                            pendingDebate.priority === 'high' ||
-                            payload.synthesis.content.confidence < 70;
+    const needsGovernance =
+      pendingDebate.priority === 'critical' ||
+      pendingDebate.priority === 'high' ||
+      payload.synthesis.content.confidence < 70;
 
     if (needsGovernance && this.debateManager) {
       await this.requestGovernanceReview(payload.debateId);
@@ -351,18 +360,28 @@ export class ChiefOrchestrator extends Agent {
 
     // QA Specialist 검토 요청
     if (this.governanceAgents.qaSpecialist) {
-      sender.send('qa-specialist', 'GOVERNANCE_REVIEW_REQUEST', {
-        debateId,
-        debate
-      }, 'high');
+      sender.send(
+        'qa-specialist',
+        'GOVERNANCE_REVIEW_REQUEST',
+        {
+          debateId,
+          debate,
+        },
+        'high'
+      );
     }
 
     // Compliance Auditor 검토 요청
     if (this.governanceAgents.complianceAuditor) {
-      sender.send('compliance-auditor', 'GOVERNANCE_REVIEW_REQUEST', {
-        debateId,
-        debate
-      }, 'high');
+      sender.send(
+        'compliance-auditor',
+        'GOVERNANCE_REVIEW_REQUEST',
+        {
+          debateId,
+          debate,
+        },
+        'high'
+      );
     }
 
     console.log(`[ChiefOrchestrator] 거버넌스 검토 요청: ${debateId}`);
@@ -430,7 +449,7 @@ export class ChiefOrchestrator extends Agent {
       reasoning: synthesis.content.reasoning,
       confidence: synthesis.content.confidence,
       actions: synthesis.content.suggestedActions || [],
-      priority: pendingDebate.priority
+      priority: pendingDebate.priority,
     };
   }
 
@@ -440,8 +459,12 @@ export class ChiefOrchestrator extends Agent {
   private publishDebateInsight(debate: DebateRecord): void {
     if (!debate.finalDecision) return;
 
-    const level = debate.finalDecision.confidence >= 80 ? 'info' :
-                  debate.finalDecision.confidence >= 60 ? 'warning' : 'critical';
+    const level =
+      debate.finalDecision.confidence >= 80
+        ? 'info'
+        : debate.finalDecision.confidence >= 60
+          ? 'warning'
+          : 'critical';
 
     this.publishInsight(
       debate.domain,
@@ -459,11 +482,11 @@ export class ChiefOrchestrator extends Agent {
           governanceReviews: debate.governanceReviews?.map(r => ({
             reviewer: r.reviewerId,
             approved: r.approved,
-            score: r.score
-          }))
+            score: r.score,
+          })),
         },
         actionable: true,
-        suggestedActions: debate.finalDecision.actions
+        suggestedActions: debate.finalDecision.actions,
       }
     );
   }
@@ -498,8 +521,9 @@ export class ChiefOrchestrator extends Agent {
    * 모든 인사이트 종합
    */
   async synthesizeAllInsights(): Promise<string> {
-    const recentInsights = Array.from(this.insightBuffer.values())
-      .filter(i => Date.now() - i.timestamp.getTime() < 300000); // 최근 5분
+    const recentInsights = Array.from(this.insightBuffer.values()).filter(
+      i => Date.now() - i.timestamp.getTime() < 300000
+    ); // 최근 5분
 
     const byDomain: Record<string, AgentInsight[]> = {};
     for (const insight of recentInsights) {
@@ -511,36 +535,33 @@ export class ChiefOrchestrator extends Agent {
 
     // Gemini로 종합 생성
     const summary = await geminiAdapter.generateCoordinatorSummary({
-      bomWaste: byDomain['bom']?.map(i => i.description).join('; ') ||
-                byDomain['waste']?.map(i => i.description).join('; '),
+      bomWaste:
+        byDomain['bom']?.map(i => i.description).join('; ') ||
+        byDomain['waste']?.map(i => i.description).join('; '),
       inventory: byDomain['inventory']?.map(i => i.description).join('; '),
-      profitability: byDomain['profitability']?.map(i => i.description).join('; ')
+      profitability: byDomain['profitability']?.map(i => i.description).join('; '),
     });
 
     // 종합 인사이트 발행
     const criticalCount = recentInsights.filter(i => i.level === 'critical').length;
     const warningCount = recentInsights.filter(i => i.level === 'warning').length;
 
-    this.publishInsight(
-      'general',
-      '전체 도메인 종합 분석',
-      summary,
-      {
-        highlight: criticalCount > 0
+    this.publishInsight('general', '전체 도메인 종합 분석', summary, {
+      highlight:
+        criticalCount > 0
           ? `긴급 ${criticalCount}건, 주의 ${warningCount}건`
           : warningCount > 0
             ? `주의 ${warningCount}건`
             : '정상 운영 중',
-        level: criticalCount > 0 ? 'critical' : warningCount > 0 ? 'warning' : 'info',
-        confidence: 0.9,
-        data: {
-          domainCount: Object.keys(byDomain).length,
-          insightCount: recentInsights.length,
-          criticalCount,
-          warningCount
-        }
-      }
-    );
+      level: criticalCount > 0 ? 'critical' : warningCount > 0 ? 'warning' : 'info',
+      confidence: 0.9,
+      data: {
+        domainCount: Object.keys(byDomain).length,
+        insightCount: recentInsights.length,
+        criticalCount,
+        warningCount,
+      },
+    });
 
     return summary;
   }
@@ -586,7 +607,7 @@ export class ChiefOrchestrator extends Agent {
     return {
       active: queueStatus?.activeCount || 0,
       pending: this.pendingDebates.size,
-      completed: statistics?.completedDebates || 0
+      completed: statistics?.completedDebates || 0,
     };
   }
 
@@ -600,7 +621,7 @@ export class ChiefOrchestrator extends Agent {
       { name: 'bom-waste-team', team: this.domainTeams.bomWaste },
       { name: 'inventory-team', team: this.domainTeams.inventory },
       { name: 'profitability-team', team: this.domainTeams.profitability },
-      { name: 'cost-team', team: this.domainTeams.cost }
+      { name: 'cost-team', team: this.domainTeams.cost },
     ];
 
     for (const { name, team } of teams) {
@@ -609,7 +630,7 @@ export class ChiefOrchestrator extends Agent {
           team: name,
           optimist: team.optimist.getStatus(),
           pessimist: team.pessimist.getStatus(),
-          mediator: team.mediator.getStatus()
+          mediator: team.mediator.getStatus(),
         });
       }
     }

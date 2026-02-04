@@ -6,13 +6,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import {
-  DebateRecord,
-  DebatePhase,
-  WipFileMetadata,
-  InsightDomain,
-  DomainTeam
-} from '../types';
+import { DebateRecord, DebatePhase, WipFileMetadata, InsightDomain, DomainTeam } from '../types';
 
 export class WipManager {
   private wipPath: string;
@@ -183,7 +177,7 @@ export class WipManager {
     // 거버넌스 검토
     if (debate.governanceReviews?.length) {
       lines.push('## 거버넌스 검토');
-      debate.governanceReviews.forEach((review) => {
+      debate.governanceReviews.forEach(review => {
         lines.push(`### ${review.reviewerId} 검토`);
         lines.push(`- **승인**: ${review.approved ? '✅ 승인됨' : '❌ 거부됨'}`);
         lines.push(`- **점수**: ${review.score}/100`);
@@ -219,7 +213,7 @@ export class WipManager {
       antithesis: '반(反) 진행중',
       synthesis: '합(合) 진행중',
       governance_review: '거버넌스 검토중',
-      complete: '완료'
+      complete: '완료',
     };
     return phaseNames[phase] || phase;
   }
@@ -344,7 +338,7 @@ export class WipManager {
           filename: file,
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
-          phase: this.parsePhase(phaseMatch?.[1] || 'pending')
+          phase: this.parsePhase(phaseMatch?.[1] || 'pending'),
         });
       }
 
@@ -357,12 +351,12 @@ export class WipManager {
 
   private parsePhase(phaseText: string): DebatePhase {
     const phaseMap: Record<string, DebatePhase> = {
-      '대기중': 'pending',
+      대기중: 'pending',
       '정(正) 진행중': 'thesis',
       '반(反) 진행중': 'antithesis',
       '합(合) 진행중': 'synthesis',
       '거버넌스 검토중': 'governance_review',
-      '완료': 'complete'
+      완료: 'complete',
     };
     return phaseMap[phaseText] || 'pending';
   }

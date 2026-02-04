@@ -89,7 +89,8 @@ router.post('/sync', async (req: Request, res: Response) => {
 // Transform ECOUNT raw data to frontend format
 function transformEcountData(data: any) {
   // Transform inventory data - use inventoryByLocation if inventory is empty
-  const inventorySource = data.inventory.length > 0 ? data.inventory : (data.inventoryByLocation || []);
+  const inventorySource =
+    data.inventory.length > 0 ? data.inventory : data.inventoryByLocation || [];
   const inventory = inventorySource.map((item: any, idx: number) => ({
     id: item.PROD_CD || `inv-${idx}`,
     skuName: item.PROD_DES || item.PROD_CD || `품목 ${idx + 1}`,
@@ -124,7 +125,7 @@ function transformEcountData(data: any) {
       date,
       revenue: Math.round(revenue),
       profit: Math.round(revenue - cost),
-      marginRate: revenue > 0 ? parseFloat(((revenue - cost) / revenue * 100).toFixed(1)) : 0,
+      marginRate: revenue > 0 ? parseFloat((((revenue - cost) / revenue) * 100).toFixed(1)) : 0,
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-31); // Last 31 days
@@ -147,7 +148,10 @@ function transformEcountData(data: any) {
   }));
 
   // Calculate profit rankings from sales data
-  const productProfits = new Map<string, { name: string; channel: string; profit: number; revenue: number }>();
+  const productProfits = new Map<
+    string,
+    { name: string; channel: string; profit: number; revenue: number }
+  >();
   data.sales.forEach((sale: any) => {
     const prodCode = sale.PROD_CD || 'unknown';
     const existing = productProfits.get(prodCode) || {
@@ -180,14 +184,17 @@ function transformEcountData(data: any) {
     margin: parseFloat(item.margin.toFixed(1)),
   }));
 
-  const bottomProfit = sortedProfits.slice(-5).reverse().map((item, idx) => ({
-    id: `bot-${idx}`,
-    rank: idx + 1,
-    skuName: item.name,
-    channel: item.channel,
-    profit: Math.round(item.profit),
-    margin: parseFloat(item.margin.toFixed(1)),
-  }));
+  const bottomProfit = sortedProfits
+    .slice(-5)
+    .reverse()
+    .map((item, idx) => ({
+      id: `bot-${idx}`,
+      rank: idx + 1,
+      skuName: item.name,
+      channel: item.channel,
+      profit: Math.round(item.profit),
+      margin: parseFloat(item.margin.toFixed(1)),
+    }));
 
   // Generate waste trend from production data
   const wasteTrend = profitTrend.slice(-14).map(p => ({
@@ -244,7 +251,10 @@ function transformEcountData(data: any) {
   };
 }
 
-function determineStockStatus(current: number, safety: number): 'Shortage' | 'Normal' | 'Overstock' {
+function determineStockStatus(
+  current: number,
+  safety: number
+): 'Shortage' | 'Normal' | 'Overstock' {
   if (current < safety) return 'Shortage';
   if (current > safety * 2) return 'Overstock';
   return 'Normal';
@@ -278,10 +288,7 @@ router.get('/sales', async (req: Request, res: Response) => {
   }
 
   try {
-    const data = await ecountAdapter.fetchSales(
-      dateFrom as string,
-      dateTo as string
-    );
+    const data = await ecountAdapter.fetchSales(dateFrom as string, dateTo as string);
 
     res.json({
       success: true,
@@ -309,10 +316,7 @@ router.get('/purchases', async (req: Request, res: Response) => {
   }
 
   try {
-    const data = await ecountAdapter.fetchPurchases(
-      dateFrom as string,
-      dateTo as string
-    );
+    const data = await ecountAdapter.fetchPurchases(dateFrom as string, dateTo as string);
 
     res.json({
       success: true,
@@ -358,10 +362,7 @@ router.get('/production', async (req: Request, res: Response) => {
   }
 
   try {
-    const data = await ecountAdapter.fetchProduction(
-      dateFrom as string,
-      dateTo as string
-    );
+    const data = await ecountAdapter.fetchProduction(dateFrom as string, dateTo as string);
 
     res.json({
       success: true,
@@ -407,10 +408,7 @@ router.get('/purchase-orders', async (req: Request, res: Response) => {
   }
 
   try {
-    const data = await ecountAdapter.fetchPurchaseOrders(
-      dateFrom as string,
-      dateTo as string
-    );
+    const data = await ecountAdapter.fetchPurchaseOrders(dateFrom as string, dateTo as string);
 
     res.json({
       success: true,
@@ -458,10 +456,7 @@ router.get('/attendance', async (req: Request, res: Response) => {
   }
 
   try {
-    const data = await ecountAdapter.fetchAttendance(
-      dateFrom as string,
-      dateTo as string
-    );
+    const data = await ecountAdapter.fetchAttendance(dateFrom as string, dateTo as string);
 
     res.json({
       success: true,

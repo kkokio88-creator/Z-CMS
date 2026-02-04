@@ -13,7 +13,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       ></div>
@@ -21,9 +21,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
       {/* Modal Panel */}
       <div className="relative w-full max-w-lg transform rounded-xl bg-white dark:bg-surface-dark p-6 shadow-2xl transition-all border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold leading-6 text-gray-900 dark:text-white">
-            {title}
-          </h3>
+          <h3 className="text-lg font-bold leading-6 text-gray-900 dark:text-white">{title}</h3>
           <button
             onClick={onClose}
             className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700 focus:outline-none"
@@ -31,10 +29,8 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
             <span className="material-icons-outlined">close</span>
           </button>
         </div>
-        
-        <div className="mt-2">
-            {children}
-        </div>
+
+        <div className="mt-2">{children}</div>
 
         <div className="mt-6 flex justify-end gap-3">
           <button

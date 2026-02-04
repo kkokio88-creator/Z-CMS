@@ -62,13 +62,13 @@ interface DebateViewerProps {
 const phaseLabels: Record<string, { label: string; icon: string }> = {
   thesis: { label: '정(正)', icon: '💡' },
   antithesis: { label: '반(反)', icon: '⚠️' },
-  synthesis: { label: '합(合)', icon: '✨' }
+  synthesis: { label: '합(合)', icon: '✨' },
 };
 
 const roleLabels: Record<string, string> = {
   optimist: '혁신가',
   pessimist: '검증가',
-  mediator: '조율자'
+  mediator: '조율자',
 };
 
 const domainLabels: Record<string, string> = {
@@ -76,14 +76,10 @@ const domainLabels: Record<string, string> = {
   waste: '폐기물',
   inventory: '재고',
   profitability: '수익성',
-  general: '일반'
+  general: '일반',
 };
 
-export const DebateViewer: React.FC<DebateViewerProps> = ({
-  debate,
-  onClose,
-  onFeedback
-}) => {
+export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onFeedback }) => {
   const [expandedRound, setExpandedRound] = useState<string | null>(null);
   const [showGovernance, setShowGovernance] = useState(false);
 
@@ -93,7 +89,7 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -104,7 +100,10 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
     return 'pending';
   };
 
-  const renderRound = (round: DebateRound | undefined, phase: 'thesis' | 'antithesis' | 'synthesis') => {
+  const renderRound = (
+    round: DebateRound | undefined,
+    phase: 'thesis' | 'antithesis' | 'synthesis'
+  ) => {
     const status = getPhaseStatus(phase);
     const { label, icon } = phaseLabels[phase];
     const isExpanded = expandedRound === phase;
@@ -132,12 +131,14 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
           </div>
           {round && (
             <div className="flex items-center gap-2">
-              <span className={`
+              <span
+                className={`
                 px-2 py-1 rounded text-sm font-medium
                 ${round.content.confidence >= 80 ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : ''}
                 ${round.content.confidence >= 60 && round.content.confidence < 80 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : ''}
                 ${round.content.confidence < 60 ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : ''}
-              `}>
+              `}
+              >
                 신뢰도 {round.content.confidence}%
               </span>
             </div>
@@ -147,9 +148,7 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
         {/* 입장 */}
         {round ? (
           <div>
-            <p className="text-gray-800 dark:text-gray-200 font-medium">
-              {round.content.position}
-            </p>
+            <p className="text-gray-800 dark:text-gray-200 font-medium">{round.content.position}</p>
 
             {/* 확장된 상세 내용 */}
             {isExpanded && (
@@ -164,7 +163,9 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
                     <h4 className="font-semibold text-gray-600 dark:text-gray-400 mb-1">근거</h4>
                     <ul className="list-disc list-inside space-y-1">
                       {round.content.evidence.map((e, i) => (
-                        <li key={i} className="text-gray-700 dark:text-gray-300">{e}</li>
+                        <li key={i} className="text-gray-700 dark:text-gray-300">
+                          {e}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -172,10 +173,14 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
 
                 {round.content.suggestedActions && round.content.suggestedActions.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-600 dark:text-gray-400 mb-1">권장 조치</h4>
+                    <h4 className="font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                      권장 조치
+                    </h4>
                     <ul className="list-decimal list-inside space-y-1">
                       {round.content.suggestedActions.map((a, i) => (
-                        <li key={i} className="text-gray-700 dark:text-gray-300">{a}</li>
+                        <li key={i} className="text-gray-700 dark:text-gray-300">
+                          {a}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -247,13 +252,15 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🎯</span>
               <h3 className="font-bold text-indigo-800 dark:text-indigo-200">최종 결정</h3>
-              <span className={`
+              <span
+                className={`
                 px-2 py-0.5 rounded text-xs
                 ${debate.finalDecision.priority === 'critical' ? 'bg-red-500 text-white' : ''}
                 ${debate.finalDecision.priority === 'high' ? 'bg-orange-500 text-white' : ''}
                 ${debate.finalDecision.priority === 'medium' ? 'bg-yellow-500 text-white' : ''}
                 ${debate.finalDecision.priority === 'low' ? 'bg-gray-500 text-white' : ''}
-              `}>
+              `}
+              >
                 {debate.finalDecision.priority}
               </span>
             </div>
@@ -262,7 +269,9 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
             </p>
             {debate.finalDecision.actions.length > 0 && (
               <div className="mt-2">
-                <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400">실행 항목</h4>
+                <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  실행 항목
+                </h4>
                 <ul className="mt-1 space-y-1">
                   {debate.finalDecision.actions.map((action, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm">
@@ -292,7 +301,7 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
 
           {showGovernance && (
             <div className="mt-2 space-y-2">
-              {debate.governanceReviews.map((review) => (
+              {debate.governanceReviews.map(review => (
                 <div
                   key={review.id}
                   className={`
@@ -302,7 +311,9 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-medium">
-                      {review.reviewerId === 'qa-specialist' ? 'QA Specialist' : 'Compliance Auditor'}
+                      {review.reviewerId === 'qa-specialist'
+                        ? 'QA Specialist'
+                        : 'Compliance Auditor'}
                     </span>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">{review.score}/100</span>

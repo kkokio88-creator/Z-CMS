@@ -9,7 +9,13 @@ import { AgentId, InsightDomain, MessagePriority } from './index';
 export type TrioRole = 'optimist' | 'pessimist' | 'mediator';
 
 // 토론 단계
-export type DebatePhase = 'pending' | 'thesis' | 'antithesis' | 'synthesis' | 'governance_review' | 'complete';
+export type DebatePhase =
+  | 'pending'
+  | 'thesis'
+  | 'antithesis'
+  | 'synthesis'
+  | 'governance_review'
+  | 'complete';
 
 // 도메인 팀 식별자
 export type DomainTeam =

@@ -43,25 +43,18 @@ export const WasteTrendChart: React.FC<Props> = ({ data }) => {
 
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={data}
-            margin={{ top: 20, right: 30, left: -20, bottom: 0 }}
-          >
+          <LineChart data={data} margin={{ top: 20, right: 30, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-            <XAxis 
-                dataKey="day" 
-                tick={{ fontSize: 12, fill: '#6B7280' }} 
-                axisLine={false} 
-                tickLine={false} 
-                dy={10}
+            <XAxis
+              dataKey="day"
+              tick={{ fontSize: 12, fill: '#6B7280' }}
+              axisLine={false}
+              tickLine={false}
+              dy={10}
             />
-            <YAxis 
-                tick={{ fontSize: 12, fill: '#6B7280' }} 
-                axisLine={false} 
-                tickLine={false} 
-            />
+            <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
             <Tooltip content={<CustomTooltip />} />
-            
+
             {/* Average Line (Dashed) */}
             <Line
               type="monotone"
@@ -80,8 +73,8 @@ export const WasteTrendChart: React.FC<Props> = ({ data }) => {
               dataKey="actual"
               stroke="#2F5E3E"
               strokeWidth={3}
-              dot={{ r: 4, fill: "white", stroke: "#2F5E3E", strokeWidth: 2 }}
-              activeDot={{ r: 6, fill: "#2F5E3E", stroke: "white", strokeWidth: 2 }}
+              dot={{ r: 4, fill: 'white', stroke: '#2F5E3E', strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: '#2F5E3E', stroke: 'white', strokeWidth: 2 }}
               name="실제 폐기량"
             />
           </LineChart>

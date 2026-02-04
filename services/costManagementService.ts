@@ -77,7 +77,10 @@ export interface AgentInsight {
 }
 
 // Fetch Purchase Orders
-export const fetchPurchaseOrders = async (dateFrom?: string, dateTo?: string): Promise<PurchaseOrderData[]> => {
+export const fetchPurchaseOrders = async (
+  dateFrom?: string,
+  dateTo?: string
+): Promise<PurchaseOrderData[]> => {
   try {
     const today = new Date();
     const threeMonthsAgo = new Date(today);
@@ -86,7 +89,9 @@ export const fetchPurchaseOrders = async (dateFrom?: string, dateTo?: string): P
     const from = dateFrom || threeMonthsAgo.toISOString().slice(0, 10).replace(/-/g, '');
     const to = dateTo || today.toISOString().slice(0, 10).replace(/-/g, '');
 
-    const response = await fetch(`${BACKEND_URL}/ecount/purchase-orders?dateFrom=${from}&dateTo=${to}`);
+    const response = await fetch(
+      `${BACKEND_URL}/ecount/purchase-orders?dateFrom=${from}&dateTo=${to}`
+    );
     const result = await response.json();
 
     if (!result.success) {
@@ -112,7 +117,9 @@ export const fetchPurchaseOrders = async (dateFrom?: string, dateTo?: string): P
 };
 
 // Fetch Inventory by Location
-export const fetchInventoryByLocation = async (baseDate?: string): Promise<InventoryByLocation[]> => {
+export const fetchInventoryByLocation = async (
+  baseDate?: string
+): Promise<InventoryByLocation[]> => {
   try {
     const url = baseDate
       ? `${BACKEND_URL}/ecount/inventory-by-location?baseDate=${baseDate}`
@@ -133,7 +140,8 @@ export const fetchInventoryByLocation = async (baseDate?: string): Promise<Inven
       productName: inv.PROD_DES || inv.PROD_CD || '품목',
       quantity: parseFloat(inv.QTY || inv.BALANCE_QTY || 0),
       unitPrice: parseFloat(inv.UNIT_PRICE || 0),
-      totalValue: parseFloat(inv.AMT || 0) || parseFloat(inv.QTY || 0) * parseFloat(inv.UNIT_PRICE || 0),
+      totalValue:
+        parseFloat(inv.AMT || 0) || parseFloat(inv.QTY || 0) * parseFloat(inv.UNIT_PRICE || 0),
       category: inv.CLASS_CD || inv.CATEGORY || '일반',
     }));
   } catch (error) {
@@ -143,7 +151,10 @@ export const fetchInventoryByLocation = async (baseDate?: string): Promise<Inven
 };
 
 // Fetch Attendance Records
-export const fetchAttendanceRecords = async (dateFrom?: string, dateTo?: string): Promise<AttendanceRecord[]> => {
+export const fetchAttendanceRecords = async (
+  dateFrom?: string,
+  dateTo?: string
+): Promise<AttendanceRecord[]> => {
   try {
     const today = new Date();
     const oneMonthAgo = new Date(today);
@@ -222,11 +233,12 @@ export const calculateCostAnalysis = (
   const totalOvertimeHours = attendance.reduce((sum, att) => sum + att.overtimeHours, 0);
   const uniqueEmployees = new Set(attendance.map(a => a.employeeId)).size;
   const avgOvertimePerEmployee = uniqueEmployees > 0 ? totalOvertimeHours / uniqueEmployees : 0;
-  const totalLaborCost = attendance.reduce((sum, att) => sum + (att.workHours * hourlyWage), 0);
+  const totalLaborCost = attendance.reduce((sum, att) => sum + att.workHours * hourlyWage, 0);
 
   // Urgent order ratio
   const urgentOrders = purchaseOrders.filter(po => po.isUrgent).length;
-  const urgentOrderRatio = purchaseOrders.length > 0 ? (urgentOrders / purchaseOrders.length) * 100 : 0;
+  const urgentOrderRatio =
+    purchaseOrders.length > 0 ? (urgentOrders / purchaseOrders.length) * 100 : 0;
 
   // Top suppliers
   const supplierMap = new Map<string, number>();
@@ -245,8 +257,10 @@ export const calculateCostAnalysis = (
     const current = warehouseMap.get(inv.warehouseName) || 0;
     warehouseMap.set(inv.warehouseName, current + inv.totalValue);
   });
-  const costByWarehouse = Array.from(warehouseMap.entries())
-    .map(([warehouse, value]) => ({ warehouse, value }));
+  const costByWarehouse = Array.from(warehouseMap.entries()).map(([warehouse, value]) => ({
+    warehouse,
+    value,
+  }));
 
   // Labor by department
   const deptMap = new Map<string, { hours: number; cost: number }>();
@@ -254,11 +268,13 @@ export const calculateCostAnalysis = (
     const current = deptMap.get(att.department) || { hours: 0, cost: 0 };
     deptMap.set(att.department, {
       hours: current.hours + att.workHours,
-      cost: current.cost + (att.workHours * hourlyWage),
+      cost: current.cost + att.workHours * hourlyWage,
     });
   });
-  const laborByDepartment = Array.from(deptMap.entries())
-    .map(([department, data]) => ({ department, ...data }));
+  const laborByDepartment = Array.from(deptMap.entries()).map(([department, data]) => ({
+    department,
+    ...data,
+  }));
 
   return {
     totalPurchaseAmount,
@@ -284,8 +300,10 @@ export const fetchAgentInsights = async (): Promise<AgentInsight[]> => {
     }
 
     return result.data
-      .filter((insight: AgentInsight) =>
-        insight.domain === 'profitability' || insight.domain === 'inventory')
+      .filter(
+        (insight: AgentInsight) =>
+          insight.domain === 'profitability' || insight.domain === 'inventory'
+      )
       .slice(0, 10);
   } catch (error) {
     console.error('Agent insights fetch error:', error);
@@ -334,9 +352,8 @@ function calculateWorkHours(clockIn: string, clockOut: string): number {
     const outMinutes = outHour * 60 + outMin;
 
     // Handle overnight shifts
-    const diff = outMinutes >= inMinutes
-      ? outMinutes - inMinutes
-      : (24 * 60 - inMinutes) + outMinutes;
+    const diff =
+      outMinutes >= inMinutes ? outMinutes - inMinutes : 24 * 60 - inMinutes + outMinutes;
 
     // Subtract 1 hour lunch break
     return Math.max(0, (diff - 60) / 60);

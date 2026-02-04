@@ -18,7 +18,7 @@ import {
   DebateStartRequest,
   DebateEvent,
   DebateStatistics,
-  MessagePriority
+  MessagePriority,
 } from '../types';
 import { WipManager } from './WipManager';
 
@@ -27,7 +27,7 @@ const TEAM_TO_DOMAIN: Record<DomainTeam, InsightDomain> = {
   'bom-waste-team': 'bom',
   'inventory-team': 'inventory',
   'profitability-team': 'profitability',
-  'cost-management-team': 'general'
+  'cost-management-team': 'general',
 };
 
 export class DebateManager extends EventEmitter {
@@ -83,7 +83,7 @@ export class DebateManager extends EventEmitter {
       contextData: request.contextData,
       currentPhase: 'thesis',
       startedAt: new Date(),
-      version
+      version,
     };
 
     this.activeDebates.set(debateId, debate);
@@ -149,7 +149,7 @@ export class DebateManager extends EventEmitter {
     const fullReview: GovernanceReview = {
       id: uuidv4(),
       debateId,
-      ...review
+      ...review,
     };
 
     if (!debate.governanceReviews) {
@@ -169,10 +169,7 @@ export class DebateManager extends EventEmitter {
   /**
    * 토론 완료
    */
-  async completeDebate(
-    debateId: string,
-    finalDecision: FinalDecision
-  ): Promise<DebateRecord> {
+  async completeDebate(debateId: string, finalDecision: FinalDecision): Promise<DebateRecord> {
     const debate = this.activeDebates.get(debateId);
     if (!debate) {
       throw new Error(`토론을 찾을 수 없습니다: ${debateId}`);
@@ -219,10 +216,7 @@ export class DebateManager extends EventEmitter {
   /**
    * 토론 이벤트 발행
    */
-  private emitDebateEvent(
-    type: DebateEvent['type'],
-    debate: DebateRecord
-  ): void {
+  private emitDebateEvent(type: DebateEvent['type'], debate: DebateRecord): void {
     const event: DebateEvent = {
       type,
       debateId: debate.id,
@@ -231,9 +225,9 @@ export class DebateManager extends EventEmitter {
         domain: debate.domain,
         team: debate.team,
         topic: debate.topic,
-        currentPhase: debate.currentPhase
+        currentPhase: debate.currentPhase,
       },
-      timestamp: new Date()
+      timestamp: new Date(),
     };
     this.emit('debate_event', event);
   }
@@ -256,8 +250,7 @@ export class DebateManager extends EventEmitter {
    * 팀별 활성 토론 조회
    */
   getActiveDebatesByTeam(team: DomainTeam): DebateRecord[] {
-    return Array.from(this.activeDebates.values())
-      .filter(d => d.team === team);
+    return Array.from(this.activeDebates.values()).filter(d => d.team === team);
   }
 
   /**
@@ -311,14 +304,14 @@ export class DebateManager extends EventEmitter {
       waste: 0,
       inventory: 0,
       profitability: 0,
-      general: 0
+      general: 0,
     };
 
     const byTeam: Record<DomainTeam, number> = {
       'bom-waste-team': 0,
       'inventory-team': 0,
       'profitability-team': 0,
-      'cost-management-team': 0
+      'cost-management-team': 0,
     };
 
     allDebates.forEach(d => {
@@ -329,17 +322,13 @@ export class DebateManager extends EventEmitter {
     return {
       totalDebates: allDebates.length,
       completedDebates: completedDebates.length,
-      averageConfidence: completedDebates.length > 0
-        ? totalConfidence / completedDebates.length
-        : 0,
-      averageDuration: completedDebates.length > 0
-        ? totalDuration / completedDebates.length
-        : 0,
-      governanceApprovalRate: completedDebates.length > 0
-        ? approvedDebates.length / completedDebates.length
-        : 0,
+      averageConfidence:
+        completedDebates.length > 0 ? totalConfidence / completedDebates.length : 0,
+      averageDuration: completedDebates.length > 0 ? totalDuration / completedDebates.length : 0,
+      governanceApprovalRate:
+        completedDebates.length > 0 ? approvedDebates.length / completedDebates.length : 0,
       byDomain,
-      byTeam
+      byTeam,
     };
   }
 
@@ -359,7 +348,7 @@ export class DebateManager extends EventEmitter {
       reasoning: reason,
       confidence: 0,
       actions: [],
-      priority: 'low'
+      priority: 'low',
     };
 
     this.activeDebates.delete(debateId);
@@ -386,20 +375,23 @@ export class DebateManager extends EventEmitter {
     const roleDescriptions: Record<TrioRole, string> = {
       optimist: '가능성, 확장성, 창의적 대안 제시에 집중',
       pessimist: '제약 조건, 리스크, 잠재적 실패 요인 분석',
-      mediator: '두 관점을 통합하여 실행 가능한 최적의 결론 도출'
+      mediator: '두 관점을 통합하여 실행 가능한 최적의 결론 도출',
     };
 
     const successCriteriaByRole: Record<TrioRole, string> = {
-      optimist: 'position(주장), reasoning(추론), evidence(근거), confidence(신뢰도 0-100)를 포함한 JSON 형식',
-      pessimist: 'position(반론), reasoning(리스크 분석), evidence(위험 요소), confidence(신뢰도 0-100)를 포함한 JSON 형식',
-      mediator: 'position(종합), reasoning(균형 분석), suggestedActions(권고 조치), confidence(신뢰도 0-100)를 포함한 JSON 형식'
+      optimist:
+        'position(주장), reasoning(추론), evidence(근거), confidence(신뢰도 0-100)를 포함한 JSON 형식',
+      pessimist:
+        'position(반론), reasoning(리스크 분석), evidence(위험 요소), confidence(신뢰도 0-100)를 포함한 JSON 형식',
+      mediator:
+        'position(종합), reasoning(균형 분석), suggestedActions(권고 조치), confidence(신뢰도 0-100)를 포함한 JSON 형식',
     };
 
     return {
       context: `[${debate.domain}] ${debate.topic}\n배경 데이터: ${JSON.stringify(debate.contextData).slice(0, 500)}...`,
       agentRole: role,
       task: `${roleDescriptions[role]}. ${task}`,
-      successCriteria: successCriteriaByRole[role]
+      successCriteria: successCriteriaByRole[role],
     };
   }
 
@@ -414,7 +406,7 @@ export class DebateManager extends EventEmitter {
     return {
       activeCount: this.activeDebates.size,
       queuedCount: this.debateQueue.length,
-      maxActive: this.maxActiveDebates
+      maxActive: this.maxActiveDebates,
     };
   }
 }

@@ -29,23 +29,27 @@ export function createDebateRoutes(
       // 활성 토론
       if (includeActive === 'true') {
         const activeDebates = debateManager.getAllActiveDebates();
-        results.push(...activeDebates.map(d => ({
-          ...d,
-          isActive: true
-        })));
+        results.push(
+          ...activeDebates.map(d => ({
+            ...d,
+            isActive: true,
+          }))
+        );
       }
 
       // 히스토리
       const history = debateManager.getDebateHistory({
         domain: domain as string | undefined,
         team: team as DomainTeam | undefined,
-        limit: parseInt(limit as string)
+        limit: parseInt(limit as string),
       });
 
-      results.push(...history.map(d => ({
-        ...d,
-        isActive: false
-      })));
+      results.push(
+        ...history.map(d => ({
+          ...d,
+          isActive: false,
+        }))
+      );
 
       res.json({
         success: true,
@@ -53,14 +57,14 @@ export function createDebateRoutes(
         meta: {
           total: results.length,
           activeCount: debateManager.getQueueStatus().activeCount,
-          queuedCount: debateManager.getQueueStatus().queuedCount
-        }
+          queuedCount: debateManager.getQueueStatus().queuedCount,
+        },
       });
     } catch (error) {
       console.error('[DebateRoutes] 목록 조회 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -78,14 +82,14 @@ export function createDebateRoutes(
         success: true,
         data: {
           ...statistics,
-          queue: queueStatus
-        }
+          queue: queueStatus,
+        },
       });
     } catch (error) {
       console.error('[DebateRoutes] 통계 조회 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -112,7 +116,7 @@ export function createDebateRoutes(
       if (!debate) {
         return res.status(404).json({
           success: false,
-          error: '토론을 찾을 수 없습니다.'
+          error: '토론을 찾을 수 없습니다.',
         });
       }
 
@@ -120,14 +124,14 @@ export function createDebateRoutes(
         success: true,
         data: {
           ...debate,
-          isActive
-        }
+          isActive,
+        },
       });
     } catch (error) {
       console.error('[DebateRoutes] 상세 조회 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -144,7 +148,7 @@ export function createDebateRoutes(
       if (!log) {
         return res.status(404).json({
           success: false,
-          error: '토론 로그를 찾을 수 없습니다.'
+          error: '토론 로그를 찾을 수 없습니다.',
         });
       }
 
@@ -154,7 +158,7 @@ export function createDebateRoutes(
       if (format === 'json') {
         res.json({
           success: true,
-          data: { content: log }
+          data: { content: log },
         });
       } else {
         res.type('text/markdown').send(log);
@@ -163,7 +167,7 @@ export function createDebateRoutes(
       console.error('[DebateRoutes] 로그 조회 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -179,7 +183,7 @@ export function createDebateRoutes(
       if (!team || !topic) {
         return res.status(400).json({
           success: false,
-          error: 'team과 topic은 필수입니다.'
+          error: 'team과 topic은 필수입니다.',
         });
       }
 
@@ -187,7 +191,7 @@ export function createDebateRoutes(
         team: team as DomainTeam,
         topic,
         contextData: contextData || {},
-        priority: priority as MessagePriority
+        priority: priority as MessagePriority,
       });
 
       res.status(201).json({
@@ -195,16 +199,15 @@ export function createDebateRoutes(
         data: {
           debateId,
           status: debateId === 'queued' ? 'queued' : 'started',
-          message: debateId === 'queued'
-            ? '토론이 대기열에 추가되었습니다.'
-            : '토론이 시작되었습니다.'
-        }
+          message:
+            debateId === 'queued' ? '토론이 대기열에 추가되었습니다.' : '토론이 시작되었습니다.',
+        },
       });
     } catch (error) {
       console.error('[DebateRoutes] 토론 시작 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -218,21 +221,21 @@ export function createDebateRoutes(
       const { priority = 'medium' } = req.body;
 
       await chiefOrchestrator.orchestrateAllTeams({
-        priority: priority as MessagePriority
+        priority: priority as MessagePriority,
       });
 
       res.status(201).json({
         success: true,
         data: {
           message: '모든 팀에 토론이 시작되었습니다.',
-          teams: ['bom-waste-team', 'inventory-team', 'profitability-team', 'cost-management-team']
-        }
+          teams: ['bom-waste-team', 'inventory-team', 'profitability-team', 'cost-management-team'],
+        },
       });
     } catch (error) {
       console.error('[DebateRoutes] 전체 팀 토론 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -253,14 +256,14 @@ export function createDebateRoutes(
         data: {
           debateId: id,
           status: 'cancelled',
-          reason
-        }
+          reason,
+        },
       });
     } catch (error) {
       console.error('[DebateRoutes] 토론 취소 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -277,7 +280,7 @@ export function createDebateRoutes(
       if (!type) {
         return res.status(400).json({
           success: false,
-          error: 'type은 필수입니다. (helpful, dismissed, corrected)'
+          error: 'type은 필수입니다. (helpful, dismissed, corrected)',
         });
       }
 
@@ -289,14 +292,14 @@ export function createDebateRoutes(
         data: {
           debateId: id,
           feedback: { type, comment, rating },
-          message: '피드백이 기록되었습니다.'
-        }
+          message: '피드백이 기록되었습니다.',
+        },
       });
     } catch (error) {
       console.error('[DebateRoutes] 피드백 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -311,13 +314,13 @@ export function createDebateRoutes(
 
       res.json({
         success: true,
-        data: files
+        data: files,
       });
     } catch (error) {
       console.error('[DebateRoutes] WIP 파일 목록 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -335,14 +338,14 @@ export function createDebateRoutes(
         success: true,
         data: {
           teams: statuses,
-          debates: debateStatus
-        }
+          debates: debateStatus,
+        },
       });
     } catch (error) {
       console.error('[DebateRoutes] 팀 상태 조회 오류:', error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });

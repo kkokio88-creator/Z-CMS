@@ -68,12 +68,12 @@ export abstract class Agent {
       status: this.status,
       lastActivity: new Date(),
       processedTasks: this.processedTasks,
-      successRate: this.processedTasks > 0
-        ? Math.round((this.successfulTasks / this.processedTasks) * 100)
-        : 100,
-      avgProcessingTime: this.processedTasks > 0
-        ? Math.round(this.totalProcessingTime / this.processedTasks)
-        : 0,
+      successRate:
+        this.processedTasks > 0
+          ? Math.round((this.successfulTasks / this.processedTasks) * 100)
+          : 100,
+      avgProcessingTime:
+        this.processedTasks > 0 ? Math.round(this.totalProcessingTime / this.processedTasks) : 0,
       currentTask: this.currentTask,
     };
   }

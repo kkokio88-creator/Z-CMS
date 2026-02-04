@@ -11,7 +11,7 @@ import type {
   DebateRound,
   DebateContent,
   InsightDomain,
-  DomainTeam
+  DomainTeam,
 } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager } from '../../services/StateManager.js';
@@ -29,7 +29,7 @@ export class OptimistPersona extends TrioPersona {
     const config: TrioPersonaConfig = {
       role: 'optimist',
       team,
-      domain
+      domain,
     };
     super(id, config, eventBus, stateManager, learningRegistry);
   }
@@ -70,7 +70,7 @@ export class OptimistPersona extends TrioPersona {
     const verbosityGuide = {
       concise: '핵심만 간결하게 2-3문장으로',
       normal: '적절한 수준으로 상세하게',
-      detailed: '가능한 모든 기회를 상세히 분석하여'
+      detailed: '가능한 모든 기회를 상세히 분석하여',
     };
 
     return `당신은 ${this.team}의 혁신가(Optimist)입니다.
@@ -124,7 +124,7 @@ JSON만 반환하세요.`;
         reasoning: parsed.reasoning || '분석 결과 긍정적인 가능성이 확인되었습니다.',
         evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
         confidence: this.getAdjustedConfidence(parsed.confidence || 70),
-        suggestedActions: parsed.suggestedActions
+        suggestedActions: parsed.suggestedActions,
       };
     } catch (error) {
       console.error(`[${this.id}] 응답 파싱 실패:`, error);
@@ -140,28 +140,24 @@ JSON만 반환하세요.`;
       bom: [
         '원가 절감 가능성 발견',
         '대체 원자재를 통한 품질 개선 기회',
-        '생산 효율성 향상 여지 존재'
+        '생산 효율성 향상 여지 존재',
       ],
       waste: [
         '폐기물 감소를 통한 비용 절감 가능',
         '재활용 프로세스 도입 기회',
-        '친환경 생산으로 브랜드 가치 상승'
+        '친환경 생산으로 브랜드 가치 상승',
       ],
       inventory: [
         '재고 최적화로 자금 효율성 개선',
         '적시 납품 체계 구축 가능',
-        '안전재고 조정으로 비용 절감'
+        '안전재고 조정으로 비용 절감',
       ],
-      profitability: [
-        '고수익 채널 확대 기회',
-        '가격 정책 최적화 여지',
-        '신규 시장 진입 가능성'
-      ],
+      profitability: ['고수익 채널 확대 기회', '가격 정책 최적화 여지', '신규 시장 진입 가능성'],
       general: [
         '전반적인 운영 효율성 개선 가능',
         '디지털 전환 기회 발견',
-        '조직 역량 강화 여지 존재'
-      ]
+        '조직 역량 강화 여지 존재',
+      ],
     };
 
     const opportunities = domainOpportunities[this.domain];
@@ -171,11 +167,7 @@ JSON만 반환하세요.`;
       reasoning: `현재 상황을 면밀히 검토한 결과, ${this.domain} 영역에서 다음과 같은 성장 가능성이 확인되었습니다. 적극적인 개선 노력을 통해 예상보다 큰 성과를 달성할 수 있을 것으로 전망됩니다.`,
       evidence: opportunities,
       confidence: this.getAdjustedConfidence(75),
-      suggestedActions: [
-        '상세 기회 분석 실시',
-        '파일럿 프로젝트 기획',
-        '이해관계자 의견 수렴'
-      ]
+      suggestedActions: ['상세 기회 분석 실시', '파일럿 프로젝트 기획', '이해관계자 의견 수렴'],
     };
   }
 }

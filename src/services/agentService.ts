@@ -3,7 +3,7 @@ import type {
   AgentState,
   AgentPerformance,
   FeedbackType,
-  AgentId
+  AgentId,
 } from '../agents/types';
 
 const API_BASE = import.meta.env.VITE_AGENT_API_URL || 'http://localhost:3001/api';
@@ -34,7 +34,7 @@ class AgentService {
     };
 
     // Listen for insight events
-    this.sseConnection.addEventListener('insight_share', (event) => {
+    this.sseConnection.addEventListener('insight_share', event => {
       try {
         const data = JSON.parse(event.data);
         const insight: AgentInsight = {
@@ -107,7 +107,9 @@ class AgentService {
   /**
    * Trigger full analysis
    */
-  async triggerAnalysis(priority: 'low' | 'medium' | 'high' | 'critical' = 'medium'): Promise<void> {
+  async triggerAnalysis(
+    priority: 'low' | 'medium' | 'high' | 'critical' = 'medium'
+  ): Promise<void> {
     await fetch(`${API_BASE}/agents/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -169,7 +171,7 @@ class AgentService {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Sync failed'
+        error: error instanceof Error ? error.message : 'Sync failed',
       };
     }
   }

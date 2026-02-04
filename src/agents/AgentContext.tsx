@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from 'react';
 import { agentService } from '../services/agentService';
 import type { AgentInsight, AgentState, FeedbackType, InsightDomain, AgentId } from './types';
 
@@ -36,7 +43,7 @@ interface AgentProviderProps {
 export function AgentProvider({
   children,
   autoConnect = true,
-  maxInsights = 50
+  maxInsights = 50,
 }: AgentProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +58,7 @@ export function AgentProvider({
     agentService.connectSSE();
 
     const unsubscribeConnection = agentService.onConnectionChange(setIsConnected);
-    const unsubscribeInsight = agentService.onInsight((insight) => {
+    const unsubscribeInsight = agentService.onInsight(insight => {
       setInsights(prev => {
         const newInsights = [insight, ...prev].slice(0, maxInsights);
         return newInsights;
@@ -69,14 +76,17 @@ export function AgentProvider({
     };
   }, [autoConnect, maxInsights]);
 
-  const refreshInsights = useCallback(async (domain?: InsightDomain) => {
-    try {
-      const fetchedInsights = await agentService.getInsights(domain, maxInsights);
-      setInsights(fetchedInsights);
-    } catch (error) {
-      console.error('Failed to fetch insights:', error);
-    }
-  }, [maxInsights]);
+  const refreshInsights = useCallback(
+    async (domain?: InsightDomain) => {
+      try {
+        const fetchedInsights = await agentService.getInsights(domain, maxInsights);
+        setInsights(fetchedInsights);
+      } catch (error) {
+        console.error('Failed to fetch insights:', error);
+      }
+    },
+    [maxInsights]
+  );
 
   const refreshStatuses = useCallback(async () => {
     try {
@@ -87,30 +97,30 @@ export function AgentProvider({
     }
   }, []);
 
-  const submitFeedback = useCallback(async (
-    insightId: string,
-    type: FeedbackType,
-    correction?: unknown
-  ) => {
-    try {
-      await agentService.submitFeedback(insightId, type, correction);
-      setFeedbackSubmitted(prev => new Set(prev).add(insightId));
-    } catch (error) {
-      console.error('Failed to submit feedback:', error);
-      throw error;
-    }
-  }, []);
+  const submitFeedback = useCallback(
+    async (insightId: string, type: FeedbackType, correction?: unknown) => {
+      try {
+        await agentService.submitFeedback(insightId, type, correction);
+        setFeedbackSubmitted(prev => new Set(prev).add(insightId));
+      } catch (error) {
+        console.error('Failed to submit feedback:', error);
+        throw error;
+      }
+    },
+    []
+  );
 
-  const triggerAnalysis = useCallback(async (
-    priority: 'low' | 'medium' | 'high' | 'critical' = 'medium'
-  ) => {
-    setIsLoading(true);
-    try {
-      await agentService.triggerAnalysis(priority);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const triggerAnalysis = useCallback(
+    async (priority: 'low' | 'medium' | 'high' | 'critical' = 'medium') => {
+      setIsLoading(true);
+      try {
+        await agentService.triggerAnalysis(priority);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
   const syncData = useCallback(async () => {
     setIsLoading(true);
@@ -139,11 +149,7 @@ export function AgentProvider({
     feedbackSubmitted,
   };
 
-  return (
-    <AgentContext.Provider value={value}>
-      {children}
-    </AgentContext.Provider>
-  );
+  return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>;
 }
 
 export function useAgentContext(): AgentContextValue {

@@ -48,34 +48,40 @@ export function useAgentInsight(options: UseAgentInsightOptions = {}): UseAgentI
   }, [allInsights, domain, level, limit]);
 
   // Get critical and warning insights
-  const criticalInsights = useMemo(
-    () => insights.filter(i => i.level === 'critical'),
-    [insights]
-  );
+  const criticalInsights = useMemo(() => insights.filter(i => i.level === 'critical'), [insights]);
 
-  const warningInsights = useMemo(
-    () => insights.filter(i => i.level === 'warning'),
-    [insights]
-  );
+  const warningInsights = useMemo(() => insights.filter(i => i.level === 'warning'), [insights]);
 
   const latestInsight = insights[0] || null;
 
   // Feedback actions
-  const markHelpful = useCallback(async (insightId: string) => {
-    await submitFeedback(insightId, 'helpful');
-  }, [submitFeedback]);
+  const markHelpful = useCallback(
+    async (insightId: string) => {
+      await submitFeedback(insightId, 'helpful');
+    },
+    [submitFeedback]
+  );
 
-  const dismiss = useCallback(async (insightId: string) => {
-    await submitFeedback(insightId, 'dismissed');
-  }, [submitFeedback]);
+  const dismiss = useCallback(
+    async (insightId: string) => {
+      await submitFeedback(insightId, 'dismissed');
+    },
+    [submitFeedback]
+  );
 
-  const correct = useCallback(async (insightId: string, correction: unknown) => {
-    await submitFeedback(insightId, 'corrected', correction);
-  }, [submitFeedback]);
+  const correct = useCallback(
+    async (insightId: string, correction: unknown) => {
+      await submitFeedback(insightId, 'corrected', correction);
+    },
+    [submitFeedback]
+  );
 
-  const hasFeedback = useCallback((insightId: string) => {
-    return feedbackSubmitted.has(insightId);
-  }, [feedbackSubmitted]);
+  const hasFeedback = useCallback(
+    (insightId: string) => {
+      return feedbackSubmitted.has(insightId);
+    },
+    [feedbackSubmitted]
+  );
 
   const refresh = useCallback(async () => {
     await refreshInsights(domain);

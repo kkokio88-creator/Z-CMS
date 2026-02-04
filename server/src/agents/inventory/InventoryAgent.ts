@@ -1,12 +1,12 @@
 import { Agent } from '../base/Agent.js';
 import { geminiAdapter } from '../../adapters/GeminiAdapter.js';
-import type {
-  Task,
-  TaskResult,
-  CoachingMessage,
-} from '../../types/index.js';
+import type { Task, TaskResult, CoachingMessage } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
-import type { StateManager, StocktakeAnomalyItem, InventorySafetyItem } from '../../services/StateManager.js';
+import type {
+  StateManager,
+  StocktakeAnomalyItem,
+  InventorySafetyItem,
+} from '../../services/StateManager.js';
 import type { LearningRegistry } from '../../services/LearningRegistry.js';
 
 export class InventoryAgent extends Agent {
@@ -14,11 +14,7 @@ export class InventoryAgent extends Agent {
   private anomalyThreshold = 10; // 10% variance threshold for stocktake
   private predictionConfidence = 0.85;
 
-  constructor(
-    eventBus: EventBus,
-    stateManager: StateManager,
-    learningRegistry: LearningRegistry
-  ) {
+  constructor(eventBus: EventBus, stateManager: StateManager, learningRegistry: LearningRegistry) {
     super('inventory-agent', eventBus, stateManager, learningRegistry);
   }
 
@@ -74,17 +70,16 @@ export class InventoryAgent extends Agent {
       this.publishInsight(
         'inventory',
         `긴급 재고 부족: ${criticalItems.length}개 품목`,
-        `${criticalItems.map(i => i.materialName).slice(0, 3).join(', ')} 등의 재고가 안전재고 이하입니다.`,
+        `${criticalItems
+          .map(i => i.materialName)
+          .slice(0, 3)
+          .join(', ')} 등의 재고가 안전재고 이하입니다.`,
         {
           highlight: `${criticalItems[0].daysRemaining}일 내 재고 소진 예상`,
           level: 'critical',
           confidence: 0.95,
           data: criticalItems,
-          suggestedActions: [
-            '긴급 발주 진행',
-            '대체 자재 검토',
-            '생산 일정 조정',
-          ],
+          suggestedActions: ['긴급 발주 진행', '대체 자재 검토', '생산 일정 조정'],
         }
       );
     } else if (warningItems.length > 0) {
@@ -136,16 +131,19 @@ export class InventoryAgent extends Agent {
     const processedAnomalies: StocktakeAnomalyItem[] = [];
 
     for (const anomaly of anomalies.slice(0, 5)) {
-      const inventory = state.inventoryItems.find(
-        i => i.materialCode === anomaly.materialCode
-      );
+      const inventory = state.inventoryItems.find(i => i.materialCode === anomaly.materialCode);
 
       if (inventory) {
         const prediction = await geminiAdapter.predictInventory({
           materialName: anomaly.materialName,
           currentStock: anomaly.systemQty,
           avgDailyUsage: inventory.avgDailyUsage,
-          recentTrend: inventory.trend === 'up' ? 'increasing' : inventory.trend === 'down' ? 'decreasing' : 'stable',
+          recentTrend:
+            inventory.trend === 'up'
+              ? 'increasing'
+              : inventory.trend === 'down'
+                ? 'decreasing'
+                : 'stable',
         });
 
         const updatedAnomaly: StocktakeAnomalyItem = {
@@ -176,11 +174,7 @@ export class InventoryAgent extends Agent {
           level: highAnomalies[0].anomalyScore >= 90 ? 'critical' : 'warning',
           confidence: this.predictionConfidence,
           data: highAnomalies,
-          suggestedActions: [
-            '재실사 진행',
-            '입출고 기록 검토',
-            '분실/파손 조사',
-          ],
+          suggestedActions: ['재실사 진행', '입출고 기록 검토', '분실/파손 조사'],
         }
       );
     }
@@ -213,7 +207,10 @@ export class InventoryAgent extends Agent {
       this.publishInsight(
         'inventory',
         `긴급 발주 필요: ${urgentOrders.length}건`,
-        `${urgentOrders.map(o => o.materialName).slice(0, 3).join(', ')} 등의 발주가 필요합니다.`,
+        `${urgentOrders
+          .map(o => o.materialName)
+          .slice(0, 3)
+          .join(', ')} 등의 발주가 필요합니다.`,
         {
           highlight: `예상 발주 금액: ${totalCost.toLocaleString()}원`,
           level: 'warning',
@@ -247,7 +244,8 @@ export class InventoryAgent extends Agent {
     // Calculate overall inventory health
     const items = state.inventoryItems;
     const criticalRate = items.filter(i => i.status === 'critical').length / (items.length || 1);
-    const avgDaysRemaining = items.reduce((sum, i) => sum + i.daysRemaining, 0) / (items.length || 1);
+    const avgDaysRemaining =
+      items.reduce((sum, i) => sum + i.daysRemaining, 0) / (items.length || 1);
 
     if (criticalRate > 0.1) {
       this.publishInsight(

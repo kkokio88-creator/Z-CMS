@@ -26,11 +26,7 @@ export class LearningRegistry {
   /**
    * Record an agent's output for later feedback correlation
    */
-  recordOutput(
-    agentId: AgentId,
-    insightId: string,
-    output: LearningRecord['output']
-  ): string {
+  recordOutput(agentId: AgentId, insightId: string, output: LearningRecord['output']): string {
     const record: LearningRecord = {
       id: uuidv4(),
       agentId,
@@ -52,11 +48,7 @@ export class LearningRegistry {
   /**
    * Record user feedback for an insight
    */
-  recordFeedback(
-    insightId: string,
-    feedbackType: FeedbackType,
-    correction?: unknown
-  ): boolean {
+  recordFeedback(insightId: string, feedbackType: FeedbackType, correction?: unknown): boolean {
     const record = this.records.find(r => r.insightId === insightId);
     if (!record) {
       console.warn(`No learning record found for insight: ${insightId}`);
@@ -79,9 +71,7 @@ export class LearningRegistry {
    * Record that coaching was applied to an agent
    */
   recordCoaching(agentId: AgentId, insightId: string, adjustments: string[]): void {
-    const record = this.records.find(
-      r => r.agentId === agentId && r.insightId === insightId
-    );
+    const record = this.records.find(r => r.agentId === agentId && r.insightId === insightId);
 
     if (record) {
       record.coaching = {
@@ -179,20 +169,14 @@ export class LearningRegistry {
    * Get records with feedback
    */
   getRecordsWithFeedback(agentId?: AgentId): LearningRecord[] {
-    return this.records.filter(
-      r => r.feedback && (!agentId || r.agentId === agentId)
-    );
+    return this.records.filter(r => r.feedback && (!agentId || r.agentId === agentId));
   }
 
   /**
    * Get all agent performances
    */
   getAllPerformances(): AgentPerformance[] {
-    const agentIds: AgentId[] = [
-      'bom-waste-agent',
-      'inventory-agent',
-      'profitability-agent',
-    ];
+    const agentIds: AgentId[] = ['bom-waste-agent', 'inventory-agent', 'profitability-agent'];
 
     return agentIds.map(id => this.getAgentPerformance(id));
   }
@@ -206,15 +190,9 @@ export class LearningRegistry {
     const agentRecords = this.records.filter(r => r.agentId === agentId);
     const recordsWithFeedback = agentRecords.filter(r => r.feedback);
 
-    const helpfulCount = recordsWithFeedback.filter(
-      r => r.feedback?.type === 'helpful'
-    ).length;
-    const dismissedCount = recordsWithFeedback.filter(
-      r => r.feedback?.type === 'dismissed'
-    ).length;
-    const correctedCount = recordsWithFeedback.filter(
-      r => r.feedback?.type === 'corrected'
-    ).length;
+    const helpfulCount = recordsWithFeedback.filter(r => r.feedback?.type === 'helpful').length;
+    const dismissedCount = recordsWithFeedback.filter(r => r.feedback?.type === 'dismissed').length;
+    const correctedCount = recordsWithFeedback.filter(r => r.feedback?.type === 'corrected').length;
 
     const totalWithFeedback = recordsWithFeedback.length || 1;
 
@@ -224,9 +202,7 @@ export class LearningRegistry {
       helpfulCount,
       dismissedCount,
       correctedCount,
-      accuracyScore: Math.round(
-        ((helpfulCount + correctedCount * 0.5) / totalWithFeedback) * 100
-      ),
+      accuracyScore: Math.round(((helpfulCount + correctedCount * 0.5) / totalWithFeedback) * 100),
       acceptanceRate: Math.round((helpfulCount / totalWithFeedback) * 100),
       lastUpdated: new Date(),
     };

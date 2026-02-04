@@ -150,7 +150,8 @@ ${data.historicalContext ? `과거 맥락: ${data.historicalContext}` : ''}
     };
     trend?: 'improving' | 'stable' | 'deteriorating';
   }): Promise<{ analysis: string; recommendations: string[] }> {
-    const totalCost = data.rawMaterialCost + data.subMaterialCost + data.laborCost + data.expenseAmount;
+    const totalCost =
+      data.rawMaterialCost + data.subMaterialCost + data.laborCost + data.expenseAmount;
     const profitRatio = data.salesAmount > 0 ? data.salesAmount / totalCost : 0;
 
     const prompt = `당신은 제조업 원가 관리 전문가입니다. 다음 원가 구조를 분석해주세요:
@@ -177,9 +178,10 @@ ${data.historicalContext ? `과거 맥락: ${data.historicalContext}` : ''}
       };
     } catch {
       return {
-        analysis: profitRatio < 1.2
-          ? '원가 비율이 높아 수익성 개선이 필요합니다.'
-          : '원가 구조가 양호한 상태입니다.',
+        analysis:
+          profitRatio < 1.2
+            ? '원가 비율이 높아 수익성 개선이 필요합니다.'
+            : '원가 구조가 양호한 상태입니다.',
         recommendations: [
           '원재료비 절감을 위한 대체 공급처 검토',
           '생산 효율성 향상을 통한 노무비 절감',
@@ -205,7 +207,7 @@ ${data.historicalContext ? `과거 맥락: ${data.historicalContext}` : ''}
 인원수: ${data.employeeCount}명
 초과근무 시간: ${data.overtimeHours}시간
 생산량: ${data.productionVolume}
-${data.previousPeriodCost ? `전기 대비 증감: ${((data.totalLaborCost - data.previousPeriodCost) / data.previousPeriodCost * 100).toFixed(1)}%` : ''}
+${data.previousPeriodCost ? `전기 대비 증감: ${(((data.totalLaborCost - data.previousPeriodCost) / data.previousPeriodCost) * 100).toFixed(1)}%` : ''}
 인당 노무비: ${costPerEmployee.toLocaleString()}원
 단위당 노무비: ${costPerUnit.toFixed(0)}원
 
@@ -224,9 +226,10 @@ ${data.previousPeriodCost ? `전기 대비 증감: ${((data.totalLaborCost - dat
     } catch {
       const overtimeRatio = data.overtimeHours / (data.employeeCount * 160); // 월 160시간 기준
       return {
-        analysis: overtimeRatio > 0.1
-          ? '초과근무 비율이 높아 인력 충원 또는 생산 계획 조정이 필요합니다.'
-          : '노무비 구조가 안정적입니다.',
+        analysis:
+          overtimeRatio > 0.1
+            ? '초과근무 비율이 높아 인력 충원 또는 생산 계획 조정이 필요합니다.'
+            : '노무비 구조가 안정적입니다.',
         efficiencyScore: Math.round(Math.max(50, 90 - overtimeRatio * 100)),
         suggestions: [
           overtimeRatio > 0.1 ? '초과근무 원인 분석 및 인력 배치 조정' : '현 인력 운영 유지',
@@ -266,14 +269,12 @@ ${data.previousPeriodCost ? `전기 대비 증감: ${((data.totalLaborCost - dat
     } catch {
       const urgentRatio = data.urgentOrders / data.orderCount;
       return {
-        analysis: urgentRatio > 0.2
-          ? '긴급발주 비율이 높아 재고 관리 및 발주 계획 개선이 필요합니다.'
-          : '발주 관리가 안정적입니다.',
+        analysis:
+          urgentRatio > 0.2
+            ? '긴급발주 비율이 높아 재고 관리 및 발주 계획 개선이 필요합니다.'
+            : '발주 관리가 안정적입니다.',
         riskLevel: urgentRatio > 0.3 ? 'high' : urgentRatio > 0.1 ? 'medium' : 'low',
-        suggestions: [
-          '정기 발주 시스템 도입 검토',
-          '주요 거래처 다각화로 리스크 분산',
-        ],
+        suggestions: ['정기 발주 시스템 도입 검토', '주요 거래처 다각화로 리스크 분산'],
       };
     }
   }
@@ -305,7 +306,8 @@ ${parts.join('\n\n')}
     let mockText = '';
 
     if (prompt.includes('BOM') || prompt.includes('차이')) {
-      mockText = '최근 원자재 품질 변동으로 인한 투입량 증가로 판단됩니다. 공급업체 품질 검수를 강화하고, 작업 표준서 업데이트를 권장합니다.';
+      mockText =
+        '최근 원자재 품질 변동으로 인한 투입량 증가로 판단됩니다. 공급업체 품질 검수를 강화하고, 작업 표준서 업데이트를 권장합니다.';
     } else if (prompt.includes('재고') || prompt.includes('예측')) {
       mockText = JSON.stringify({
         expectedQty: 150,
@@ -313,7 +315,8 @@ ${parts.join('\n\n')}
       });
     } else if (prompt.includes('원가') || prompt.includes('비용')) {
       mockText = JSON.stringify({
-        analysis: '원재료비 비중이 높아 원가 구조 개선이 필요합니다. 목표 대비 노무비는 양호한 수준입니다.',
+        analysis:
+          '원재료비 비중이 높아 원가 구조 개선이 필요합니다. 목표 대비 노무비는 양호한 수준입니다.',
         recommendations: [
           '원재료 대체재 검토 또는 대량 구매 협상',
           '생산 공정 효율화로 부재료 사용 절감',
@@ -324,22 +327,17 @@ ${parts.join('\n\n')}
       mockText = JSON.stringify({
         analysis: '초과근무 비율이 다소 높으나 생산성은 양호합니다.',
         efficiencyScore: 75,
-        suggestions: [
-          '야간 근무 인력 배치 최적화',
-          '자동화 투자를 통한 노동 집약도 감소',
-        ],
+        suggestions: ['야간 근무 인력 배치 최적화', '자동화 투자를 통한 노동 집약도 감소'],
       });
     } else if (prompt.includes('발주') || prompt.includes('구매')) {
       mockText = JSON.stringify({
         analysis: '긴급발주 비율이 높아 재고 관리 개선이 필요합니다.',
         riskLevel: 'medium',
-        suggestions: [
-          '안전재고 수준 재검토',
-          '주요 원재료 장기 계약 체결 검토',
-        ],
+        suggestions: ['안전재고 수준 재검토', '주요 원재료 장기 계약 체결 검토'],
       });
     } else if (prompt.includes('수익') || prompt.includes('마진')) {
-      mockText = '해당 채널의 마진율이 업계 평균 대비 양호합니다. 판매량 증대를 통한 추가 수익 확보가 가능할 것으로 보입니다.';
+      mockText =
+        '해당 채널의 마진율이 업계 평균 대비 양호합니다. 판매량 증대를 통한 추가 수익 확보가 가능할 것으로 보입니다.';
     } else if (prompt.includes('종합') || prompt.includes('요약')) {
       mockText = `1. 핵심 현황: 생산 효율성은 양호하나 일부 원자재 재고 주의가 필요합니다.
 2. 우선 조치: PP 원료 긴급 발주 검토, BOM 표준량 업데이트
@@ -618,7 +616,7 @@ ${debate.synthesis ? `- 결론: ${debate.synthesis.position}\n- 추론: ${debate
           approved: parsed.approved ?? true,
           score: parsed.score ?? 70,
           issues: parsed.issues ?? [],
-          recommendations: parsed.recommendations ?? []
+          recommendations: parsed.recommendations ?? [],
         };
       }
     } catch (e) {
@@ -629,7 +627,7 @@ ${debate.synthesis ? `- 결론: ${debate.synthesis.position}\n- 추론: ${debate
       approved: true,
       score: 75,
       issues: [],
-      recommendations: ['상세 검토 필요']
+      recommendations: ['상세 검토 필요'],
     };
   }
 
@@ -678,7 +676,7 @@ ${debate.fullContent.slice(0, 2000)}
           approved: parsed.approved ?? true,
           score: parsed.score ?? 80,
           violations: parsed.violations ?? [],
-          recommendations: parsed.recommendations ?? []
+          recommendations: parsed.recommendations ?? [],
         };
       }
     } catch (e) {
@@ -689,14 +687,17 @@ ${debate.fullContent.slice(0, 2000)}
       approved: true,
       score: 80,
       violations: [],
-      recommendations: ['정기 컴플라이언스 검토 권장']
+      recommendations: ['정기 컴플라이언스 검토 권장'],
     };
   }
 
   /**
    * 토론 응답 파싱 헬퍼
    */
-  private parseDebateResponse(text: string, role: 'optimist' | 'pessimist' | 'mediator'): {
+  private parseDebateResponse(
+    text: string,
+    role: 'optimist' | 'pessimist' | 'mediator'
+  ): {
     position: string;
     reasoning: string;
     evidence: string[];
@@ -714,7 +715,7 @@ ${debate.fullContent.slice(0, 2000)}
           evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
           confidence: parsed.confidence || 70,
           suggestedActions: parsed.suggestedActions || [],
-          dissent: parsed.dissent
+          dissent: parsed.dissent,
         };
       }
     } catch (e) {
@@ -726,7 +727,7 @@ ${debate.fullContent.slice(0, 2000)}
       reasoning: '추가 분석이 필요합니다.',
       evidence: [],
       confidence: 65,
-      suggestedActions: ['상세 검토 필요']
+      suggestedActions: ['상세 검토 필요'],
     };
   }
 
@@ -734,7 +735,7 @@ ${debate.fullContent.slice(0, 2000)}
     const defaults = {
       optimist: '기회 요인이 발견되어 추가 검토가 권장됩니다.',
       pessimist: '주의가 필요한 리스크 요인이 있습니다.',
-      mediator: '양측 의견을 종합하여 균형 잡힌 접근이 필요합니다.'
+      mediator: '양측 의견을 종합하여 균형 잡힌 접근이 필요합니다.',
     };
     return defaults[role];
   }

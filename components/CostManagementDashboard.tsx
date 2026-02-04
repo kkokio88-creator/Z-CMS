@@ -39,7 +39,9 @@ interface DataStatus {
 }
 
 export const CostManagementDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'purchase' | 'labor' | 'insights'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'purchase' | 'labor' | 'insights'>(
+    'overview'
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [dataStatus, setDataStatus] = useState<DataStatus>({
     purchaseOrders: false,
@@ -137,8 +139,12 @@ export const CostManagementDashboard: React.FC = () => {
       {/* Header with Data Status */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">종합 원가관리 대시보드</h2>
-          <p className="text-sm text-gray-500">ECOUNT ERP + Google Sheets + AI 에이전트 통합 분석</p>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+            종합 원가관리 대시보드
+          </h2>
+          <p className="text-sm text-gray-500">
+            ECOUNT ERP + Google Sheets + AI 에이전트 통합 분석
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <DataStatusBadge label="발주서" connected={dataStatus.purchaseOrders} />
@@ -181,8 +187,10 @@ export const CostManagementDashboard: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`${activeTab === tab.id
-                ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'
+              className={`${
+                activeTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
               } py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
             >
               <span className="material-icons-outlined mr-2 text-lg">{tab.icon}</span>
@@ -228,12 +236,18 @@ export const CostManagementDashboard: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Top Suppliers Chart */}
             <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">상위 공급처 현황</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                상위 공급처 현황
+              </h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={displaySummary.topSuppliers} layout="vertical" margin={{ left: 80 }}>
+                  <BarChart
+                    data={displaySummary.topSuppliers}
+                    layout="vertical"
+                    margin={{ left: 80 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" horizontal />
-                    <XAxis type="number" tickFormatter={(v) => `₩${formatCurrency(v)}`} />
+                    <XAxis type="number" tickFormatter={v => `₩${formatCurrency(v)}`} />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={75} />
                     <Tooltip formatter={(value: number) => `₩${formatCurrency(value)}`} />
                     <Bar dataKey="amount" fill="#3B82F6" radius={[0, 4, 4, 0]} />
@@ -244,7 +258,9 @@ export const CostManagementDashboard: React.FC = () => {
 
             {/* Warehouse Distribution */}
             <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">창고별 재고 자산</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                창고별 재고 자산
+              </h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -270,20 +286,41 @@ export const CostManagementDashboard: React.FC = () => {
 
           {/* Labor by Department */}
           <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">부서별 노무비 현황</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+              부서별 노무비 현황
+            </h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={displaySummary.laborByDepartment}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="department" />
-                  <YAxis yAxisId="left" tickFormatter={(v) => `₩${formatCurrency(v)}`} />
-                  <YAxis yAxisId="right" orientation="right" label={{ value: '시간', angle: 90, position: 'insideRight' }} />
-                  <Tooltip formatter={(value: number, name: string) =>
-                    name === 'cost' ? `₩${formatCurrency(value)}` : `${value}시간`
-                  } />
+                  <YAxis yAxisId="left" tickFormatter={v => `₩${formatCurrency(v)}`} />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    label={{ value: '시간', angle: 90, position: 'insideRight' }}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) =>
+                      name === 'cost' ? `₩${formatCurrency(value)}` : `${value}시간`
+                    }
+                  />
                   <Legend />
-                  <Bar yAxisId="left" dataKey="cost" name="노무비" fill="#14B8A6" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="right" type="monotone" dataKey="hours" name="근무시간" stroke="#F97316" strokeWidth={2} />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="cost"
+                    name="노무비"
+                    fill="#14B8A6"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="hours"
+                    name="근무시간"
+                    stroke="#F97316"
+                    strokeWidth={2}
+                  />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -332,17 +369,29 @@ export const CostManagementDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {(purchaseOrders.length > 0 ? purchaseOrders.slice(0, 10) : getMockPurchaseOrders()).map((po, idx) => (
-                    <tr key={po.orderId || idx} className={po.isUrgent ? 'bg-red-50 dark:bg-red-900/10' : ''}>
+                  {(purchaseOrders.length > 0
+                    ? purchaseOrders.slice(0, 10)
+                    : getMockPurchaseOrders()
+                  ).map((po, idx) => (
+                    <tr
+                      key={po.orderId || idx}
+                      className={po.isUrgent ? 'bg-red-50 dark:bg-red-900/10' : ''}
+                    >
                       <td className="px-4 py-3 font-mono text-sm">{po.orderId}</td>
                       <td className="px-4 py-3">{formatDate(po.orderDate)}</td>
                       <td className="px-4 py-3">{po.supplierName}</td>
-                      <td className="px-4 py-3 text-right font-medium">₩{formatCurrency(po.totalAmount)}</td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        ₩{formatCurrency(po.totalAmount)}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         {po.isUrgent ? (
-                          <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">긴급</span>
+                          <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">
+                            긴급
+                          </span>
                         ) : (
-                          <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">일반</span>
+                          <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
+                            일반
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -403,20 +452,30 @@ export const CostManagementDashboard: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {displaySummary.laborByDepartment.map((dept, idx) => {
-                    const totalCost = displaySummary.laborByDepartment.reduce((s, d) => s + d.cost, 0);
+                    const totalCost = displaySummary.laborByDepartment.reduce(
+                      (s, d) => s + d.cost,
+                      0
+                    );
                     const ratio = (dept.cost / totalCost) * 100;
                     return (
                       <tr key={dept.department}>
                         <td className="px-4 py-3 font-medium">{dept.department}</td>
                         <td className="px-4 py-3 text-right">{dept.hours.toLocaleString()}시간</td>
-                        <td className="px-4 py-3 text-right font-medium">₩{formatCurrency(dept.cost)}</td>
-                        <td className="px-4 py-3 text-right">₩{formatCurrency(dept.cost / dept.hours)}</td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          ₩{formatCurrency(dept.cost)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          ₩{formatCurrency(dept.cost / dept.hours)}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div
                                 className="h-full rounded-full"
-                                style={{ width: `${ratio}%`, backgroundColor: COLORS[idx % COLORS.length] }}
+                                style={{
+                                  width: `${ratio}%`,
+                                  backgroundColor: COLORS[idx % COLORS.length],
+                                }}
                               />
                             </div>
                             <span className="text-xs font-medium">{ratio.toFixed(1)}%</span>
@@ -436,7 +495,9 @@ export const CostManagementDashboard: React.FC = () => {
       {activeTab === 'insights' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI 원가관리 인사이트</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+              AI 원가관리 인사이트
+            </h3>
             <span className="text-sm text-gray-500">원가관리 전문가 에이전트 분석 결과</span>
           </div>
 
@@ -444,12 +505,12 @@ export const CostManagementDashboard: React.FC = () => {
             <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
               <span className="material-icons-outlined text-4xl text-gray-400 mb-2">lightbulb</span>
               <p className="text-gray-500">아직 생성된 인사이트가 없습니다.</p>
-              <p className="text-sm text-gray-400 mt-1">ECOUNT 데이터를 동기화하면 AI가 원가 절감 기회를 분석합니다.</p>
+              <p className="text-sm text-gray-400 mt-1">
+                ECOUNT 데이터를 동기화하면 AI가 원가 절감 기회를 분석합니다.
+              </p>
             </div>
           ) : (
-            insights.map(insight => (
-              <InsightCard key={insight.id} insight={insight} />
-            ))
+            insights.map(insight => <InsightCard key={insight.id} insight={insight} />)
           )}
 
           {/* Mock insights for demo */}
@@ -461,7 +522,8 @@ export const CostManagementDashboard: React.FC = () => {
                   agentId: 'cost-management-agent',
                   domain: 'profitability',
                   title: '원재료비 비율 경고',
-                  description: '원재료비가 목표 대비 15% 초과하고 있습니다. 대체 공급처 검토 또는 대량 구매 협상을 권장합니다.',
+                  description:
+                    '원재료비가 목표 대비 15% 초과하고 있습니다. 대체 공급처 검토 또는 대량 구매 협상을 권장합니다.',
                   highlight: '목표 대비 +15%',
                   level: 'warning',
                   confidence: 0.85,
@@ -475,7 +537,8 @@ export const CostManagementDashboard: React.FC = () => {
                   agentId: 'cost-management-agent',
                   domain: 'profitability',
                   title: '초과근무 비율 분석',
-                  description: '생산1팀의 초과근무 시간이 평균 대비 25% 높습니다. 인력 배치 조정 또는 추가 채용을 고려하세요.',
+                  description:
+                    '생산1팀의 초과근무 시간이 평균 대비 25% 높습니다. 인력 배치 조정 또는 추가 채용을 고려하세요.',
                   highlight: '초과근무 +25%',
                   level: 'info',
                   confidence: 0.78,
@@ -489,11 +552,16 @@ export const CostManagementDashboard: React.FC = () => {
                   agentId: 'cost-management-agent',
                   domain: 'inventory',
                   title: '긴급발주 패턴 감지',
-                  description: '최근 3개월 간 긴급발주 비율이 증가 추세입니다. 안전재고 수준 재검토가 필요합니다.',
+                  description:
+                    '최근 3개월 간 긴급발주 비율이 증가 추세입니다. 안전재고 수준 재검토가 필요합니다.',
                   highlight: '긴급발주 15.5%',
                   level: 'warning',
                   confidence: 0.82,
-                  suggestedActions: ['안전재고 수준 상향', '정기 발주 시스템 도입', '리드타임 단축 협의'],
+                  suggestedActions: [
+                    '안전재고 수준 상향',
+                    '정기 발주 시스템 도입',
+                    '리드타임 단축 협의',
+                  ],
                   timestamp: new Date().toISOString(),
                 }}
               />
@@ -529,9 +597,11 @@ const KPICard: React.FC<{
 
 // Data Status Badge
 const DataStatusBadge: React.FC<{ label: string; connected: boolean }> = ({ label, connected }) => (
-  <span className={`px-2 py-1 text-xs rounded-full ${
-    connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-  }`}>
+  <span
+    className={`px-2 py-1 text-xs rounded-full ${
+      connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+    }`}
+  >
     {connected ? '●' : '○'} {label}
   </span>
 );
@@ -577,7 +647,10 @@ const InsightCard: React.FC<{ insight: AgentInsight }> = ({ insight }) => {
               <p className="text-xs font-medium text-gray-500 mb-1">권장 조치:</p>
               <div className="flex flex-wrap gap-2">
                 {insight.suggestedActions.map((action, idx) => (
-                  <span key={idx} className="px-2 py-1 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200">
+                  <span
+                    key={idx}
+                    className="px-2 py-1 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200"
+                  >
                     {action}
                   </span>
                 ))}
@@ -605,16 +678,71 @@ function formatDate(dateStr: string): string {
 
 function formatTimestamp(timestamp: string): string {
   const date = new Date(timestamp);
-  return date.toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function getMockPurchaseOrders(): PurchaseOrderData[] {
   return [
-    { orderId: 'PO-2026-0142', orderDate: '20260128', supplierName: 'ABC 원자재', supplierCode: 'S001', totalAmount: 12500000, itemCount: 5, status: 'pending', isUrgent: false, items: [] },
-    { orderId: 'PO-2026-0141', orderDate: '20260127', supplierName: 'XYZ 부품', supplierCode: 'S002', totalAmount: 8200000, itemCount: 3, status: 'pending', isUrgent: true, items: [] },
-    { orderId: 'PO-2026-0140', orderDate: '20260126', supplierName: '대한화학', supplierCode: 'S003', totalAmount: 15800000, itemCount: 8, status: 'complete', isUrgent: false, items: [] },
-    { orderId: 'PO-2026-0139', orderDate: '20260125', supplierName: '삼성포장', supplierCode: 'S004', totalAmount: 3200000, itemCount: 2, status: 'complete', isUrgent: false, items: [] },
-    { orderId: 'PO-2026-0138', orderDate: '20260124', supplierName: 'ABC 원자재', supplierCode: 'S001', totalAmount: 9500000, itemCount: 4, status: 'complete', isUrgent: true, items: [] },
+    {
+      orderId: 'PO-2026-0142',
+      orderDate: '20260128',
+      supplierName: 'ABC 원자재',
+      supplierCode: 'S001',
+      totalAmount: 12500000,
+      itemCount: 5,
+      status: 'pending',
+      isUrgent: false,
+      items: [],
+    },
+    {
+      orderId: 'PO-2026-0141',
+      orderDate: '20260127',
+      supplierName: 'XYZ 부품',
+      supplierCode: 'S002',
+      totalAmount: 8200000,
+      itemCount: 3,
+      status: 'pending',
+      isUrgent: true,
+      items: [],
+    },
+    {
+      orderId: 'PO-2026-0140',
+      orderDate: '20260126',
+      supplierName: '대한화학',
+      supplierCode: 'S003',
+      totalAmount: 15800000,
+      itemCount: 8,
+      status: 'complete',
+      isUrgent: false,
+      items: [],
+    },
+    {
+      orderId: 'PO-2026-0139',
+      orderDate: '20260125',
+      supplierName: '삼성포장',
+      supplierCode: 'S004',
+      totalAmount: 3200000,
+      itemCount: 2,
+      status: 'complete',
+      isUrgent: false,
+      items: [],
+    },
+    {
+      orderId: 'PO-2026-0138',
+      orderDate: '20260124',
+      supplierName: 'ABC 원자재',
+      supplierCode: 'S001',
+      totalAmount: 9500000,
+      itemCount: 4,
+      status: 'complete',
+      isUrgent: true,
+      items: [],
+    },
   ];
 }
 

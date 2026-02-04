@@ -19,7 +19,7 @@ import type {
   DebateRound,
   DebateContent,
   DebatePhase,
-  MessagePriority
+  MessagePriority,
 } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager } from '../../services/StateManager.js';
@@ -61,10 +61,7 @@ export abstract class TrioPersona extends Agent {
   /**
    * 의존성 주입
    */
-  injectDependencies(
-    debateManager: DebateManager,
-    geminiAdapter: GeminiAdapter
-  ): void {
+  injectDependencies(debateManager: DebateManager, geminiAdapter: GeminiAdapter): void {
     this.debateManager = debateManager;
     this.geminiAdapter = geminiAdapter;
   }
@@ -113,11 +110,7 @@ export abstract class TrioPersona extends Agent {
         payload
       );
 
-      const position = await this.generatePosition(
-        payload.topic,
-        payload.contextData,
-        catsCommand
-      );
+      const position = await this.generatePosition(payload.topic, payload.contextData, catsCommand);
 
       const round: DebateRound = {
         id: uuidv4(),
@@ -127,7 +120,7 @@ export abstract class TrioPersona extends Agent {
         agentId: this.id,
         content: position,
         timestamp: new Date(),
-        catsCommand
+        catsCommand,
       };
 
       // 토론 매니저에 라운드 기록
@@ -138,16 +131,20 @@ export abstract class TrioPersona extends Agent {
       // Pessimist에게 전달
       const sender = this.eventBus.createSender(this.id);
       const pessimistId = this.id.replace('-optimist', '-pessimist') as AgentId;
-      sender.send(pessimistId, 'DEBATE_THESIS', {
-        debateId: payload.debateId,
-        thesis: round,
-        contextData: payload.contextData
-      }, message.priority);
+      sender.send(
+        pessimistId,
+        'DEBATE_THESIS',
+        {
+          debateId: payload.debateId,
+          thesis: round,
+          contextData: payload.contextData,
+        },
+        message.priority
+      );
 
       this.processedTasks++;
       this.successfulTasks++;
       this.totalProcessingTime += Date.now() - startTime;
-
     } catch (error) {
       console.error(`[${this.id}] 토론 시작 오류:`, error);
       this.status = 'error';
@@ -194,7 +191,7 @@ export abstract class TrioPersona extends Agent {
         content: position,
         timestamp: new Date(),
         catsCommand,
-        respondsTo: [payload.thesis.id]
+        respondsTo: [payload.thesis.id],
       };
 
       // 토론 매니저에 라운드 기록
@@ -205,17 +202,21 @@ export abstract class TrioPersona extends Agent {
       // Mediator에게 전달
       const sender = this.eventBus.createSender(this.id);
       const mediatorId = this.id.replace('-pessimist', '-mediator') as AgentId;
-      sender.send(mediatorId, 'DEBATE_ANTITHESIS', {
-        debateId: payload.debateId,
-        thesis: payload.thesis,
-        antithesis: round,
-        contextData: payload.contextData
-      }, message.priority);
+      sender.send(
+        mediatorId,
+        'DEBATE_ANTITHESIS',
+        {
+          debateId: payload.debateId,
+          thesis: payload.thesis,
+          antithesis: round,
+          contextData: payload.contextData,
+        },
+        message.priority
+      );
 
       this.processedTasks++;
       this.successfulTasks++;
       this.totalProcessingTime += Date.now() - startTime;
-
     } catch (error) {
       console.error(`[${this.id}] 반론 생성 오류:`, error);
       this.status = 'error';
@@ -263,7 +264,7 @@ export abstract class TrioPersona extends Agent {
         content: position,
         timestamp: new Date(),
         catsCommand,
-        respondsTo: [payload.thesis.id, payload.antithesis.id]
+        respondsTo: [payload.thesis.id, payload.antithesis.id],
       };
 
       // 토론 매니저에 라운드 기록
@@ -273,18 +274,22 @@ export abstract class TrioPersona extends Agent {
 
       // Chief Orchestrator에게 종합 결과 전달
       const sender = this.eventBus.createSender(this.id);
-      sender.send('chief-orchestrator', 'DEBATE_SYNTHESIS', {
-        debateId: payload.debateId,
-        thesis: payload.thesis,
-        antithesis: payload.antithesis,
-        synthesis: round,
-        contextData: payload.contextData
-      }, message.priority);
+      sender.send(
+        'chief-orchestrator',
+        'DEBATE_SYNTHESIS',
+        {
+          debateId: payload.debateId,
+          thesis: payload.thesis,
+          antithesis: payload.antithesis,
+          synthesis: round,
+          contextData: payload.contextData,
+        },
+        message.priority
+      );
 
       this.processedTasks++;
       this.successfulTasks++;
       this.totalProcessingTime += Date.now() - startTime;
-
     } catch (error) {
       console.error(`[${this.id}] 종합 생성 오류:`, error);
       this.status = 'error';
@@ -303,21 +308,18 @@ export abstract class TrioPersona extends Agent {
   /**
    * C.A.T.S 명령 생성
    */
-  protected createCATSCommand(
-    task: string,
-    payload: { contextData?: unknown }
-  ): CATSCommand {
+  protected createCATSCommand(task: string, payload: { contextData?: unknown }): CATSCommand {
     const roleDescriptions: Record<TrioRole, string> = {
       optimist: '가능성, 확장성, 창의적 대안 제시',
       pessimist: '제약 조건, 리스크, 잠재적 실패 요인 분석',
-      mediator: '두 관점을 통합하여 실행 가능한 결론 도출'
+      mediator: '두 관점을 통합하여 실행 가능한 결론 도출',
     };
 
     return {
       context: JSON.stringify(payload.contextData || {}).slice(0, 1000),
       agentRole: this.role,
       task: `[${this.team}] ${roleDescriptions[this.role]}. ${task}`,
-      successCriteria: this.getSuccessCriteria()
+      successCriteria: this.getSuccessCriteria(),
     };
   }
 
@@ -326,9 +328,12 @@ export abstract class TrioPersona extends Agent {
    */
   protected getSuccessCriteria(): string {
     const criteria: Record<TrioRole, string> = {
-      optimist: 'position(주장), reasoning(추론), evidence(근거 배열), confidence(0-100)를 JSON으로 반환',
-      pessimist: 'position(반론), reasoning(리스크 분석), evidence(위험 요소 배열), confidence(0-100)를 JSON으로 반환',
-      mediator: 'position(종합), reasoning(균형 분석), suggestedActions(권고 조치 배열), confidence(0-100)를 JSON으로 반환'
+      optimist:
+        'position(주장), reasoning(추론), evidence(근거 배열), confidence(0-100)를 JSON으로 반환',
+      pessimist:
+        'position(반론), reasoning(리스크 분석), evidence(위험 요소 배열), confidence(0-100)를 JSON으로 반환',
+      mediator:
+        'position(종합), reasoning(균형 분석), suggestedActions(권고 조치 배열), confidence(0-100)를 JSON으로 반환',
     };
     return criteria[this.role];
   }
@@ -353,7 +358,7 @@ export abstract class TrioPersona extends Agent {
       agentId: this.id,
       success: true,
       output: { message: `${this.role} persona processed task` },
-      processingTime: 0
+      processingTime: 0,
     };
   }
 
@@ -364,13 +369,13 @@ export abstract class TrioPersona extends Agent {
     const baseCapabilities = [
       'dialectical_debate',
       'cats_command_execution',
-      `${this.role}_perspective`
+      `${this.role}_perspective`,
     ];
 
     const roleCapabilities: Record<TrioRole, string[]> = {
       optimist: ['opportunity_analysis', 'growth_projection', 'innovation_proposal'],
       pessimist: ['risk_assessment', 'constraint_analysis', 'failure_mode_detection'],
-      mediator: ['synthesis_generation', 'consensus_building', 'action_planning']
+      mediator: ['synthesis_generation', 'consensus_building', 'action_planning'],
     };
 
     return [...baseCapabilities, ...roleCapabilities[this.role]];
@@ -379,9 +384,7 @@ export abstract class TrioPersona extends Agent {
   /**
    * 코칭 적용
    */
-  protected async applyCoaching(
-    feedback: CoachingMessage['payload']['feedback']
-  ): Promise<void> {
+  protected async applyCoaching(feedback: CoachingMessage['payload']['feedback']): Promise<void> {
     console.log(`[${this.id}] 코칭 적용: ${feedback.suggestion}`);
 
     switch (feedback.metric) {
@@ -414,8 +417,8 @@ export abstract class TrioPersona extends Agent {
       appliedAt: new Date(),
       adjustments: [
         `confidenceAdjustment: ${this.confidenceAdjustment}`,
-        `verbosityLevel: ${this.verbosityLevel}`
-      ]
+        `verbosityLevel: ${this.verbosityLevel}`,
+      ],
     });
   }
 
@@ -430,7 +433,7 @@ export abstract class TrioPersona extends Agent {
     return {
       role: this.role,
       team: this.team,
-      domain: this.domain
+      domain: this.domain,
     };
   }
 

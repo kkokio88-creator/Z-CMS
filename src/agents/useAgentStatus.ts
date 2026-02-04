@@ -13,19 +13,19 @@ interface UseAgentStatusReturn {
 export function useAgentStatus(): UseAgentStatusReturn {
   const { agentStatuses, refreshStatuses } = useAgentContext();
 
-  const getStatus = useCallback((agentId: AgentId) => {
-    return agentStatuses.find(s => s.id === agentId);
-  }, [agentStatuses]);
+  const getStatus = useCallback(
+    (agentId: AgentId) => {
+      return agentStatuses.find(s => s.id === agentId);
+    },
+    [agentStatuses]
+  );
 
   const isAnyProcessing = useMemo(
     () => agentStatuses.some(s => s.status === 'processing'),
     [agentStatuses]
   );
 
-  const hasErrors = useMemo(
-    () => agentStatuses.some(s => s.status === 'error'),
-    [agentStatuses]
-  );
+  const hasErrors = useMemo(() => agentStatuses.some(s => s.status === 'error'), [agentStatuses]);
 
   return {
     statuses: agentStatuses,

@@ -8,6 +8,7 @@
 - **현재 단계**: 거버넌스 검토중
 
 ## 배경 데이터 (Context)
+
 ```json
 {
   "salesData": {
@@ -47,86 +48,92 @@
       "amount",
       "warehouse"
     ],
-    "sampleItems": [
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
+    "sampleItems": ["", "", "", "", ""],
     "uniqueItems": 1,
     "totalAmount": 379092436
   },
-  "analysisGoals": [
-    "품목별 마진율 시각화",
-    "수익성 기반 품목 분류",
-    "가격 조정 시뮬레이션"
-  ]
+  "analysisGoals": ["품목별 마진율 시각화", "수익성 기반 품목 분류", "가격 조정 시뮬레이션"]
 }
 ```
 
 ## 정(正) - 낙관론자 의견
+
 **에이전트**: profitability-optimist
 **신뢰도**: 75%
 
 ### C.A.T.S 명령
+
 - **Context**: {"salesData":{"count":9692,"fields":["date","customerCode","customerName","itemCode","itemName","quantity","unitPrice","amount","channel","warehouse"],"sampleItems":["고추를곁들인양파장아찌_반가","적채를곁들인양배추피클_반가","유자를곁들인오이무피클_반가","배송","잡채"],"uniqueItems":261,"totalAmount":1138101112},"purchaseData":{"count":1518,"fields":["date","supplierCode","supplierName","itemCode","itemName","quantity","unitPrice","amount","warehouse"],"sampleItems":["","","","",""],"uniqueItems":1,"totalAmount":379092436},"analysisGoals":["품목별 마진율 시각화","수익성 기반 품목 분류","가격 조정 시뮬레이션"]}
 - **Agent Role**: optimist
 - **Task**: [profitability-team] 가능성, 확장성, 창의적 대안 제시. 수익성 분석 대시보드 설계에 대한 가능성과 기회를 분석하세요.
 - **Success Criteria**: position(주장), reasoning(추론), evidence(근거 배열), confidence(0-100)를 JSON으로 반환
 
 ### 입장
+
 수익성 분석 대시보드 설계 분석 결과, 상당한 개선 기회가 발견되었습니다.
 
 ### 추론
+
 현재 상황을 면밀히 검토한 결과, profitability 영역에서 다음과 같은 성장 가능성이 확인되었습니다. 적극적인 개선 노력을 통해 예상보다 큰 성과를 달성할 수 있을 것으로 전망됩니다.
 
 ### 근거
+
 1. "고수익 채널 확대 기회"
 2. "가격 정책 최적화 여지"
 3. "신규 시장 진입 가능성"
 
 ## 반(反) - 비관론자 의견
+
 **에이전트**: profitability-pessimist
 **신뢰도**: 72%
 
 ### C.A.T.S 명령
+
 - **Context**: {"salesData":{"count":9692,"fields":["date","customerCode","customerName","itemCode","itemName","quantity","unitPrice","amount","channel","warehouse"],"sampleItems":["고추를곁들인양파장아찌_반가","적채를곁들인양배추피클_반가","유자를곁들인오이무피클_반가","배송","잡채"],"uniqueItems":261,"totalAmount":1138101112},"purchaseData":{"count":1518,"fields":["date","supplierCode","supplierName","itemCode","itemName","quantity","unitPrice","amount","warehouse"],"sampleItems":["","","","",""],"uniqueItems":1,"totalAmount":379092436},"analysisGoals":["품목별 마진율 시각화","수익성 기반 품목 분류","가격 조정 시뮬레이션"]}
 - **Agent Role**: pessimist
 - **Task**: [profitability-team] 제약 조건, 리스크, 잠재적 실패 요인 분석. 낙관론(수익성 분석 대시보드 설계 분석 결과, 상당한 개선 기회가 발견되었습니다.)에 대한 리스크와 제약을 분석하세요.
 - **Success Criteria**: position(반론), reasoning(리스크 분석), evidence(위험 요소 배열), confidence(0-100)를 JSON으로 반환
 
 ### 입장
+
 수익성 분석 대시보드 설계 분석 결과, 상당한 개선 기회가 발견되었습니다.에는 신중한 접근이 필요합니다.
 
 ### 추론
+
 profitability 영역에서 다음과 같은 잠재적 위험 요소가 식별되었습니다. 이러한 리스크를 사전에 인지하고 대응책을 마련하지 않으면 예상치 못한 문제가 발생할 수 있습니다.
 
 ### 근거
+
 1. "경쟁사 가격 전략에 따른 마진 압박"
 2. "고정비 증가로 인한 수익성 악화 가능"
 3. "시장 변동성에 따른 매출 감소 위험"
 
 ## 합(合) - 중재자 종합
+
 **에이전트**: profitability-mediator
 **신뢰도**: 78%
 
 ### C.A.T.S 명령
+
 - **Context**: {"salesData":{"count":9692,"fields":["date","customerCode","customerName","itemCode","itemName","quantity","unitPrice","amount","channel","warehouse"],"sampleItems":["고추를곁들인양파장아찌_반가","적채를곁들인양배추피클_반가","유자를곁들인오이무피클_반가","배송","잡채"],"uniqueItems":261,"totalAmount":1138101112},"purchaseData":{"count":1518,"fields":["date","supplierCode","supplierName","itemCode","itemName","quantity","unitPrice","amount","warehouse"],"sampleItems":["","","","",""],"uniqueItems":1,"totalAmount":379092436},"analysisGoals":["품목별 마진율 시각화","수익성 기반 품목 분류","가격 조정 시뮬레이션"]}
 - **Agent Role**: mediator
 - **Task**: [profitability-team] 두 관점을 통합하여 실행 가능한 결론 도출. 낙관론과 비관론을 종합하여 균형 잡힌 결론을 도출하세요.
 - **Success Criteria**: position(종합), reasoning(균형 분석), suggestedActions(권고 조치 배열), confidence(0-100)를 JSON으로 반환
 
 ### 종합 입장
+
 수익성 개선과 리스크 관리를 병행하는 균형 잡힌 전략이 필요합니다.
 
 ### 추론
+
 낙관론자의 기회 요소와 비관론자의 위험 요소를 모두 고려하여 분석했습니다. profitability 영역에서 실현 가능하고 리스크를 관리할 수 있는 최적의 방안을 도출했습니다.
 
 ### 권고 조치
+
 1. 고수익 채널 우선 강화
 2. 가격 변경 시 시장 반응 모니터링
 3. 비용 구조 지속적 최적화
 
 ---
-*Generated at 2026-02-03T01:29:13.492Z*
+
+_Generated at 2026-02-03T01:29:13.492Z_

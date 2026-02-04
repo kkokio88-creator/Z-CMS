@@ -11,7 +11,7 @@ import type {
   DebateRound,
   DebateContent,
   InsightDomain,
-  DomainTeam
+  DomainTeam,
 } from '../../types/index.js';
 import type { EventBus } from '../../services/EventBus.js';
 import type { StateManager } from '../../services/StateManager.js';
@@ -29,7 +29,7 @@ export class PessimistPersona extends TrioPersona {
     const config: TrioPersonaConfig = {
       role: 'pessimist',
       team,
-      domain
+      domain,
     };
     super(id, config, eventBus, stateManager, learningRegistry);
   }
@@ -73,7 +73,7 @@ export class PessimistPersona extends TrioPersona {
     const verbosityGuide = {
       concise: '핵심 리스크만 간결하게',
       normal: '주요 리스크를 적절히 상세하게',
-      detailed: '모든 잠재적 위험을 철저히 분석하여'
+      detailed: '모든 잠재적 위험을 철저히 분석하여',
     };
 
     let thesisContext = '';
@@ -141,7 +141,7 @@ JSON만 반환하세요.`;
         reasoning: parsed.reasoning || '분석 결과 간과된 리스크가 발견되었습니다.',
         evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
         confidence: this.getAdjustedConfidence(parsed.confidence || 70),
-        suggestedActions: parsed.suggestedActions
+        suggestedActions: parsed.suggestedActions,
       };
     } catch (error) {
       console.error(`[${this.id}] 응답 파싱 실패:`, error);
@@ -161,28 +161,28 @@ JSON만 반환하세요.`;
       bom: [
         '원자재 가격 변동에 따른 예산 초과 위험',
         '대체 원자재 품질 검증 미흡 가능성',
-        '공급업체 의존도 증가에 따른 리스크'
+        '공급업체 의존도 증가에 따른 리스크',
       ],
       waste: [
         '폐기물 처리 비용 과소평가 가능성',
         '환경 규제 강화에 따른 추가 비용 발생',
-        '재활용 인프라 구축 비용 미반영'
+        '재활용 인프라 구축 비용 미반영',
       ],
       inventory: [
         '수요 예측 불확실성으로 인한 재고 위험',
         '보관 비용 및 감가상각 고려 미흡',
-        '긴급 발주 시 추가 비용 발생 가능'
+        '긴급 발주 시 추가 비용 발생 가능',
       ],
       profitability: [
         '경쟁사 가격 전략에 따른 마진 압박',
         '고정비 증가로 인한 수익성 악화 가능',
-        '시장 변동성에 따른 매출 감소 위험'
+        '시장 변동성에 따른 매출 감소 위험',
       ],
       general: [
         '실행 역량 부족에 따른 지연 가능성',
         '조직 내 저항으로 인한 추진력 약화',
-        '예상치 못한 외부 요인 발생 가능성'
-      ]
+        '예상치 못한 외부 요인 발생 가능성',
+      ],
     };
 
     const risks = domainRisks[this.domain];
@@ -200,8 +200,8 @@ JSON만 반환하세요.`;
       suggestedActions: [
         '리스크 평가 매트릭스 작성',
         '비상 대응 계획 수립',
-        '단계별 검증 프로세스 도입'
-      ]
+        '단계별 검증 프로세스 도입',
+      ],
     };
   }
 }

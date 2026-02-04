@@ -29,13 +29,9 @@ export const AgentInsightPanel: React.FC<AgentInsightPanelProps> = ({
   const [activeTab, setActiveTab] = useState<InsightDomain | 'all'>('all');
   const [showAll, setShowAll] = useState(false);
 
-  const filteredInsights = insights.filter(
-    i => activeTab === 'all' || i.domain === activeTab
-  );
+  const filteredInsights = insights.filter(i => activeTab === 'all' || i.domain === activeTab);
 
-  const visibleInsights = showAll
-    ? filteredInsights
-    : filteredInsights.slice(0, maxVisible);
+  const visibleInsights = showAll ? filteredInsights : filteredInsights.slice(0, maxVisible);
 
   const criticalCount = insights.filter(i => i.level === 'critical').length;
   const warningCount = insights.filter(i => i.level === 'warning').length;
@@ -64,10 +60,9 @@ export const AgentInsightPanel: React.FC<AgentInsightPanelProps> = ({
         </div>
 
         <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
-          {DOMAIN_TABS.map((tab) => {
-            const count = tab.id === 'all'
-              ? insights.length
-              : insights.filter(i => i.domain === tab.id).length;
+          {DOMAIN_TABS.map(tab => {
+            const count =
+              tab.id === 'all' ? insights.length : insights.filter(i => i.domain === tab.id).length;
 
             return (
               <button
@@ -82,11 +77,13 @@ export const AgentInsightPanel: React.FC<AgentInsightPanelProps> = ({
                 <span className="material-icons-outlined text-xs">{tab.icon}</span>
                 {tab.label}
                 {count > 0 && (
-                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${
-                    activeTab === tab.id
-                      ? 'bg-indigo-200 dark:bg-indigo-800'
-                      : 'bg-gray-200 dark:bg-gray-600'
-                  }`}>
+                  <span
+                    className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${
+                      activeTab === tab.id
+                        ? 'bg-indigo-200 dark:bg-indigo-800'
+                        : 'bg-gray-200 dark:bg-gray-600'
+                    }`}
+                  >
                     {count}
                   </span>
                 )}
@@ -103,12 +100,14 @@ export const AgentInsightPanel: React.FC<AgentInsightPanelProps> = ({
               auto_awesome
             </span>
             <p className="text-sm">
-              {activeTab === 'all' ? '아직 인사이트가 없습니다' : `${activeTab} 관련 인사이트가 없습니다`}
+              {activeTab === 'all'
+                ? '아직 인사이트가 없습니다'
+                : `${activeTab} 관련 인사이트가 없습니다`}
             </p>
           </div>
         ) : (
           <>
-            {visibleInsights.map((insight) => (
+            {visibleInsights.map(insight => (
               <AgentInsightBanner
                 key={insight.id}
                 insight={insight}
