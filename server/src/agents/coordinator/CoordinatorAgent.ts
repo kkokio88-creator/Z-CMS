@@ -73,7 +73,14 @@ export class CoordinatorAgent extends Agent {
     try {
       switch (task.type) {
         case 'orchestrate_analysis':
-          return await this.orchestrateAnalysis(task);
+          await this.orchestrateAnalysis(task);
+          return {
+            taskId: task.id,
+            agentId: this.id,
+            success: true,
+            output: { orchestrated: true },
+            processingTime: Date.now() - startTime,
+          };
         case 'synthesize_insights':
           return await this.synthesizeInsights(task);
         case 'evaluate_agents':

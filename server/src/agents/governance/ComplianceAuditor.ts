@@ -73,9 +73,9 @@ export class ComplianceAuditor extends Agent {
         if (!hasFinancialData) return true;
 
         const hasEvidence =
-          debate.thesis?.content.evidence?.length > 0 ||
-          debate.antithesis?.content.evidence?.length > 0 ||
-          debate.synthesis?.content.evidence?.length > 0;
+          (debate.thesis?.content.evidence?.length ?? 0) > 0 ||
+          (debate.antithesis?.content.evidence?.length ?? 0) > 0 ||
+          (debate.synthesis?.content.evidence?.length ?? 0) > 0;
         return hasEvidence;
       },
     },

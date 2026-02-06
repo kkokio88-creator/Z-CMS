@@ -114,7 +114,7 @@ router.post('/targets', (req: Request, res: Response) => {
 // Update single target
 router.put('/targets/:month', (req: Request, res: Response) => {
   try {
-    const { month } = req.params;
+    const month = req.params.month as string;
     const { targetRatio, targetSales, targetCost } = req.body;
 
     const existingIdx = costTargets.findIndex(t => t.month === month);

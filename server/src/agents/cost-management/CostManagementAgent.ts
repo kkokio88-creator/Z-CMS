@@ -208,7 +208,7 @@ export class CostManagementAgent extends Agent {
       employeeCount: uniqueEmployees,
       overtimeHours: totalOvertimeHours,
       productionVolume,
-      previousPeriodCost: task.payload?.previousLaborCost,
+      previousPeriodCost: task.payload?.previousLaborCost as number | undefined,
     });
 
     // Check for overtime alerts

@@ -4,14 +4,25 @@ import type {
   AgentPerformance,
   FeedbackType,
   AgentId,
+  DebateRecord,
+  DomainTeam,
 } from '../agents/types';
 
-const API_BASE = import.meta.env.VITE_AGENT_API_URL || 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+// 토론 이벤트 타입
+export interface DebateSSEEvent {
+  debateId: string;
+  type: 'debate_started' | 'round_completed' | 'debate_completed' | 'governance_reviewed';
+  data: Partial<DebateRecord>;
+  timestamp: string;
+}
 
 class AgentService {
   private sseConnection: EventSource | null = null;
   private insightCallbacks: Set<(insight: AgentInsight) => void> = new Set();
   private connectionCallbacks: Set<(connected: boolean) => void> = new Set();
+  private debateCallbacks: Set<(event: DebateSSEEvent) => void> = new Set();
 
   /**
    * Connect to SSE stream for real-time updates
@@ -51,6 +62,19 @@ class AgentService {
     this.sseConnection.addEventListener('heartbeat', () => {
       // Connection is alive
     });
+
+    // Listen for debate events
+    const debateEvents = ['debate_start', 'debate_round', 'debate_complete', 'debate_governance'];
+    debateEvents.forEach(eventType => {
+      this.sseConnection?.addEventListener(eventType, event => {
+        try {
+          const data = JSON.parse((event as MessageEvent).data) as DebateSSEEvent;
+          this.debateCallbacks.forEach(cb => cb(data));
+        } catch (error) {
+          console.error(`Failed to parse ${eventType} event:`, error);
+        }
+      });
+    });
   }
 
   /**
@@ -77,6 +101,14 @@ class AgentService {
   onConnectionChange(callback: (connected: boolean) => void): () => void {
     this.connectionCallbacks.add(callback);
     return () => this.connectionCallbacks.delete(callback);
+  }
+
+  /**
+   * Subscribe to debate events
+   */
+  onDebateEvent(callback: (event: DebateSSEEvent) => void): () => void {
+    this.debateCallbacks.add(callback);
+    return () => this.debateCallbacks.delete(callback);
   }
 
   /**
@@ -193,6 +225,62 @@ class AgentService {
     const response = await fetch(`${API_BASE}/stream/state`);
     const data = await response.json();
     return data.data;
+  }
+
+  /**
+   * Get active debates
+   */
+  async getActiveDebates(): Promise<DebateRecord[]> {
+    try {
+      const response = await fetch(`${API_BASE}/debates/active`);
+      const data = await response.json();
+      return data.data || [];
+    } catch (error) {
+      console.error('Failed to fetch active debates:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get debate history
+   */
+  async getDebateHistory(limit = 10): Promise<DebateRecord[]> {
+    try {
+      const response = await fetch(`${API_BASE}/debates/history?limit=${limit}`);
+      const data = await response.json();
+      return data.data || [];
+    } catch (error) {
+      console.error('Failed to fetch debate history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Start all team debates
+   */
+  async startAllTeamDebates(priority: 'low' | 'medium' | 'high' | 'critical' = 'medium'): Promise<void> {
+    await fetch(`${API_BASE}/debates/start-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priority }),
+    });
+  }
+
+  /**
+   * Start a single team debate
+   */
+  async startTeamDebate(
+    team: DomainTeam,
+    topic: string,
+    priority: 'low' | 'medium' | 'high' | 'critical' = 'medium'
+  ): Promise<string> {
+    const response = await fetch(`${API_BASE}/debates/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team, topic, priority }),
+    });
+    const data = await response.json();
+    return data.debateId;
   }
 }
 

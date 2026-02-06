@@ -21,7 +21,7 @@ router.get('/status', (req: Request, res: Response) => {
 
 // Get specific agent status
 router.get('/status/:agentId', (req: Request, res: Response) => {
-  const { agentId } = req.params;
+  const agentId = req.params.agentId as string;
   const agents = req.app.locals.agents as Record<string, Agent>;
   const agent = agents[agentId];
 

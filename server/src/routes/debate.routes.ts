@@ -7,7 +7,7 @@ import { Router, Request, Response } from 'express';
 import type { DebateManager } from '../services/DebateManager.js';
 import type { WipManager } from '../services/WipManager.js';
 import type { ChiefOrchestrator } from '../agents/orchestrator/ChiefOrchestrator.js';
-import type { DomainTeam, MessagePriority } from '../types/index.js';
+import type { DomainTeam, MessagePriority, InsightDomain } from '../types/index.js';
 
 export function createDebateRoutes(
   debateManager: DebateManager,
@@ -39,7 +39,7 @@ export function createDebateRoutes(
 
       // 히스토리
       const history = debateManager.getDebateHistory({
-        domain: domain as string | undefined,
+        domain: domain as InsightDomain | undefined,
         team: team as DomainTeam | undefined,
         limit: parseInt(limit as string),
       });
@@ -100,7 +100,7 @@ export function createDebateRoutes(
    */
   router.get('/:id', async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
 
       // 활성 토론에서 찾기
       let debate = debateManager.getActiveDebate(id);
@@ -142,7 +142,7 @@ export function createDebateRoutes(
    */
   router.get('/:id/log', async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const log = await wipManager.readDebateLog(id);
 
       if (!log) {
@@ -246,7 +246,7 @@ export function createDebateRoutes(
    */
   router.post('/:id/cancel', async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const { reason = '사용자 요청에 의한 취소' } = req.body;
 
       await debateManager.cancelDebate(id, reason);
