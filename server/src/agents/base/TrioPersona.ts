@@ -413,13 +413,10 @@ export abstract class TrioPersona extends Agent {
     }
 
     // 학습 레지스트리에 기록
-    this.learningRegistry.recordCoaching(this.id, {
-      appliedAt: new Date(),
-      adjustments: [
-        `confidenceAdjustment: ${this.confidenceAdjustment}`,
-        `verbosityLevel: ${this.verbosityLevel}`,
-      ],
-    });
+    this.learningRegistry.recordCoaching(this.id, '', [
+      `confidenceAdjustment: ${this.confidenceAdjustment}`,
+      `verbosityLevel: ${this.verbosityLevel}`,
+    ]);
   }
 
   /**

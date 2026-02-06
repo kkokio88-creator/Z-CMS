@@ -265,6 +265,7 @@ export class ChiefOrchestrator extends Agent {
       'inventory-team': 'inventory-optimist',
       'profitability-team': 'profitability-optimist',
       'cost-management-team': 'cost-optimist',
+      'business-strategy-team': 'business-optimist',
     };
     return mapping[team];
   }

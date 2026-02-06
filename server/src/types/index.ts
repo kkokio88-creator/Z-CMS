@@ -5,6 +5,7 @@ export type AgentId =
   | 'bom-waste-agent'
   | 'inventory-agent'
   | 'profitability-agent'
+  | 'cost-management-agent'
   // 조율 계층 (Orchestration Layer)
   | 'chief-orchestrator'
   // BOM/Waste 팀 (Trio)
@@ -23,6 +24,10 @@ export type AgentId =
   | 'cost-optimist'
   | 'cost-pessimist'
   | 'cost-mediator'
+  // 사업전략 팀 (Trio)
+  | 'business-optimist'
+  | 'business-pessimist'
+  | 'business-mediator'
   // 거버넌스 계층 (Governance Layer)
   | 'qa-specialist'
   | 'compliance-auditor';
@@ -67,6 +72,7 @@ export interface Task {
   input: unknown;
   priority: MessagePriority;
   deadline?: Date;
+  payload?: Record<string, unknown>;
 }
 
 export interface TaskResult {

@@ -22,7 +22,8 @@ export type DomainTeam =
   | 'bom-waste-team'
   | 'inventory-team'
   | 'profitability-team'
-  | 'cost-management-team';
+  | 'cost-management-team'
+  | 'business-strategy-team';
 
 // 거버넌스 역할
 export type GovernanceRole = 'qa-specialist' | 'compliance-auditor';

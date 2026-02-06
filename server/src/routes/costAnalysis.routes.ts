@@ -360,7 +360,7 @@ function transformBomYieldData(production: EcountProductionRaw[], bom: EcountBom
     }
     const entry = productionByProduct.get(prodCode)!;
     entry.total += parseFloat(p.QTY as any) || 0;
-    entry.used += parseFloat(p.USE_QTY as any) || 0;
+    entry.used += parseFloat((p as any).USE_QTY as any) || 0;
     if (p.IO_DATE) entry.dates.push(p.IO_DATE);
   });
 
@@ -371,7 +371,7 @@ function transformBomYieldData(production: EcountProductionRaw[], bom: EcountBom
   productionByProduct.forEach((data, prodCode) => {
     // Find standard BOM quantity
     const bomEntry = bom.find(b => b.PROD_CD === prodCode);
-    const stdQty = bomEntry ? parseFloat(bomEntry.USE_QTY as any) || 100 : 100;
+    const stdQty = bomEntry ? parseFloat((bomEntry as any).USE_QTY as any) || 100 : 100;
 
     // Calculate yield
     const stdYield = 100; // 표준 수율 100%
@@ -403,8 +403,8 @@ function transformInventoryDiscrepancy(
   const theoreticalInventory = new Map<string, number>();
 
   production.forEach(p => {
-    const code = p.USE_PROD_CD || p.PROD_CD;
-    const qty = parseFloat(p.USE_QTY as any) || parseFloat(p.QTY as any) || 0;
+    const code = (p as any).USE_PROD_CD || p.PROD_CD;
+    const qty = parseFloat((p as any).USE_QTY as any) || parseFloat(p.QTY as any) || 0;
     theoreticalInventory.set(code, (theoreticalInventory.get(code) || 0) - qty);
   });
 
@@ -447,7 +447,7 @@ function transformMaterialPriceHistory(purchases: EcountPurchaseRaw[], weeks: nu
     }
     priceByMaterial.get(code)!.prices.push({
       date: formatDate(p.IO_DATE),
-      price: parseFloat(p.PRICE as any) || 0,
+      price: parseFloat(p.U_PRICE as any) || 0,
       supplier: p.CUST_DES || '',
     });
   });
@@ -519,10 +519,10 @@ function calculateMaterialImpacts(priceHistory: any[], bom: EcountBomRaw[]): any
 
   return increasedMaterials.map(material => {
     // Find products that use this material
-    const affectedBom = bom.filter(b => b.USE_PROD_CD === material.materialCode);
+    const affectedBom = bom.filter(b => (b as any).USE_PROD_CD === material.materialCode);
 
     const affectedProducts = affectedBom.map(b => {
-      const bomQty = parseFloat(b.USE_QTY as any) || 1;
+      const bomQty = parseFloat((b as any).USE_QTY as any) || 1;
       const deltaCost = bomQty * (material.currentPrice - material.previousWeekPrice);
 
       return {

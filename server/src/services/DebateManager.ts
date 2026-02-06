@@ -28,6 +28,7 @@ const TEAM_TO_DOMAIN: Record<DomainTeam, InsightDomain> = {
   'inventory-team': 'inventory',
   'profitability-team': 'profitability',
   'cost-management-team': 'general',
+  'business-strategy-team': 'general',
 };
 
 export class DebateManager extends EventEmitter {
@@ -312,6 +313,7 @@ export class DebateManager extends EventEmitter {
       'inventory-team': 0,
       'profitability-team': 0,
       'cost-management-team': 0,
+      'business-strategy-team': 0,
     };
 
     allDebates.forEach(d => {

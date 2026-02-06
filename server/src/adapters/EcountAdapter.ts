@@ -65,7 +65,7 @@ export class EcountAdapter {
         }),
       });
 
-      const data = await response.json();
+      const data: any = await response.json();
 
       if (data.Data?.Datas?.SESSION_ID) {
         this.sessionId = data.Data.Datas.SESSION_ID;
@@ -101,7 +101,7 @@ export class EcountAdapter {
         }),
       });
 
-      const data: EcountApiResponse<T> = await response.json();
+      const data = (await response.json()) as EcountApiResponse<T>;
 
       if (data.Error?.Code === '999') {
         console.log('Session expired, re-logging in...');

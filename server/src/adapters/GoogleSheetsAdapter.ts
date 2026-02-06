@@ -47,6 +47,28 @@ export class GoogleSheetsAdapter {
   private async getClient(): Promise<sheets_v4.Sheets> {
     if (this.sheets) return this.sheets;
 
+    // Method 0: Try GOOGLE_SERVICE_ACCOUNT_JSON env var (for cloud deployments)
+    const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (serviceAccountJson) {
+      try {
+        const credentials = JSON.parse(serviceAccountJson);
+        const auth = new google.auth.GoogleAuth({
+          credentials,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+
+        const authClient = await auth.getClient();
+        this.sheets = google.sheets({
+          version: 'v4',
+          auth: authClient as any,
+        });
+        console.log('Google Sheets connected via GOOGLE_SERVICE_ACCOUNT_JSON env var');
+        return this.sheets;
+      } catch (error: any) {
+        console.error('Error parsing GOOGLE_SERVICE_ACCOUNT_JSON:', error.message);
+      }
+    }
+
     // Method 1: Try service account JSON key file first
     const serviceAccountPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
     if (serviceAccountPath) {
