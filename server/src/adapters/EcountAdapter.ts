@@ -20,16 +20,25 @@ interface EcountApiResponse<T> {
 }
 
 export class EcountAdapter {
-  private config: EcountConfig;
+  private _config: EcountConfig | null = null;
   private sessionId: string | null = null;
+  private loginPromise: Promise<boolean> | null = null;
 
-  constructor() {
-    this.config = {
-      COM_CODE: process.env.ECOUNT_COM_CODE || '',
-      USER_ID: process.env.ECOUNT_USER_ID || '',
-      API_KEY: process.env.ECOUNT_API_KEY || '',
-      ZONE: process.env.ECOUNT_ZONE || 'CD',
-    };
+  // dotenv.config() 이후에 env를 읽도록 lazy 로딩
+  private get config(): EcountConfig {
+    if (!this._config) {
+      this._config = {
+        COM_CODE: process.env.ECOUNT_COM_CODE || '',
+        USER_ID: process.env.ECOUNT_USER_ID || '',
+        API_KEY: process.env.ECOUNT_API_KEY || '',
+        ZONE: process.env.ECOUNT_ZONE || 'CD',
+      };
+    }
+    return this._config;
+  }
+
+  private set config(value: EcountConfig) {
+    this._config = value;
   }
 
   updateConfig(config: Partial<EcountConfig>): void {
@@ -81,12 +90,19 @@ export class EcountAdapter {
     }
   }
 
+  private async ensureLogin(): Promise<boolean> {
+    if (this.sessionId) return true;
+    if (this.loginPromise) return this.loginPromise;
+    this.loginPromise = this.login().finally(() => {
+      this.loginPromise = null;
+    });
+    return this.loginPromise;
+  }
+
   private async callApi<T>(endpoint: string, params: Record<string, unknown> = {}): Promise<T[]> {
-    if (!this.sessionId) {
-      const loginSuccess = await this.login();
-      if (!loginSuccess) {
-        throw new Error('ECOUNT login failed');
-      }
+    const loginSuccess = await this.ensureLogin();
+    if (!loginSuccess) {
+      throw new Error('ECOUNT login failed');
     }
 
     const url = `${this.getBaseUrl()}${endpoint}?SESSION_ID=${this.sessionId}`;

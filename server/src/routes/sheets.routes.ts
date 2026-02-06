@@ -21,8 +21,20 @@ function extractSpreadsheetId(url: string): string | null {
 
 // Google Sheets 클라이언트 가져오기
 async function getSheetsClient(): Promise<sheets_v4.Sheets> {
-  const serviceAccountPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
+  // Method 1: GOOGLE_SERVICE_ACCOUNT_JSON env var (for cloud deployments)
+  const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (serviceAccountJson) {
+    const credentials = JSON.parse(serviceAccountJson);
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    const authClient = await auth.getClient();
+    return google.sheets({ version: 'v4', auth: authClient as any });
+  }
 
+  // Method 2: Service account key file path
+  const serviceAccountPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
   if (serviceAccountPath) {
     const keyFilePath = path.resolve(serviceAccountPath);
 

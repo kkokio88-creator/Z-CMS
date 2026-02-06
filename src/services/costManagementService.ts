@@ -182,28 +182,42 @@ export const fetchPurchaseOrders = async (
   }
 };
 
-// Fetch Inventory by Location - ECOUNT 재고 데이터 사용
+// Fetch Inventory by Location - Supabase 우선, ECOUNT 폴백
 export const fetchInventoryByLocation = async (
   baseDate?: string
 ): Promise<InventoryByLocation[]> => {
+  // 1. Supabase 캐시에서 먼저 시도
   try {
-    // ECOUNT inventory-by-location API 먼저 시도
+    const sbResponse = await fetch(`${BACKEND_URL}/data/inventory`);
+    const sbResult = await sbResponse.json();
+
+    if (sbResult.success && sbResult.data && sbResult.data.length > 0) {
+      const mapped = sbResult.data.map((inv: any) => ({
+        warehouseCode: inv.warehouse_code || '001',
+        warehouseName: inv.warehouse_code || '메인창고',
+        productCode: inv.product_code || '',
+        productName: inv.product_name || inv.product_code || '품목',
+        quantity: Number(inv.balance_qty || 0),
+        unitPrice: 1000, // Supabase에는 단가 없음 - 기본값
+        totalValue: Number(inv.balance_qty || 0) * 1000,
+        category: '일반',
+      }));
+      console.log('[costManagementService] Supabase 재고:', mapped.length, '건');
+      return mapped;
+    }
+  } catch { /* Supabase 실패 - 폴백 */ }
+
+  // 2. ECOUNT inventory-by-location API
+  try {
     const url = baseDate
       ? `${BACKEND_URL}/ecount/inventory-by-location?baseDate=${baseDate}`
       : `${BACKEND_URL}/ecount/inventory-by-location`;
 
-    console.log('[costManagementService] 재고 API 호출:', url);
     const response = await fetch(url);
     const result = await response.json();
 
-    console.log('[costManagementService] 재고 API 응답:', {
-      success: result.success,
-      dataLength: result.data?.length || 0,
-      error: result.error,
-    });
-
     if (result.success && result.data && result.data.length > 0) {
-      const mapped = result.data.map((inv: any) => ({
+      return result.data.map((inv: any) => ({
         warehouseCode: inv.WH_CD || '001',
         warehouseName: inv.WH_DES || inv.WH_CD || '메인창고',
         productCode: inv.PROD_CD || '',
@@ -214,19 +228,11 @@ export const fetchInventoryByLocation = async (
           parseFloat(inv.AMT || 0) || parseFloat(inv.BAL_QTY || inv.QTY || 0) * parseFloat(inv.UNIT_PRICE || 1000),
         category: inv.CLASS_CD || inv.CATEGORY || '일반',
       }));
-      console.log('[costManagementService] 재고 데이터 변환 완료:', mapped.length, '건');
-      return mapped;
     }
 
-    // 대체: 일반 inventory API 시도
-    console.log('[costManagementService] 대체 재고 API 시도:', `${BACKEND_URL}/ecount/inventory`);
+    // 3. 일반 inventory API
     const invResponse = await fetch(`${BACKEND_URL}/ecount/inventory`);
     const invResult = await invResponse.json();
-
-    console.log('[costManagementService] 대체 재고 API 응답:', {
-      success: invResult.success,
-      dataLength: invResult.data?.length || 0,
-    });
 
     if (invResult.success && invResult.data && invResult.data.length > 0) {
       return invResult.data.map((inv: any) => ({
@@ -240,13 +246,11 @@ export const fetchInventoryByLocation = async (
         category: inv.CLASS_CD || '일반',
       }));
     }
-
-    console.warn('[costManagementService] 재고 데이터 없음 - 모든 API 실패');
-    return [];
   } catch (error) {
     console.error('[costManagementService] 재고 API 오류:', error);
-    return [];
   }
+
+  return [];
 };
 
 // Fetch Attendance Records - Google Sheet DB_노무비 시트에서 실제 데이터 사용

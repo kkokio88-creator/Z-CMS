@@ -12,6 +12,9 @@ import orderingRoutes from './routes/ordering.routes.js';
 import sheetsRoutes from './routes/sheets.routes.js';
 import { createDebateRoutes } from './routes/debate.routes.js';
 import { createGovernanceRoutes } from './routes/governance.routes.js';
+import supabaseRoutes from './routes/supabase.routes.js';
+import { supabaseAdapter } from './adapters/SupabaseAdapter.js';
+import { syncService } from './services/SyncService.js';
 import { EventBus } from './services/EventBus.js';
 import { StateManager } from './services/StateManager.js';
 import { LearningRegistry } from './services/LearningRegistry.js';
@@ -44,11 +47,14 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(
   cors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:5173',
-      process.env.FRONTEND_URL,
-    ].filter(Boolean) as string[],
+    origin: function (origin, callback) {
+      // Allow localhost on any port for development
+      if (!origin || /^http:\/\/localhost:\d+$/.test(origin) || origin === process.env.FRONTEND_URL) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   })
 );
@@ -183,6 +189,9 @@ app.use('/api/cost-report', costReportRoutes);
 app.use('/api/cost-analysis', costAnalysisRoutes);
 app.use('/api/ordering', orderingRoutes);
 app.use('/api/sheets', sheetsRoutes);
+
+// Supabase 데이터/동기화 라우트
+app.use('/api', supabaseRoutes);
 
 // 새 라우트: 토론 및 거버넌스
 app.use('/api/debates', createDebateRoutes(debateManager, wipManager, chiefOrchestrator));
@@ -444,6 +453,45 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// ================================
+// Supabase 자동 동기화
+// ================================
+const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1시간
+
+async function runAutoSync() {
+  if (!supabaseAdapter.isConfigured()) {
+    console.log('[AutoSync] Supabase 미설정 - 자동 동기화 건너뜀');
+    return;
+  }
+
+  try {
+    const connResult = await supabaseAdapter.testConnection();
+    if (!connResult.success) {
+      console.warn('[AutoSync] Supabase 연결 실패:', connResult.message);
+      return;
+    }
+
+    // 마지막 동기화 시간 확인
+    const gsMinutes = await syncService.getMinutesSinceLastSync('google_sheets');
+    const ecountMinutes = await syncService.getMinutesSinceLastSync('ecount');
+
+    const needsGsSync = gsMinutes === null || gsMinutes >= 60;
+    const needsEcountSync = ecountMinutes === null || ecountMinutes >= 60;
+
+    if (needsGsSync || needsEcountSync) {
+      console.log('[AutoSync] 동기화 필요 - 실행 중...');
+      const tasks: Promise<any>[] = [];
+      if (needsGsSync) tasks.push(syncService.syncFromGoogleSheets());
+      if (needsEcountSync) tasks.push(syncService.syncFromEcount());
+      await Promise.allSettled(tasks);
+    } else {
+      console.log(`[AutoSync] 동기화 불필요 (GS: ${gsMinutes}분 전, ECOUNT: ${ecountMinutes}분 전)`);
+    }
+  } catch (err: any) {
+    console.error('[AutoSync] 오류:', err.message);
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Z-CMS Agent Server running on port ${PORT}`);
   console.log(`📡 SSE endpoint: http://localhost:${PORT}/api/stream`);
@@ -455,4 +503,15 @@ app.listen(PORT, () => {
   console.log(`👑 Chief Orchestrator: 활성화됨`);
   console.log(`📁 WIP 폴더: ./wip`);
   console.log(`✨ 에이전틱 멀티-레이어 프레임워크 준비 완료`);
+
+  // Supabase 상태 확인 및 초기 동기화
+  if (supabaseAdapter.isConfigured()) {
+    console.log(`💾 Supabase: 설정됨 - 자동 동기화 활성화 (${SYNC_INTERVAL_MS / 60000}분 간격)`);
+    // 서버 시작 5초 후 초기 동기화 (다른 초기화 완료 대기)
+    setTimeout(() => runAutoSync(), 5000);
+    // 주기적 동기화
+    setInterval(() => runAutoSync(), SYNC_INTERVAL_MS);
+  } else {
+    console.log('💾 Supabase: 미설정 - SUPABASE_URL, SUPABASE_KEY 환경변수를 설정하세요');
+  }
 });

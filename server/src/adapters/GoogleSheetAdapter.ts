@@ -94,6 +94,29 @@ export interface UtilityData {
   gasCost: number;
 }
 
+// 노무비 데이터 타입
+export interface LaborData {
+  week: string;
+  date: string;
+  department: string;
+  headcount: number;
+  weekdayRegularHours: number;
+  weekdayOvertimeHours: number;
+  weekdayNightHours: number;
+  weekdayTotalHours: number;
+  holidayRegularHours: number;
+  holidayOvertimeHours: number;
+  holidayNightHours: number;
+  holidayTotalHours: number;
+  weekdayRegularPay: number;
+  weekdayOvertimePay: number;
+  weekdayNightPay: number;
+  holidayRegularPay: number;
+  holidayOvertimePay: number;
+  holidayNightPay: number;
+  totalPay: number;
+}
+
 export class GoogleSheetAdapter {
   private baseUrl: string;
 
@@ -170,6 +193,25 @@ export class GoogleSheetAdapter {
   private parseDate(value: string): string {
     if (!value || value.trim() === '') return '';
     return value.trim().replace(/\//g, '-');
+  }
+
+  /**
+   * 시트 이름으로 데이터 가져오기
+   */
+  private async fetchSheetByName(sheetName: string): Promise<string[][]> {
+    const url = `${this.baseUrl}&sheet=${encodeURIComponent(sheetName)}`;
+
+    try {
+      const response = await fetch(url, { headers: { Accept: 'text/csv' } });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const csv = await response.text();
+      return this.parseCSV(csv);
+    } catch (error) {
+      console.error(`Failed to fetch sheet "${sheetName}":`, error);
+      return [];
+    }
   }
 
   /**
@@ -375,17 +417,66 @@ export class GoogleSheetAdapter {
   }
 
   /**
+   * 노무비 데이터 가져오기 (노무비 시트)
+   * 날짜 형식: "2026. 1. 1." → "2026-01-01"
+   */
+  async fetchLabor(): Promise<LaborData[]> {
+    const rows = await this.fetchSheetByName('노무비');
+    const results: LaborData[] = [];
+
+    // CSV 첫 행이 헤더, 데이터는 2행부터
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row[0] || !row[1]) continue;
+
+      // 날짜 정규화: "2026. 1. 1." → "2026-01-01"
+      const rawDate = (row[1] || '').trim();
+      const dateMatch = rawDate.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
+      if (!dateMatch) continue;
+
+      const date = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
+      const department = (row[2] || '').trim();
+      if (!department) continue;
+
+      results.push({
+        week: row[0] || '',
+        date,
+        department,
+        headcount: this.parseNumber(row[3]),
+        weekdayRegularHours: this.parseNumber(row[4]),
+        weekdayOvertimeHours: this.parseNumber(row[5]),
+        weekdayNightHours: this.parseNumber(row[6]),
+        weekdayTotalHours: this.parseNumber(row[7]),
+        holidayRegularHours: this.parseNumber(row[8]),
+        holidayOvertimeHours: this.parseNumber(row[9]),
+        holidayNightHours: this.parseNumber(row[10]),
+        holidayTotalHours: this.parseNumber(row[11]),
+        weekdayRegularPay: this.parseNumber(row[12]),
+        weekdayOvertimePay: this.parseNumber(row[13]),
+        weekdayNightPay: this.parseNumber(row[14]),
+        holidayRegularPay: this.parseNumber(row[15]),
+        holidayOvertimePay: this.parseNumber(row[16]),
+        holidayNightPay: this.parseNumber(row[17]),
+        totalPay: this.parseNumber(row[18]),
+      });
+    }
+
+    return results;
+  }
+
+  /**
    * 모든 데이터 동기화
    */
   async syncAllData() {
     console.log('Syncing Google Sheet data...');
 
-    const [dailySales, salesDetail, production, purchases, utilities] = await Promise.all([
+    const [dailySales, salesDetail, production, purchases, utilities, labor] = await Promise.all([
       this.fetchDailySales(),
       this.fetchSalesDetail(),
       this.fetchProduction(),
       this.fetchPurchases(),
       this.fetchUtilities(),
+      this.fetchLabor(),
     ]);
 
     console.log('Google Sheet sync complete:', {
@@ -394,6 +485,7 @@ export class GoogleSheetAdapter {
       production: production.length,
       purchases: purchases.length,
       utilities: utilities.length,
+      labor: labor.length,
     });
 
     return {
@@ -402,6 +494,7 @@ export class GoogleSheetAdapter {
       production,
       purchases,
       utilities,
+      labor,
       syncedAt: new Date().toISOString(),
     };
   }

@@ -27,7 +27,7 @@ import {
   InventoryItem,
   SalesRecord,
   PurchaseRecord,
-} from '../../services/dataIntegrationService';
+} from '../services/dataIntegrationService';
 
 // ============================================
 // 파생 데이터 타입

@@ -99,6 +99,23 @@ router.get('/purchases', async (req: Request, res: Response) => {
   }
 });
 
+// 노무비 데이터
+router.get('/labor', async (req: Request, res: Response) => {
+  try {
+    const data = await googleSheetAdapter.fetchLabor();
+    res.json({
+      success: true,
+      data,
+      count: data.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch labor data',
+    });
+  }
+});
+
 // 유틸리티 데이터
 router.get('/utilities', async (req: Request, res: Response) => {
   try {
