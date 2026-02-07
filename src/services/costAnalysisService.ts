@@ -23,7 +23,7 @@ import {
 } from '../types';
 
 // Backend API URL
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 /**
  * 원가 분석 전체 데이터 동기화

@@ -3,20 +3,11 @@ import { Sidebar } from '../components/Sidebar.tsx';
 import { Header } from '../components/Header.tsx';
 import { NotificationPanel } from '../components/NotificationPanel.tsx';
 import { DashboardHomeView } from '../components/DashboardHomeView.tsx';
-import { WasteBomView } from '../components/WasteBomView.tsx';
-import { ChannelProfitView } from '../components/ChannelProfitView.tsx';
-import { InventorySafetyView } from '../components/InventorySafetyView.tsx';
-import { StocktakeAnomalyView } from '../components/StocktakeAnomalyView.tsx';
-import { MonthlyProfitView } from '../components/MonthlyProfitView.tsx';
 import { SettingsView } from '../components/SettingsView.tsx';
-import { OrderManagementView } from '../components/OrderManagementView.tsx';
-import { CostReportView } from '../components/CostReportView.tsx';
-import { CostManagementDashboard } from '../components/CostManagementDashboard.tsx';
-import BomIntegrityAuditView from '../components/BomIntegrityAuditView.tsx';
-import MaterialPriceImpactView from '../components/MaterialPriceImpactView.tsx';
-import DailyPerformanceView from '../components/DailyPerformanceView.tsx';
-import BudgetExpenseView from '../components/BudgetExpenseView.tsx';
-import StatisticalOrderingView from '../components/StatisticalOrderingView.tsx';
+import { ProfitAnalysisView } from '../components/ProfitAnalysisView.tsx';
+import { CostManagementView } from '../components/CostManagementView.tsx';
+import { ProductionBomView } from '../components/ProductionBomView.tsx';
+import { InventoryOrderView } from '../components/InventoryOrderView.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { AgentProvider } from '../agents/AgentContext.tsx';
 import { AIInsightSidebar } from '../components/AIInsightSidebar.tsx';
@@ -84,23 +75,15 @@ import {
   fetchExpenseSummary,
   fetchStaffingSuggestions,
 } from '../services/costAnalysisService';
+import { checkDataSource, directFetchSyncStatus, SyncStatusInfo } from '../services/supabaseClient';
 
 type ViewType =
   | 'home'
   | 'profit'
-  | 'waste'
+  | 'cost'
+  | 'production'
   | 'inventory'
-  | 'stocktake'
-  | 'monthly'
-  | 'settings'
-  | 'order'
-  | 'costreport'
-  | 'costmgmt'
-  | 'bomaudit'
-  | 'priceimpact'
-  | 'dailyperformance'
-  | 'budgetexpense'
-  | 'statorder';
+  | 'settings';
 
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -150,6 +133,8 @@ const App = () => {
     production: false,
     bom: false,
   });
+  const [dataSource, setDataSource] = useState<'backend' | 'direct' | false>(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatusInfo | null>(null);
 
   // Notification State
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -191,6 +176,17 @@ const App = () => {
   const handleEcountSync = async () => {
     setIsSyncing(true);
     try {
+      // 데이터 소스 확인
+      const source = await checkDataSource();
+      setDataSource(source);
+      console.log('[App] 데이터 소스:', source || '연결 없음');
+
+      // Supabase 동기화 상태 조회 (직접 연결 가능 시)
+      if (source === 'direct' || source === 'backend') {
+        const status = await directFetchSyncStatus();
+        if (status) setSyncStatus(status);
+      }
+
       // ECOUNT 데이터와 Google Sheet 데이터를 병렬로 가져오기
       const [ecountResult, gsResult] = await Promise.all([
         syncAllEcountData().catch(e => {
@@ -441,9 +437,15 @@ const App = () => {
 
       // 동기화 결과 메시지 설정
       if (!hasEcountData && !hasGsData) {
-        // API 연결 실패 - 빈 상태 유지 (Mock 데이터 사용 안함)
-        console.log('API 연결 실패 - 데이터 연결 필요');
-        setSyncMessage('데이터 소스 연결이 필요합니다');
+        // 데이터 없음 - 원인별 안내 메시지
+        if (source === 'direct') {
+          setSyncMessage('백엔드 서버 미연결 — Supabase에서 직접 조회했으나 데이터가 비어있습니다. 서버를 실행하고 초기 동기화를 해주세요.');
+        } else if (source === false) {
+          setSyncMessage('백엔드 서버 및 Supabase 모두 연결 실패 — 환경 설정을 확인하세요.');
+        } else {
+          setSyncMessage('데이터 소스 연결이 필요합니다');
+        }
+        console.log('데이터 없음 - 소스:', source || '연결 없음');
         setDataAvailability({
           sales: false,
           purchases: false,
@@ -463,7 +465,8 @@ const App = () => {
           if (gsResult.counts.production > 0) messages.push(`생산 ${gsResult.counts.production}건`);
           if (gsResult.counts.purchases > 0) messages.push(`구매 ${gsResult.counts.purchases}건`);
         }
-        setSyncMessage(messages.length > 0 ? messages.join(', ') + ' 연동됨' : '');
+        const sourceLabel = source === 'direct' ? ' (Supabase 직접)' : source === 'backend' ? '' : '';
+        setSyncMessage(messages.length > 0 ? messages.join(', ') + ' 연동됨' + sourceLabel : '');
       }
 
       const now = new Date().toLocaleTimeString();
@@ -538,14 +541,14 @@ const App = () => {
     let filename = `export_${activeView}_${new Date().toISOString().slice(0, 10)}.csv`;
 
     switch (activeView) {
-      case 'waste':
-        dataToExport = filteredWasteData;
-        break;
       case 'profit':
         dataToExport = filteredProfitData;
         break;
-      case 'monthly':
-        dataToExport = [...topProfitItems, ...bottomProfitItems];
+      case 'cost':
+        dataToExport = budgetItems;
+        break;
+      case 'production':
+        dataToExport = bomItems;
         break;
       case 'inventory':
         dataToExport = inventoryData;
@@ -627,72 +630,52 @@ const App = () => {
             inventoryCount={inventoryData.length}
             onNavigateToSettings={() => setActiveView('settings')}
             onNavigate={view => setActiveView(view as ViewType)}
+            dataSource={dataSource}
+            syncStatus={syncStatus}
           />
         );
       case 'profit':
-        return <ChannelProfitView data={filteredProfitData} />;
-      case 'waste':
         return (
-          <WasteBomView
-            onItemClick={handleItemClick}
-            wasteTrendData={filteredWasteData}
-            bomItems={bomItems}
-          />
-        );
-      case 'inventory':
-        return <InventorySafetyView onItemClick={handleItemClick} data={inventoryData} />;
-      case 'stocktake':
-        return <StocktakeAnomalyView onItemClick={handleItemClick} data={stocktakeAnomalies} />;
-      case 'monthly':
-        return (
-          <MonthlyProfitView
-            onItemClick={handleItemClick}
+          <ProfitAnalysisView
+            profitData={filteredProfitData}
             topItems={topProfitItems}
             bottomItems={bottomProfitItems}
+            onItemClick={handleItemClick}
           />
         );
-      case 'settings':
-        return <SettingsView />;
-      case 'order':
-        return <OrderManagementView suggestions={orderSuggestions} />;
-      case 'costreport':
-        return <CostReportView />;
-      case 'costmgmt':
-        return <CostManagementDashboard />;
-      case 'bomaudit':
+      case 'cost':
         return (
-          <BomIntegrityAuditView
+          <CostManagementView
+            materialPriceHistory={materialPriceHistory}
+            materialCostImpacts={materialCostImpacts}
+            dailyPerformance={dailyPerformance}
+            staffingSuggestions={staffingSuggestions}
+            budgetItems={budgetItems}
+            expenseSummary={expenseSummary}
+            onItemClick={handleItemClick}
+          />
+        );
+      case 'production':
+        return (
+          <ProductionBomView
+            wasteTrendData={filteredWasteData}
+            bomItems={bomItems}
             yieldData={bomYieldData}
             discrepancyData={inventoryDiscrepancy}
             onItemClick={handleItemClick}
           />
         );
-      case 'priceimpact':
+      case 'inventory':
         return (
-          <MaterialPriceImpactView
-            priceHistory={materialPriceHistory}
-            impacts={materialCostImpacts}
+          <InventoryOrderView
+            inventoryData={inventoryData}
+            stocktakeAnomalies={stocktakeAnomalies}
+            orderSuggestions={orderSuggestions}
             onItemClick={handleItemClick}
           />
         );
-      case 'dailyperformance':
-        return (
-          <DailyPerformanceView
-            data={dailyPerformance}
-            staffingSuggestions={staffingSuggestions}
-            targets={{ laborRatio: 25, materialRatio: 45 }}
-          />
-        );
-      case 'budgetexpense':
-        return (
-          <BudgetExpenseView
-            budgets={budgetItems}
-            summary={expenseSummary}
-            onItemClick={handleItemClick}
-          />
-        );
-      case 'statorder':
-        return <StatisticalOrderingView />;
+      case 'settings':
+        return <SettingsView />;
       default:
         return (
           <DashboardHomeView
@@ -707,6 +690,8 @@ const App = () => {
             inventoryCount={inventoryData.length}
             onNavigateToSettings={() => setActiveView('settings')}
             onNavigate={view => setActiveView(view as ViewType)}
+            dataSource={dataSource}
+            syncStatus={syncStatus}
           />
         );
     }
@@ -717,33 +702,15 @@ const App = () => {
       case 'home':
         return '통합 관제 대시보드';
       case 'profit':
-        return '채널 손익 대시보드';
-      case 'waste':
-        return '폐기 및 BOM 차이 분석';
+        return '수익 분석';
+      case 'cost':
+        return '원가 관리';
+      case 'production':
+        return '생산/BOM 관리';
       case 'inventory':
-        return '재고 건전성 분석';
-      case 'stocktake':
-        return '재고 실사 이상 탐지';
-      case 'monthly':
-        return '월간 수익성 랭킹';
+        return '재고/발주 관리';
       case 'settings':
         return '시스템 설정';
-      case 'order':
-        return '자재 발주 관리';
-      case 'costreport':
-        return '원가 리포트';
-      case 'costmgmt':
-        return '종합 원가관리';
-      case 'bomaudit':
-        return 'BOM 정합성 검토';
-      case 'priceimpact':
-        return '단가 변동 분석';
-      case 'dailyperformance':
-        return '일일 달성률';
-      case 'budgetexpense':
-        return '예산/경비 관리';
-      case 'statorder':
-        return '통계적 발주 관리';
       default:
         return '대시보드';
     }
@@ -752,7 +719,8 @@ const App = () => {
   const renderModalContent = () => {
     if (!selectedItem) return null;
 
-    if (activeView === 'monthly') {
+    // 월간 랭킹 모달 (margin 필드가 있는 selectedItem)
+    if (selectedItem.margin !== undefined && selectedItem.skuName) {
       return (
         <div className="space-y-6">
           {/* Top Summary */}
@@ -824,7 +792,8 @@ const App = () => {
       );
     }
 
-    if (activeView === 'inventory') {
+    // 재고 모달 (safetyStock 필드가 있는 selectedItem)
+    if (selectedItem.safetyStock !== undefined) {
       const isShortage = selectedItem.status === 'Shortage';
       return (
         <div className="space-y-4">
@@ -887,7 +856,8 @@ const App = () => {
       );
     }
 
-    if (activeView === 'stocktake') {
+    // 실사 이상 모달 (materialName 필드가 있는 selectedItem)
+    if (selectedItem.materialName !== undefined) {
       return (
         <div className="space-y-4">
           <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-md mb-4 border border-indigo-100 dark:border-indigo-800">

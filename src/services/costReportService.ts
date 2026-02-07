@@ -3,7 +3,7 @@
  * Handles communication with backend for cost data from Google Sheets
  */
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 export interface MonthlyCostSummary {
   month: string;

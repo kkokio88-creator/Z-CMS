@@ -158,7 +158,7 @@ export const SettingsView: React.FC = () => {
     }));
 
     try {
-      const response = await fetch('http://localhost:3001/api/sheets/test-connection', {
+      const response = await fetch('http://localhost:4001/api/sheets/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

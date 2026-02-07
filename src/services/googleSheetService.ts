@@ -1,9 +1,18 @@
 /**
  * Google Sheet Service - Frontend
- * Supabase 캐시 우선 조회, 실패 시 기존 Google Sheets API 폴백
+ * Supabase 직접 조회 우선, 백엔드 API 폴백
  */
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import {
+  isSupabaseDirectAvailable,
+  directFetchDailySales,
+  directFetchSalesDetail,
+  directFetchProduction,
+  directFetchPurchases,
+  directFetchUtilities,
+} from './supabaseClient';
+
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 // Supabase 스네이크_케이스 → 프론트엔드 camelCase 변환 헬퍼
 function mapDailySalesFromDb(row: any): DailySalesData {
@@ -95,10 +104,12 @@ function mapUtilityFromDb(row: any): UtilityData {
   };
 }
 
-/** Supabase 데이터 가용 여부를 빠르게 확인 */
-async function isSupabaseAvailable(): Promise<boolean> {
+/** 백엔드 서버 가용 여부 확인 (동기화 트리거용) */
+async function isBackendAvailable(): Promise<boolean> {
   try {
-    const response = await fetch(`${BACKEND_URL}/data/health`);
+    const response = await fetch(`${BACKEND_URL}/data/health`, {
+      signal: AbortSignal.timeout(2000),
+    });
     const result = await response.json();
     return result.success === true;
   } catch {
@@ -280,29 +291,29 @@ export interface UtilityCostItem {
 
 /**
  * 구글 시트 전체 동기화
- * 1) Supabase에 동기화 트리거 (백그라운드)
- * 2) Supabase에서 데이터 조회
- * 3) 실패 시 기존 Google Sheets API 폴백
+ * 3-Tier 폴백: 백엔드API → Supabase 직접 → 백엔드/Google Sheets
+ * 개별 fetch 함수들이 이미 3-Tier 폴백을 내장하므로 항상 호출
  */
 export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
-  // Supabase 사용 가능 시: 동기화 트리거 + Supabase에서 조회
-  const supabaseOk = await isSupabaseAvailable();
+  const backendOk = await isBackendAvailable();
 
-  if (supabaseOk) {
-    try {
-      // 백그라운드로 동기화 트리거 (결과를 기다리지 않음)
-      fetch(`${BACKEND_URL}/sync/google-sheets`, { method: 'POST' }).catch(() => {});
+  // 백엔드 가동 중이면 백그라운드로 동기화 트리거
+  if (backendOk) {
+    fetch(`${BACKEND_URL}/sync/google-sheets`, { method: 'POST' }).catch(() => {});
+  }
 
-      // Supabase에서 데이터 조회
-      const [dailySales, salesDetail, production, purchases, utilities] = await Promise.all([
-        fetchDailySales(),
-        fetchSalesDetail(),
-        fetchProduction(),
-        fetchPurchases(),
-        fetchUtilities(),
-      ]);
+  // 개별 fetch 함수 호출 (각각 3-Tier 폴백 내장: 백엔드→Supabase직접→Google Sheets)
+  try {
+    const [dailySales, salesDetail, production, purchases, utilities] = await Promise.all([
+      fetchDailySales(),
+      fetchSalesDetail(),
+      fetchProduction(),
+      fetchPurchases(),
+      fetchUtilities(),
+    ]);
 
-      // 변환 로직 (기존과 동일한 형식)
+    // 데이터가 하나라도 있으면 성공
+    if (dailySales.length > 0 || salesDetail.length > 0 || production.length > 0) {
       const profitTrend = buildProfitTrend(dailySales);
       const { topProfit, bottomProfit } = buildProfitRanking(salesDetail);
       const wasteTrend = buildWasteTrend(production);
@@ -332,12 +343,12 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
           bom: 0,
         },
       };
-    } catch (err) {
-      console.warn('Supabase 조회 실패, Google Sheets 폴백:', err);
     }
+  } catch (err) {
+    console.warn('3-Tier 데이터 조회 실패:', err);
   }
 
-  // 폴백: 기존 Google Sheets API
+  // 최종 폴백: 기존 Google Sheets API (백엔드 필수)
   return syncGoogleSheetDataLegacy();
 };
 
@@ -511,88 +522,97 @@ function buildUtilityCosts(utilities: UtilityData[]): UtilityCostItem[] {
 
 /**
  * 일별 채널 매출 데이터 가져오기
- * Supabase 우선, 실패 시 Google Sheets 폴백
+ * Primary: Supabase 직접 → Fallback: 백엔드 API
  */
 export const fetchDailySales = async (): Promise<DailySalesData[]> => {
-  try {
-    const response = await fetch(`${BACKEND_URL}/data/daily-sales`);
-    const result = await response.json();
-    if (result.success && result.data?.length > 0) {
-      return result.data.map(mapDailySalesFromDb);
-    }
-  } catch { /* Supabase 실패 - 폴백 */ }
+  // Primary: Supabase 직접 조회
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchDailySales();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
 
-  const response = await fetch(`${BACKEND_URL}/googlesheet/daily-sales`);
-  const result = await response.json();
-  return result.success ? result.data : [];
+  // Fallback: 백엔드 API
+  try {
+    const response = await fetch(`${BACKEND_URL}/data/daily-sales`, { signal: AbortSignal.timeout(5000) });
+    const result = await response.json();
+    if (result.success && result.data?.length > 0) return result.data.map(mapDailySalesFromDb);
+  } catch { /* 백엔드 실패 */ }
+
+  return [];
 };
 
 /**
  * 판매 상세 데이터 가져오기
  */
 export const fetchSalesDetail = async (): Promise<SalesDetailData[]> => {
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchSalesDetail();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
   try {
-    const response = await fetch(`${BACKEND_URL}/data/sales-detail`);
+    const response = await fetch(`${BACKEND_URL}/data/sales-detail`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) {
-      return result.data.map(mapSalesDetailFromDb);
-    }
-  } catch { /* Supabase 실패 - 폴백 */ }
-
-  const response = await fetch(`${BACKEND_URL}/googlesheet/sales-detail`);
-  const result = await response.json();
-  return result.success ? result.data : [];
+    if (result.success && result.data?.length > 0) return result.data.map(mapSalesDetailFromDb);
+  } catch { /* 백엔드 실패 */ }
+  return [];
 };
 
 /**
  * 생산/폐기 데이터 가져오기
  */
 export const fetchProduction = async (): Promise<ProductionData[]> => {
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchProduction();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
   try {
-    const response = await fetch(`${BACKEND_URL}/data/production`);
+    const response = await fetch(`${BACKEND_URL}/data/production`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) {
-      return result.data.map(mapProductionFromDb);
-    }
-  } catch { /* Supabase 실패 - 폴백 */ }
-
-  const response = await fetch(`${BACKEND_URL}/googlesheet/production`);
-  const result = await response.json();
-  return result.success ? result.data : [];
+    if (result.success && result.data?.length > 0) return result.data.map(mapProductionFromDb);
+  } catch { /* 백엔드 실패 */ }
+  return [];
 };
 
 /**
  * 구매/원자재 데이터 가져오기
  */
 export const fetchPurchases = async (): Promise<PurchaseData[]> => {
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchPurchases();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
   try {
-    const response = await fetch(`${BACKEND_URL}/data/purchases`);
+    const response = await fetch(`${BACKEND_URL}/data/purchases`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) {
-      return result.data.map(mapPurchaseFromDb);
-    }
-  } catch { /* Supabase 실패 - 폴백 */ }
-
-  const response = await fetch(`${BACKEND_URL}/googlesheet/purchases`);
-  const result = await response.json();
-  return result.success ? result.data : [];
+    if (result.success && result.data?.length > 0) return result.data.map(mapPurchaseFromDb);
+  } catch { /* 백엔드 실패 */ }
+  return [];
 };
 
 /**
  * 유틸리티 데이터 가져오기
  */
 export const fetchUtilities = async (): Promise<UtilityData[]> => {
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchUtilities();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
   try {
-    const response = await fetch(`${BACKEND_URL}/data/utilities`);
+    const response = await fetch(`${BACKEND_URL}/data/utilities`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) {
-      return result.data.map(mapUtilityFromDb);
-    }
-  } catch { /* Supabase 실패 - 폴백 */ }
-
-  const response = await fetch(`${BACKEND_URL}/googlesheet/utilities`);
-  const result = await response.json();
-  return result.success ? result.data : [];
+    if (result.success && result.data?.length > 0) return result.data.map(mapUtilityFromDb);
+  } catch { /* 백엔드 실패 */ }
+  return [];
 };
 
 /**

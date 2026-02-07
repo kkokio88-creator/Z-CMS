@@ -8,7 +8,7 @@ import type {
   DomainTeam,
 } from '../agents/types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 // 토론 이벤트 타입
 export interface DebateSSEEvent {

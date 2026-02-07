@@ -42,7 +42,7 @@ import { multiSpreadsheetAdapter } from './adapters/GoogleSheetsAdapter.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4001;
 
 // Middleware
 app.use(
@@ -492,6 +492,25 @@ async function runAutoSync() {
   }
 }
 
+async function runInitialSyncWithRetry(maxRetries: number, retryDelayMs: number) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[InitialSync] 시도 ${attempt}/${maxRetries}...`);
+      await runAutoSync();
+      console.log(`[InitialSync] 초기 동기화 성공 (시도 ${attempt})`);
+      return;
+    } catch (err: any) {
+      console.warn(`[InitialSync] 시도 ${attempt} 실패:`, err.message);
+      if (attempt < maxRetries) {
+        console.log(`[InitialSync] ${retryDelayMs / 1000}초 후 재시도...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+      } else {
+        console.error(`[InitialSync] ${maxRetries}회 시도 후 초기 동기화 실패. 주기적 동기화에서 재시도합니다.`);
+      }
+    }
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Z-CMS Agent Server running on port ${PORT}`);
   console.log(`📡 SSE endpoint: http://localhost:${PORT}/api/stream`);
@@ -507,8 +526,8 @@ app.listen(PORT, () => {
   // Supabase 상태 확인 및 초기 동기화
   if (supabaseAdapter.isConfigured()) {
     console.log(`💾 Supabase: 설정됨 - 자동 동기화 활성화 (${SYNC_INTERVAL_MS / 60000}분 간격)`);
-    // 서버 시작 5초 후 초기 동기화 (다른 초기화 완료 대기)
-    setTimeout(() => runAutoSync(), 5000);
+    // 서버 시작 5초 후 초기 동기화 (3회 재시도, 10초 간격)
+    setTimeout(() => runInitialSyncWithRetry(3, 10000), 5000);
     // 주기적 동기화
     setInterval(() => runAutoSync(), SYNC_INTERVAL_MS);
   } else {

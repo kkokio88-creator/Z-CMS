@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { KPICardProps, DashboardSummary } from '../types';
 import { LineChart, Line, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import type { SyncStatusInfo } from '../services/supabaseClient';
 
 interface DataAvailability {
   sales: boolean;
@@ -33,7 +34,7 @@ interface DataSourcesConfig {
 }
 
 const DATASOURCE_CONFIG_KEY = 'ZCMS_DATASOURCE_CONFIG';
-const API_BASE = 'http://localhost:3001';
+const API_BASE = 'http://localhost:4001';
 
 const DATA_SOURCE_LABELS: Record<string, { label: string; icon: string }> = {
   mealPlan: { label: '식단표', icon: 'restaurant_menu' },
@@ -57,6 +58,8 @@ interface DashboardHomeViewProps {
   inventoryCount?: number;
   onNavigateToSettings?: () => void;
   onNavigate?: (view: string) => void;
+  dataSource?: 'backend' | 'direct' | false;
+  syncStatus?: SyncStatusInfo | null;
 }
 
 const KPICard: React.FC<
@@ -132,6 +135,8 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   inventoryCount = 0,
   onNavigateToSettings,
   onNavigate,
+  dataSource,
+  syncStatus,
 }) => {
   const [sheetsConfig, setSheetsConfig] = useState<DataSourcesConfig | null>(null);
   const [testingSource, setTestingSource] = useState<string | null>(null);
@@ -247,12 +252,34 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           <button
             onClick={onSync}
             disabled={isSyncing}
-            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              isSyncing
+                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                : dataSource === 'backend'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                  : dataSource === 'direct'
+                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50'
+                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
+            }`}
           >
             <span
-              className={`w-2 h-2 rounded-full bg-green-500 mr-2 ${isSyncing ? 'animate-spin' : 'animate-pulse'}`}
+              className={`w-2 h-2 rounded-full mr-2 ${
+                isSyncing
+                  ? 'bg-blue-500 animate-spin'
+                  : dataSource === 'backend'
+                    ? 'bg-green-500 animate-pulse'
+                    : dataSource === 'direct'
+                      ? 'bg-yellow-500 animate-pulse'
+                      : 'bg-red-500'
+              }`}
             ></span>
-            {isSyncing ? 'ERP 동기화 중...' : 'ECOUNT 연동됨'}
+            {isSyncing
+              ? '동기화 중...'
+              : dataSource === 'backend'
+                ? '서버 연동됨'
+                : dataSource === 'direct'
+                  ? 'Supabase 직접'
+                  : '미연결'}
           </button>
           <span className="text-xs text-gray-400">마지막 업데이트: {lastSyncTime}</span>
         </div>
@@ -268,6 +295,61 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
                 ECOUNT API 구독에서 조회 API가 지원되지 않는 데이터는 표시되지 않습니다.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 동기화 상태 카드 */}
+      {syncStatus && (
+        <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-full ${
+                dataSource === 'backend'
+                  ? 'bg-green-100 dark:bg-green-900/30'
+                  : dataSource === 'direct'
+                    ? 'bg-yellow-100 dark:bg-yellow-900/30'
+                    : 'bg-red-100 dark:bg-red-900/30'
+              }`}>
+                <span className={`material-icons-outlined text-lg ${
+                  dataSource === 'backend'
+                    ? 'text-green-600 dark:text-green-400'
+                    : dataSource === 'direct'
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {dataSource === 'backend' ? 'cloud_done' : dataSource === 'direct' ? 'cloud_queue' : 'cloud_off'}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {dataSource === 'backend' ? '백엔드 서버 연동' : dataSource === 'direct' ? 'Supabase 직접 연결' : '연결 없음'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  마지막 동기화: {syncStatus.lastSyncTime ? new Date(syncStatus.lastSyncTime).toLocaleString('ko-KR') : '기록 없음'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              {/* 테이블별 레코드 수 */}
+              <div className="hidden md:flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                {Object.entries(syncStatus.tableCounts).map(([table, count]) => (
+                  <span key={table} className="flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${count > 0 ? 'bg-green-400' : 'bg-gray-300'}`}></span>
+                    {table.replace(/_/g, ' ')}: {count}
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={onSync}
+                disabled={isSyncing || dataSource !== 'backend'}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={dataSource !== 'backend' ? '백엔드 서버가 실행 중일 때만 동기화할 수 있습니다' : '지금 동기화'}
+              >
+                <span className={`material-icons-outlined text-sm ${isSyncing ? 'animate-spin' : ''}`}>sync</span>
+                지금 동기화
+              </button>
             </div>
           </div>
         </div>
@@ -322,7 +404,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <button
-              onClick={() => onNavigate?.('order')}
+              onClick={() => onNavigate?.('inventory')}
               className="flex items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-transparent hover:border-primary/30 group"
             >
               <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
@@ -334,7 +416,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               </div>
             </button>
             <button
-              onClick={() => onNavigate?.('bomaudit')}
+              onClick={() => onNavigate?.('production')}
               className="flex items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-transparent hover:border-primary/30 group"
             >
               <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
@@ -346,7 +428,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               </div>
             </button>
             <button
-              onClick={() => onNavigate?.('monthly')}
+              onClick={() => onNavigate?.('profit')}
               className="flex items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-transparent hover:border-primary/30 group"
             >
               <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform">

@@ -56,7 +56,7 @@ const statusColors: Record<string, string> = {
 };
 
 export const TeamStatusPanel: React.FC<TeamStatusPanelProps> = ({
-  apiBaseUrl = 'http://localhost:3001/api',
+  apiBaseUrl = 'http://localhost:4001/api',
   refreshInterval = 5000,
   onTeamClick,
   onStartDebate,

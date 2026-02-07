@@ -5,7 +5,7 @@
  * 대시보드 컴포넌트에서 사용할 수 있도록 통합/가공합니다.
  */
 
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/api$/, '');
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace(/\/api$/, '');
 const DATASOURCE_CONFIG_KEY = 'ZCMS_DATASOURCE_CONFIG';
 
 // ============================================

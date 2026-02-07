@@ -3,19 +3,10 @@ import React from 'react';
 type ViewType =
   | 'home'
   | 'profit'
-  | 'waste'
+  | 'cost'
+  | 'production'
   | 'inventory'
-  | 'stocktake'
-  | 'monthly'
-  | 'settings'
-  | 'order'
-  | 'costreport'
-  | 'costmgmt'
-  | 'bomaudit'
-  | 'priceimpact'
-  | 'dailyperformance'
-  | 'budgetexpense'
-  | 'statorder';
+  | 'settings';
 
 interface DataAvailability {
   sales: boolean;
@@ -76,7 +67,6 @@ const NavSection = ({ title, children }: { title: string; children?: React.React
 );
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, dataAvailability }) => {
-  // Determine which views have data based on dataAvailability
   const hasSalesData = dataAvailability?.sales ?? false;
   const hasInventoryData = dataAvailability?.inventory ?? false;
   const hasBomData = dataAvailability?.bom ?? false;
@@ -103,109 +93,39 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, dataAv
           />
         </NavSection>
 
-        <NavSection title="수익 분석">
+        <NavSection title="분석">
           <NavItem
-            icon="grid_view"
-            label="채널 손익 대시보드"
+            icon="payments"
+            label="수익 분석"
             isActive={activeView === 'profit'}
             onClick={() => onNavigate('profit')}
             hasData={hasSalesData}
-            noDataMessage="판매 API 미지원"
-          />
-          <NavItem
-            icon="leaderboard"
-            label="월간 수익성 랭킹"
-            isActive={activeView === 'monthly'}
-            onClick={() => onNavigate('monthly')}
-            hasData={hasSalesData}
-            noDataMessage="판매 API 미지원"
-          />
-          <NavItem
-            icon="assessment"
-            label="원가 리포트"
-            isActive={activeView === 'costreport'}
-            onClick={() => onNavigate('costreport')}
+            noDataMessage="판매 데이터 필요"
           />
           <NavItem
             icon="account_balance"
-            label="종합 원가관리"
-            isActive={activeView === 'costmgmt'}
-            onClick={() => onNavigate('costmgmt')}
+            label="원가 관리"
+            isActive={activeView === 'cost'}
+            onClick={() => onNavigate('cost')}
           />
         </NavSection>
 
-        <NavSection title="원가관리">
+        <NavSection title="운영">
           <NavItem
-            icon="rule"
-            label="BOM 정합성 검토"
-            isActive={activeView === 'bomaudit'}
-            onClick={() => onNavigate('bomaudit')}
+            icon="precision_manufacturing"
+            label="생산/BOM 관리"
+            isActive={activeView === 'production'}
+            onClick={() => onNavigate('production')}
             hasData={hasBomData || hasProductionData}
-            noDataMessage="BOM/생산 데이터 필요"
+            noDataMessage="생산/BOM 데이터 필요"
           />
-          <NavItem
-            icon="trending_up"
-            label="단가 변동 분석"
-            isActive={activeView === 'priceimpact'}
-            onClick={() => onNavigate('priceimpact')}
-            hasData={hasSalesData}
-            noDataMessage="매입 데이터 필요"
-          />
-          <NavItem
-            icon="speed"
-            label="일일 달성률"
-            isActive={activeView === 'dailyperformance'}
-            onClick={() => onNavigate('dailyperformance')}
-            hasData={hasProductionData}
-            noDataMessage="생산 데이터 필요"
-          />
-          <NavItem
-            icon="account_balance_wallet"
-            label="예산/경비 관리"
-            isActive={activeView === 'budgetexpense'}
-            onClick={() => onNavigate('budgetexpense')}
-          />
-        </NavSection>
-
-        <NavSection title="생산 관리">
-          <NavItem
-            icon="analytics"
-            label="폐기 및 BOM 차이"
-            isActive={activeView === 'waste'}
-            onClick={() => onNavigate('waste')}
-            hasData={hasBomData || hasProductionData}
-            noDataMessage="생산/BOM API 미지원"
-          />
-          <NavItem
-            icon="fact_check"
-            label="재고 실사 이상 징후"
-            isActive={activeView === 'stocktake'}
-            onClick={() => onNavigate('stocktake')}
-            hasData={hasInventoryData}
-            noDataMessage="재고 데이터 기반"
-          />
-        </NavSection>
-
-        <NavSection title="재고/구매 관리">
           <NavItem
             icon="inventory_2"
-            label="안전재고 및 회전율"
+            label="재고/발주 관리"
             isActive={activeView === 'inventory'}
             onClick={() => onNavigate('inventory')}
             hasData={hasInventoryData}
-          />
-          <NavItem
-            icon="shopping_cart"
-            label="자재 발주 관리"
-            isActive={activeView === 'order'}
-            onClick={() => onNavigate('order')}
-            hasData={hasInventoryData}
-          />
-          <NavItem
-            icon="calculate"
-            label="통계적 발주 (MRP)"
-            isActive={activeView === 'statorder'}
-            onClick={() => onNavigate('statorder')}
+            noDataMessage="재고 데이터 필요"
           />
         </NavSection>
 

@@ -1,0 +1,238 @@
+/**
+ * Supabase Direct Client - 프론트엔드에서 직접 Supabase 조회
+ * 백엔드 서버가 다운되었을 때 Tier 2 폴백으로 사용
+ * anon key는 Row Level Security로 보호되는 공개 키
+ */
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import type {
+  DailySalesData,
+  SalesDetailData,
+  ProductionData,
+  PurchaseData,
+  UtilityData,
+} from './googleSheetService';
+
+let supabaseClient: SupabaseClient | null = null;
+
+/** Supabase 직접 연결이 가능한지 확인 */
+export function isSupabaseDirectAvailable(): boolean {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  return !!(url && key);
+}
+
+/** 싱글톤 Supabase 클라이언트 반환 */
+export function getSupabaseClient(): SupabaseClient | null {
+  if (supabaseClient) return supabaseClient;
+
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!url || !key) return null;
+
+  supabaseClient = createClient(url, key);
+  return supabaseClient;
+}
+
+// === 테이블별 직접 조회 함수 ===
+
+function mapDailySalesFromDb(row: Record<string, any>): DailySalesData {
+  return {
+    date: row.date,
+    jasaPrice: row.jasa_price ?? 0,
+    coupangPrice: row.coupang_price ?? 0,
+    kurlyPrice: row.kurly_price ?? 0,
+    totalRevenue: row.total_revenue ?? 0,
+    frozenSoup: row.frozen_soup ?? 0,
+    etc: row.etc ?? 0,
+    bibimbap: row.bibimbap ?? 0,
+    jasaHalf: row.jasa_half ?? 0,
+    coupangHalf: row.coupang_half ?? 0,
+    kurlyHalf: row.kurly_half ?? 0,
+    frozenHalf: row.frozen_half ?? 0,
+    etcHalf: row.etc_half ?? 0,
+    productionQty: row.production_qty ?? 0,
+    productionRevenue: row.production_revenue ?? 0,
+  };
+}
+
+function mapSalesDetailFromDb(row: Record<string, any>): SalesDetailData {
+  return {
+    productCode: row.product_code ?? '',
+    productName: row.product_name ?? '',
+    date: row.date ?? '',
+    customer: row.customer ?? '',
+    productDesc: row.product_desc ?? '',
+    spec: row.spec ?? '',
+    quantity: row.quantity ?? 0,
+    supplyAmount: row.supply_amount ?? 0,
+    vat: row.vat ?? 0,
+    total: row.total ?? 0,
+  };
+}
+
+function mapProductionFromDb(row: Record<string, any>): ProductionData {
+  return {
+    date: row.date,
+    prodQtyNormal: row.prod_qty_normal ?? 0,
+    prodQtyPreprocess: row.prod_qty_preprocess ?? 0,
+    prodQtyFrozen: row.prod_qty_frozen ?? 0,
+    prodQtySauce: row.prod_qty_sauce ?? 0,
+    prodQtyBibimbap: row.prod_qty_bibimbap ?? 0,
+    prodQtyTotal: row.prod_qty_total ?? 0,
+    prodKgNormal: row.prod_kg_normal ?? 0,
+    prodKgPreprocess: row.prod_kg_preprocess ?? 0,
+    prodKgFrozen: row.prod_kg_frozen ?? 0,
+    prodKgSauce: row.prod_kg_sauce ?? 0,
+    prodKgTotal: row.prod_kg_total ?? 0,
+    wasteFinishedEa: row.waste_finished_ea ?? 0,
+    wasteFinishedPct: row.waste_finished_pct ?? 0,
+    wasteSemiKg: row.waste_semi_kg ?? 0,
+    wasteSemiPct: row.waste_semi_pct ?? 0,
+  };
+}
+
+function mapPurchaseFromDb(row: Record<string, any>): PurchaseData {
+  return {
+    date: row.date ?? '',
+    productName: row.product_name ?? '',
+    productCode: row.product_code ?? '',
+    quantity: row.quantity ?? 0,
+    unitPrice: row.unit_price ?? 0,
+    supplyAmount: row.supply_amount ?? 0,
+    vat: row.vat ?? 0,
+    total: row.total ?? 0,
+    inboundPrice: row.inbound_price ?? 0,
+    inboundTotal: row.inbound_total ?? 0,
+  };
+}
+
+function mapUtilityFromDb(row: Record<string, any>): UtilityData {
+  return {
+    date: row.date,
+    elecPrev: row.elec_prev ?? 0,
+    elecCurr: row.elec_curr ?? 0,
+    elecUsage: row.elec_usage ?? 0,
+    elecCost: row.elec_cost ?? 0,
+    waterPrev: row.water_prev ?? 0,
+    waterCurr: row.water_curr ?? 0,
+    waterUsage: row.water_usage ?? 0,
+    waterCost: row.water_cost ?? 0,
+    gasPrev: row.gas_prev ?? 0,
+    gasCurr: row.gas_curr ?? 0,
+    gasUsage: row.gas_usage ?? 0,
+    gasCost: row.gas_cost ?? 0,
+  };
+}
+
+export async function directFetchDailySales(): Promise<DailySalesData[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('daily_sales').select('*').order('date', { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapDailySalesFromDb);
+}
+
+export async function directFetchSalesDetail(): Promise<SalesDetailData[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('sales_detail').select('*').order('date', { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapSalesDetailFromDb);
+}
+
+export async function directFetchProduction(): Promise<ProductionData[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('production_daily').select('*').order('date', { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapProductionFromDb);
+}
+
+export async function directFetchPurchases(): Promise<PurchaseData[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('purchases').select('*').order('date', { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapPurchaseFromDb);
+}
+
+export async function directFetchInventory(): Promise<Record<string, any>[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('inventory').select('*');
+  if (error || !data) return [];
+  return data;
+}
+
+export async function directFetchUtilities(): Promise<UtilityData[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('utilities').select('*').order('date', { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapUtilityFromDb);
+}
+
+export interface SyncStatusInfo {
+  lastSyncTime: string | null;
+  tableCounts: Record<string, number>;
+  source: 'direct';
+}
+
+export async function directFetchSyncStatus(): Promise<SyncStatusInfo | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    // sync_log에서 마지막 동기화 시간 조회
+    const { data: syncLog } = await client
+      .from('sync_log')
+      .select('synced_at')
+      .order('synced_at', { ascending: false })
+      .limit(1);
+
+    const lastSyncTime = syncLog?.[0]?.synced_at ?? null;
+
+    // 각 테이블의 레코드 수 조회 (병렬)
+    const tables = ['daily_sales', 'sales_detail', 'production_daily', 'purchases', 'inventory', 'utilities'];
+    const counts = await Promise.all(
+      tables.map(async (table) => {
+        const { count } = await client.from(table).select('*', { count: 'exact', head: true });
+        return [table, count ?? 0] as [string, number];
+      })
+    );
+
+    return {
+      lastSyncTime,
+      tableCounts: Object.fromEntries(counts),
+      source: 'direct',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 데이터 소스 확인: 'backend' | 'direct' | false */
+export async function checkDataSource(): Promise<'backend' | 'direct' | false> {
+  const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
+
+  // Tier 1: 백엔드 health check
+  try {
+    const res = await fetch(`${BACKEND_URL}/data/health`, { signal: AbortSignal.timeout(3000) });
+    const json = await res.json();
+    if (json.success) return 'backend';
+  } catch { /* 백엔드 미응답 */ }
+
+  // Tier 2: Supabase 직접
+  if (isSupabaseDirectAvailable()) {
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        const { error } = await client.from('sync_log').select('synced_at').limit(1);
+        if (!error) return 'direct';
+      } catch { /* Supabase 직접 연결 실패 */ }
+    }
+  }
+
+  return false;
+}
