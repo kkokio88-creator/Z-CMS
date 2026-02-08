@@ -1,224 +1,516 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Cell, Legend, LineChart, Line, PieChart, Pie,
 } from 'recharts';
-import { WasteTrendData, BomDiffItem, BomYieldAnalysisItem, InventoryDiscrepancyItem } from '../types';
+import { SubTabLayout } from './SubTabLayout';
+import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
+import type { ProductionData } from '../services/googleSheetService';
+import type { DashboardInsights } from '../services/insightService';
 
 interface Props {
-  wasteTrendData: WasteTrendData[];
-  bomItems: BomDiffItem[];
-  yieldData: BomYieldAnalysisItem[];
-  discrepancyData: InventoryDiscrepancyItem[];
+  production: ProductionData[];
+  insights: DashboardInsights | null;
   onItemClick: (item: any) => void;
 }
 
-const getYieldColor = (level: string): string => {
-  if (level === 'critical') return '#EF4444';
-  if (level === 'warning') return '#F59E0B';
-  return '#10B981';
+const CATEGORY_COLORS: Record<string, string> = {
+  all: '#6B7280',
+  normal: '#3B82F6',
+  preprocess: '#10B981',
+  frozen: '#F59E0B',
+  sauce: '#EF4444',
+  bibimbap: '#8B5CF6',
 };
 
-export const ProductionBomView: React.FC<Props> = ({
-  wasteTrendData,
-  bomItems,
-  yieldData,
-  discrepancyData,
-  onItemClick,
-}) => {
-  // KPI 계산
-  const avgWaste = wasteTrendData.length > 0
-    ? (wasteTrendData.reduce((s, d) => s + d.actual, 0) / wasteTrendData.length).toFixed(1)
-    : '0';
-  const criticalBomItems = bomItems.filter(b => b.anomalyScore >= 80).length;
-  const yieldAlerts = yieldData.filter(y => y.anomalyLevel === 'critical' || y.anomalyLevel === 'warning').length;
-  const discrepancyAlerts = discrepancyData.filter(d => Math.abs(d.discrepancyRate) > 10).length;
+const CATEGORY_LABELS: Record<string, string> = {
+  all: '전체',
+  normal: '일반',
+  preprocess: '전처리',
+  frozen: '냉동',
+  sauce: '소스',
+  bibimbap: '비빔밥',
+};
 
-  // Yield 차트 데이터
-  const yieldChartData = yieldData.slice(0, 10).map(y => ({
-    name: y.productName.length > 8 ? y.productName.slice(0, 8) + '…' : y.productName,
-    표준수율: y.stdYield,
-    실제수율: y.actualYield,
-    level: y.anomalyLevel,
-  }));
+const CATEGORY_KEYS = ['normal', 'preprocess', 'frozen', 'sauce', 'bibimbap'] as const;
+
+const formatDate = (d: string) => {
+  if (!d) return '';
+  const parts = d.split('-');
+  return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
+};
+
+const FilterBar: React.FC<{
+  filters: { key: string; label: string; color: string }[];
+  active: string;
+  onChange: (key: string) => void;
+}> = ({ filters, active, onChange }) => (
+  <div className="flex flex-wrap gap-2 mb-4">
+    {filters.map(f => (
+      <button
+        key={f.key}
+        onClick={() => onChange(f.key)}
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+          active === f.key
+            ? 'text-white shadow-sm'
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+        }`}
+        style={active === f.key ? { backgroundColor: f.color } : undefined}
+      >
+        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
+        {f.label}
+      </button>
+    ))}
+  </div>
+);
+
+export const ProductionBomView: React.FC<Props> = ({ production, insights, onItemClick }) => {
+  const wasteAnalysis = insights?.wasteAnalysis;
+  const prodEfficiency = insights?.productionEfficiency;
+
+  const [prodFilter, setProdFilter] = useState('all');
+  const [wasteFilter, setWasteFilter] = useState('all');
+  const [effFilter, setEffFilter] = useState('all');
+
+  const categoryFilters = [
+    { key: 'all', label: '전체', color: CATEGORY_COLORS.all },
+    ...CATEGORY_KEYS.map(k => ({ key: k, label: CATEGORY_LABELS[k], color: CATEGORY_COLORS[k] })),
+  ];
+
+  // 주간 집계 (일별 데이터를 주간으로 요약)
+  const weeklyData = useMemo(() => {
+    const daily = prodEfficiency?.daily || [];
+    if (daily.length === 0) return [];
+    const weeks: { weekLabel: string; normal: number; preprocess: number; frozen: number; sauce: number; bibimbap: number; total: number; days: number }[] = [];
+    let currentWeek = { weekLabel: '', normal: 0, preprocess: 0, frozen: 0, sauce: 0, bibimbap: 0, total: 0, days: 0 };
+
+    daily.forEach((d, i) => {
+      const date = new Date(d.date);
+      const dayOfWeek = date.getDay();
+      // 월요일 시작 또는 첫 데이터
+      if (i === 0 || dayOfWeek === 1) {
+        if (currentWeek.days > 0) weeks.push(currentWeek);
+        currentWeek = { weekLabel: formatDate(d.date), normal: 0, preprocess: 0, frozen: 0, sauce: 0, bibimbap: 0, total: 0, days: 0 };
+      }
+      currentWeek.normal += d.normal;
+      currentWeek.preprocess += d.preprocess;
+      currentWeek.frozen += d.frozen;
+      currentWeek.sauce += d.sauce;
+      currentWeek.bibimbap += d.bibimbap;
+      currentWeek.total += d.total;
+      currentWeek.days++;
+    });
+    if (currentWeek.days > 0) weeks.push(currentWeek);
+    return weeks;
+  }, [prodEfficiency?.daily]);
+
+  // 일별 원본 데이터 (필터된 리스트용)
+  const dailyData = prodEfficiency?.daily || [];
+
+  const tabs = [
+    { key: 'production', label: '생산 현황', icon: 'precision_manufacturing' },
+    { key: 'waste', label: '폐기 분석', icon: 'delete_outline' },
+    { key: 'efficiency', label: '생산성 분석', icon: 'speed' },
+  ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">생산/BOM 관리</h2>
+    <SubTabLayout title="생산/BOM 관리" tabs={tabs}>
+      {(activeTab) => {
+        // ========== 생산 현황 ==========
+        if (activeTab === 'production') {
+          const totalProd = prodEfficiency?.totalProduction || 0;
+          const avgDaily = prodEfficiency?.avgDaily || 0;
+          const dataRange = prodEfficiency?.dataRange;
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">평균 폐기율</p>
-          <p className={`text-2xl font-bold mt-1 ${Number(avgWaste) > 2.5 ? 'text-red-600' : 'text-green-600'}`}>
-            {avgWaste}%
-          </p>
-          <p className="text-xs text-gray-400 mt-1">목표: 2.5%</p>
-        </div>
-        <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">BOM 이상 항목</p>
-          <p className={`text-2xl font-bold mt-1 ${criticalBomItems > 0 ? 'text-red-600' : 'text-green-600'}`}>
-            {criticalBomItems}건
-          </p>
-          <p className="text-xs text-gray-400 mt-1">전체 {bomItems.length}건 중</p>
-        </div>
-        <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">Yield 경고</p>
-          <p className={`text-2xl font-bold mt-1 ${yieldAlerts > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-            {yieldAlerts}건
-          </p>
-          <p className="text-xs text-gray-400 mt-1">주의/심각 수준</p>
-        </div>
-        <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">재고 괴리</p>
-          <p className={`text-2xl font-bold mt-1 ${discrepancyAlerts > 0 ? 'text-red-600' : 'text-green-600'}`}>
-            {discrepancyAlerts}건
-          </p>
-          <p className="text-xs text-gray-400 mt-1">괴리율 10% 초과</p>
-        </div>
-      </div>
+          // 카테고리 비율 파이 데이터
+          const categoryPie = (prodEfficiency?.categoryStats || [])
+            .filter(c => c.total > 0)
+            .map(c => ({ name: c.category, value: c.total }));
 
-      {/* 폐기 트렌드 + Yield 비교 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 폐기율 트렌드 */}
-        <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">폐기율 트렌드</h3>
-          {wasteTrendData.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={wasteTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
-                  <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Area type="monotone" dataKey="avg" name="목표" stroke="#9CA3AF" fill="#9CA3AF" fillOpacity={0.1} />
-                  <Area type="monotone" dataKey="actual" name="실제" stroke="#EF4444" fill="#EF4444" fillOpacity={0.15} />
-                </AreaChart>
-              </ResponsiveContainer>
+          // 필터에 따른 주간 차트 데이터 키
+          const chartDataKey = prodFilter === 'all' ? 'total' : prodFilter;
+
+          // 필터된 일별 상세 리스트
+          const filteredDailyList = prodFilter === 'all'
+            ? dailyData
+            : dailyData.filter(d => d[prodFilter as keyof typeof d] as number > 0);
+
+          return (
+            <div className="space-y-6">
+              {/* KPI */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">총 생산량</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{formatQty(totalProd)}</p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">일 평균</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatQty(avgDaily)}</p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">데이터 기간</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{dataRange?.days || 0}일</p>
+                  <p className="text-xs text-gray-400 mt-1">{dataRange?.from || ''} ~ {dataRange?.to || ''}</p>
+                </div>
+              </div>
+
+              {/* 필터 */}
+              <FilterBar filters={categoryFilters} active={prodFilter} onChange={setProdFilter} />
+
+              {/* 주간 생산 추이 (간소화) + 카테고리 Pie */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                    주간 생산 추이 {prodFilter !== 'all' && <span className="text-sm text-gray-400 font-normal">({CATEGORY_LABELS[prodFilter]})</span>}
+                  </h3>
+                  {weeklyData.length > 0 ? (
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        {prodFilter === 'all' ? (
+                          <AreaChart data={weeklyData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="weekLabel" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                            <Area type="monotone" dataKey="normal" name="일반" stackId="1" stroke={CATEGORY_COLORS.normal} fill={CATEGORY_COLORS.normal} fillOpacity={0.6} />
+                            <Area type="monotone" dataKey="preprocess" name="전처리" stackId="1" stroke={CATEGORY_COLORS.preprocess} fill={CATEGORY_COLORS.preprocess} fillOpacity={0.6} />
+                            <Area type="monotone" dataKey="frozen" name="냉동" stackId="1" stroke={CATEGORY_COLORS.frozen} fill={CATEGORY_COLORS.frozen} fillOpacity={0.6} />
+                            <Area type="monotone" dataKey="sauce" name="소스" stackId="1" stroke={CATEGORY_COLORS.sauce} fill={CATEGORY_COLORS.sauce} fillOpacity={0.6} />
+                            <Area type="monotone" dataKey="bibimbap" name="비빔밥" stackId="1" stroke={CATEGORY_COLORS.bibimbap} fill={CATEGORY_COLORS.bibimbap} fillOpacity={0.6} />
+                          </AreaChart>
+                        ) : (
+                          <BarChart data={weeklyData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="weekLabel" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip formatter={(v: number) => `${v.toLocaleString()}개`} />
+                            <Bar dataKey={chartDataKey} name={CATEGORY_LABELS[prodFilter]} fill={CATEGORY_COLORS[prodFilter]} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        )}
+                      </ResponsiveContainer>
+                    </div>
+                  ) : <p className="text-gray-400 text-center py-10">생산 데이터 없음</p>}
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">카테고리 비율</h3>
+                  {categoryPie.length > 0 ? (
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={categoryPie} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value">
+                            {categoryPie.map((entry, i) => {
+                              const key = CATEGORY_KEYS.find(k => CATEGORY_LABELS[k] === entry.name);
+                              return <Cell key={i} fill={key ? CATEGORY_COLORS[key] : CATEGORY_COLORS[CATEGORY_KEYS[i % CATEGORY_KEYS.length]]} />;
+                            })}
+                          </Pie>
+                          <Tooltip formatter={(v: number) => `${v.toLocaleString()}개`} />
+                          <Legend wrapperStyle={{ fontSize: 12 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
+                </div>
+              </div>
+
+              {/* 필터된 일별 상세 리스트 */}
+              {prodFilter !== 'all' && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                    {CATEGORY_LABELS[prodFilter]} 일별 생산 내역 <span className="text-sm text-gray-400 font-normal">({filteredDailyList.length}건)</span>
+                  </h3>
+                  {filteredDailyList.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                            <th className="text-left py-2 px-3 text-gray-500">날짜</th>
+                            <th className="text-right py-2 px-3 text-gray-500">{CATEGORY_LABELS[prodFilter]} 생산량</th>
+                            <th className="text-right py-2 px-3 text-gray-500">전체 생산량</th>
+                            <th className="text-right py-2 px-3 text-gray-500">비율</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredDailyList.slice(0, 30).map(d => {
+                            const catQty = d[prodFilter as keyof typeof d] as number;
+                            const ratio = d.total > 0 ? Math.round((catQty / d.total) * 1000) / 10 : 0;
+                            return (
+                              <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
+                                <td className="py-2 px-3 text-right font-medium" style={{ color: CATEGORY_COLORS[prodFilter] }}>{formatQty(catQty)}</td>
+                                <td className="py-2 px-3 text-right text-gray-500">{formatQty(d.total)}</td>
+                                <td className="py-2 px-3 text-right text-gray-500">{ratio}%</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p className="text-gray-400 text-center py-6">해당 카테고리 생산 데이터 없음</p>}
+                </div>
+              )}
             </div>
-          ) : (
-            <p className="text-gray-400 text-center py-10">폐기율 데이터 없음</p>
-          )}
-        </div>
+          );
+        }
 
-        {/* BOM Yield 비교 */}
-        <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">BOM Yield 비교</h3>
-          {yieldChartData.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={yieldChartData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="표준수율" fill="#94A3B8" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="실제수율" radius={[0, 4, 4, 0]}>
-                    {yieldChartData.map((entry, i) => <Cell key={i} fill={getYieldColor(entry.level)} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+        // ========== 폐기 분석 ==========
+        if (activeTab === 'waste') {
+          const daily = wasteAnalysis?.daily || [];
+          const avgRate = wasteAnalysis?.avgWasteRate || 0;
+          const highDays = wasteAnalysis?.highWasteDays || [];
+          const totalCost = wasteAnalysis?.totalEstimatedCost || 0;
+
+          // 주간 폐기율 집계
+          const weeklyWaste = (() => {
+            if (daily.length === 0) return [];
+            const weeks: { weekLabel: string; avgWasteRate: number; totalProduction: number; totalWaste: number; days: number }[] = [];
+            let curr = { weekLabel: '', totalProd: 0, totalWaste: 0, totalRate: 0, days: 0 };
+            daily.forEach((d, i) => {
+              const date = new Date(d.date);
+              if (i === 0 || date.getDay() === 1) {
+                if (curr.days > 0) weeks.push({
+                  weekLabel: curr.weekLabel,
+                  avgWasteRate: Math.round((curr.totalRate / curr.days) * 10) / 10,
+                  totalProduction: curr.totalProd,
+                  totalWaste: curr.totalWaste,
+                  days: curr.days,
+                });
+                curr = { weekLabel: formatDate(d.date), totalProd: 0, totalWaste: 0, totalRate: 0, days: 0 };
+              }
+              curr.totalProd += d.productionQty;
+              curr.totalWaste += d.wasteFinishedEa;
+              curr.totalRate += d.wasteFinishedPct;
+              curr.days++;
+            });
+            if (curr.days > 0) weeks.push({
+              weekLabel: curr.weekLabel,
+              avgWasteRate: Math.round((curr.totalRate / curr.days) * 10) / 10,
+              totalProduction: curr.totalProd,
+              totalWaste: curr.totalWaste,
+              days: curr.days,
+            });
+            return weeks;
+          })();
+
+          return (
+            <div className="space-y-6">
+              {/* KPI */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">평균 폐기율</p>
+                  <p className={`text-2xl font-bold mt-1 ${avgRate > 2.5 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatPercent(avgRate)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">목표: 2.5%</p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">3% 초과일</p>
+                  <p className={`text-2xl font-bold mt-1 ${highDays.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {highDays.length}일
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">추정 폐기비용</p>
+                  <p className="text-2xl font-bold text-orange-600 mt-1">{formatCurrency(totalCost)}</p>
+                </div>
+              </div>
+
+              {/* 주간 폐기율 추이 (간소화) */}
+              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 폐기율 추이</h3>
+                {weeklyWaste.length > 0 ? (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={weeklyWaste} margin={{ top: 10, right: 40, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="weekLabel" tick={{ fontSize: 10 }} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                        <Tooltip formatter={(v: number, name: string) => name === '평균폐기율' ? `${v}%` : v.toLocaleString()} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar yAxisId="left" dataKey="totalProduction" name="생산량" fill="#3B82F6" fillOpacity={0.5} radius={[2, 2, 0, 0]} />
+                        <Line yAxisId="right" type="monotone" dataKey="avgWasteRate" name="평균폐기율" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : <p className="text-gray-400 text-center py-10">생산 데이터 없음</p>}
+              </div>
+
+              {/* 3% 초과일 테이블 */}
+              {highDays.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span className="material-icons-outlined text-red-500">warning</span>
+                    폐기율 3% 초과일
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 text-gray-500">날짜</th>
+                          <th className="text-right py-2 px-3 text-gray-500">폐기율</th>
+                          <th className="text-right py-2 px-3 text-gray-500">폐기 수량</th>
+                          <th className="text-right py-2 px-3 text-gray-500">추정 비용</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {highDays.map(d => (
+                          <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 bg-red-50/50 dark:bg-red-900/10">
+                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
+                            <td className="py-2 px-3 text-right font-medium text-red-600">{formatPercent(d.rate)}</td>
+                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.qty)}</td>
+                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.qty * 1000)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
-          ) : (
-            <p className="text-gray-400 text-center py-10">Yield 데이터 없음</p>
-          )}
-        </div>
-      </div>
+          );
+        }
 
-      {/* BOM 차이 주요 항목 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <span className="material-icons-outlined text-orange-500">difference</span>
-          BOM 차이 주요 항목
-        </h3>
-        {bomItems.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-2 px-3 text-gray-500">품목</th>
-                  <th className="text-right py-2 px-3 text-gray-500">표준</th>
-                  <th className="text-right py-2 px-3 text-gray-500">실제</th>
-                  <th className="text-right py-2 px-3 text-gray-500">차이(%)</th>
-                  <th className="text-right py-2 px-3 text-gray-500">원가 영향</th>
-                  <th className="text-center py-2 px-3 text-gray-500">위험도</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bomItems.slice(0, 15).map((item, i) => (
-                  <tr key={item.id || i} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onItemClick(item)}>
-                    <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.skuName}</td>
-                    <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{item.stdQty} {item.stdUnit}</td>
-                    <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{item.actualQty} {item.stdUnit}</td>
-                    <td className={`py-2 px-3 text-right font-medium ${Math.abs(item.diffPercent) > 3 ? 'text-red-600' : 'text-green-600'}`}>
-                      {item.diffPercent > 0 ? '+' : ''}{item.diffPercent.toFixed(1)}%
-                    </td>
-                    <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">₩{item.costImpact.toLocaleString()}</td>
-                    <td className="py-2 px-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        item.anomalyScore >= 80 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                        : item.anomalyScore >= 50 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                        : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      }`}>
-                        {item.anomalyScore >= 80 ? '심각' : item.anomalyScore >= 50 ? '주의' : '정상'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-gray-400 text-center py-6">BOM 차이 데이터 없음</p>
-        )}
-      </div>
+        // ========== 생산성 분석 ==========
+        const catStats = prodEfficiency?.categoryStats || [];
+        const maxDay = prodEfficiency?.maxDay;
 
-      {/* 재고 괴리 항목 */}
-      {discrepancyData.length > 0 && (
-        <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <span className="material-icons-outlined text-blue-500">compare_arrows</span>
-            재고 괴리 항목
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-2 px-3 text-gray-500">자재</th>
-                  <th className="text-left py-2 px-3 text-gray-500">창고</th>
-                  <th className="text-right py-2 px-3 text-gray-500">전표 수량</th>
-                  <th className="text-right py-2 px-3 text-gray-500">실사 수량</th>
-                  <th className="text-right py-2 px-3 text-gray-500">괴리율</th>
-                  <th className="text-center py-2 px-3 text-gray-500">조치 상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {discrepancyData.slice(0, 10).map((item, i) => (
-                  <tr key={item.id || i} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onItemClick(item)}>
-                    <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.materialName}</td>
-                    <td className="py-2 px-3 text-gray-500 dark:text-gray-400">{item.warehouse}</td>
-                    <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{item.transactionQty.toLocaleString()}</td>
-                    <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{item.physicalQty.toLocaleString()}</td>
-                    <td className={`py-2 px-3 text-right font-medium ${Math.abs(item.discrepancyRate) > 10 ? 'text-red-600' : Math.abs(item.discrepancyRate) > 5 ? 'text-orange-600' : 'text-green-600'}`}>
-                      {item.discrepancyRate > 0 ? '+' : ''}{item.discrepancyRate.toFixed(1)}%
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        item.actionStatus === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                        : item.actionStatus === 'investigating' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      }`}>
-                        {item.actionStatus === 'pending' ? '대기' : item.actionStatus === 'investigating' ? '조사중' : '완료'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        // 주간 추이 (필터 적용)
+        const chartKey = effFilter === 'all' ? 'total' : effFilter;
+
+        // 필터된 일별 리스트
+        const filteredEffList = effFilter === 'all'
+          ? dailyData
+          : dailyData.filter(d => d[effFilter as keyof typeof d] as number > 0);
+
+        return (
+          <div className="space-y-6">
+            {/* KPI */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <p className="text-xs text-gray-500 dark:text-gray-400">최대 생산일</p>
+                <p className="text-lg font-bold text-blue-600 mt-1">{maxDay?.date || '-'}</p>
+                <p className="text-xs text-gray-400 mt-1">{formatQty(maxDay?.qty || 0)} 생산</p>
+              </div>
+              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <p className="text-xs text-gray-500 dark:text-gray-400">일 평균 생산량</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatQty(prodEfficiency?.avgDaily || 0)}</p>
+              </div>
+              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <p className="text-xs text-gray-500 dark:text-gray-400">카테고리 수</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{catStats.filter(c => c.total > 0).length}개</p>
+              </div>
+            </div>
+
+            {/* 필터 */}
+            <FilterBar filters={categoryFilters} active={effFilter} onChange={setEffFilter} />
+
+            {/* 주간 생산 추이 (필터 적용, 간소화) */}
+            <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                주간 생산 추이 {effFilter !== 'all' && <span className="text-sm text-gray-400 font-normal">({CATEGORY_LABELS[effFilter]})</span>}
+              </h3>
+              {weeklyData.length > 0 ? (
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={weeklyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="weekLabel" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(v: number) => `${v.toLocaleString()}개`} />
+                      {effFilter === 'all' ? (
+                        <>
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          {CATEGORY_KEYS.map(k => (
+                            <Line key={k} type="monotone" dataKey={k} name={CATEGORY_LABELS[k]} stroke={CATEGORY_COLORS[k]} strokeWidth={2} dot={false} />
+                          ))}
+                        </>
+                      ) : (
+                        <Line type="monotone" dataKey={chartKey} name={CATEGORY_LABELS[effFilter]} stroke={CATEGORY_COLORS[effFilter]} strokeWidth={2} dot={{ r: 3 }} />
+                      )}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : <p className="text-gray-400 text-center py-10">생산 데이터 없음</p>}
+            </div>
+
+            {/* 카테고리별 통계 테이블 */}
+            <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">카테고리별 통계</h3>
+              {catStats.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700">
+                        <th className="text-left py-2 px-3 text-gray-500">카테고리</th>
+                        <th className="text-right py-2 px-3 text-gray-500">총 생산량</th>
+                        <th className="text-right py-2 px-3 text-gray-500">일 평균</th>
+                        <th className="text-right py-2 px-3 text-gray-500">최대 생산</th>
+                        <th className="text-left py-2 px-3 text-gray-500">최대일</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {catStats.filter(c => c.total > 0).map((c, i) => (
+                        <tr key={c.category} className={`border-b border-gray-100 dark:border-gray-800 ${
+                          effFilter !== 'all' && CATEGORY_LABELS[effFilter] === c.category ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}>
+                          <td className="py-2 px-3">
+                            <span className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[CATEGORY_KEYS[i % CATEGORY_KEYS.length]] }}></span>
+                              <span className="text-gray-800 dark:text-gray-200">{c.category}</span>
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatQty(c.total)}</td>
+                          <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(c.avg)}</td>
+                          <td className="py-2 px-3 text-right text-blue-600">{formatQty(c.max)}</td>
+                          <td className="py-2 px-3 text-gray-500 text-xs">{c.maxDate}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
+            </div>
+
+            {/* 필터된 일별 상세 리스트 */}
+            {effFilter !== 'all' && (
+              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                  {CATEGORY_LABELS[effFilter]} 일별 상세 <span className="text-sm text-gray-400 font-normal">({filteredEffList.length}건)</span>
+                </h3>
+                {filteredEffList.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 text-gray-500">날짜</th>
+                          <th className="text-right py-2 px-3 text-gray-500">{CATEGORY_LABELS[effFilter]} 생산량</th>
+                          <th className="text-right py-2 px-3 text-gray-500">전체 생산량</th>
+                          <th className="text-right py-2 px-3 text-gray-500">비율</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredEffList.slice(0, 30).map(d => {
+                          const catQty = d[effFilter as keyof typeof d] as number;
+                          const ratio = d.total > 0 ? Math.round((catQty / d.total) * 1000) / 10 : 0;
+                          return (
+                            <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
+                              <td className="py-2 px-3 text-right font-medium" style={{ color: CATEGORY_COLORS[effFilter] }}>{formatQty(catQty)}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{formatQty(d.total)}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{ratio}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <p className="text-gray-400 text-center py-6">해당 카테고리 데이터 없음</p>}
+              </div>
+            )}
           </div>
-        </div>
-      )}
-    </div>
+        );
+      }}
+    </SubTabLayout>
   );
 };

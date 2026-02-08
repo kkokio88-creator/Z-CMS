@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { KPICardProps, DashboardSummary } from '../types';
 import { LineChart, Line, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import type { SyncStatusInfo } from '../services/supabaseClient';
+import { formatCurrency } from '../utils/format';
 
 interface DataAvailability {
   sales: boolean;
@@ -359,7 +360,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
           title="총 매출 (3개월)"
-          value={`₩${(summaryData.totalRevenue / 1000000).toFixed(0)}M`}
+          value={`₩${formatCurrency(summaryData.totalRevenue)}`}
           change={`+${summaryData.revenueChange}%`}
           isPositive={true}
           icon="payments"

@@ -35,6 +35,7 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
+// Note: Recharts imports used in modal renderModalContent
 import {
   Notification,
   ChannelProfitData,
@@ -45,14 +46,6 @@ import {
   StocktakeAnomalyItem,
   OrderSuggestion,
   WasteTrendData,
-  BomYieldAnalysisItem,
-  InventoryDiscrepancyItem,
-  MaterialPriceHistory,
-  MaterialCostImpact,
-  DailyPerformanceMetric,
-  BudgetItem,
-  ExpenseSummary,
-  StaffingSuggestion,
 } from '../types.ts';
 import { syncAllEcountData, DataAvailability } from '../services/ecountService';
 import {
@@ -65,16 +58,7 @@ import {
   UtilityData,
   ChannelProfitItem,
 } from '../services/googleSheetService';
-import {
-  fetchBomYieldAnalysis,
-  fetchInventoryDiscrepancy,
-  fetchMaterialPriceHistory,
-  fetchMaterialCostImpacts,
-  fetchDailyPerformance,
-  fetchBudgetItems,
-  fetchExpenseSummary,
-  fetchStaffingSuggestions,
-} from '../services/costAnalysisService';
+import { computeAllInsights, DashboardInsights } from '../services/insightService';
 import { checkDataSource, directFetchSyncStatus, SyncStatusInfo } from '../services/supabaseClient';
 
 type ViewType =
@@ -111,15 +95,8 @@ const App = () => {
   const [gsUtilities, setGsUtilities] = useState<UtilityData[]>([]);
   const [gsChannelProfit, setGsChannelProfit] = useState<ChannelProfitItem[]>([]);
 
-  // Cost Analysis Data State
-  const [bomYieldData, setBomYieldData] = useState<BomYieldAnalysisItem[]>([]);
-  const [inventoryDiscrepancy, setInventoryDiscrepancy] = useState<InventoryDiscrepancyItem[]>([]);
-  const [materialPriceHistory, setMaterialPriceHistory] = useState<MaterialPriceHistory[]>([]);
-  const [materialCostImpacts, setMaterialCostImpacts] = useState<MaterialCostImpact[]>([]);
-  const [dailyPerformance, setDailyPerformance] = useState<DailyPerformanceMetric[]>([]);
-  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
-  const [expenseSummary, setExpenseSummary] = useState<ExpenseSummary | null>(null);
-  const [staffingSuggestions, setStaffingSuggestions] = useState<StaffingSuggestion[]>([]);
+  // Insights State (insightService 기반)
+  const [insights, setInsights] = useState<DashboardInsights | null>(null);
 
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
@@ -401,38 +378,26 @@ const App = () => {
         }
       }
 
-      // Cost Analysis 데이터 로드 (병렬)
-      try {
-        const [bomYield, invDisc, priceHistory, costImpacts, dailyPerf, budget, expense, staffing] =
-          await Promise.all([
-            fetchBomYieldAnalysis(),
-            fetchInventoryDiscrepancy(),
-            fetchMaterialPriceHistory(),
-            fetchMaterialCostImpacts(),
-            fetchDailyPerformance(),
-            fetchBudgetItems(),
-            fetchExpenseSummary(),
-            fetchStaffingSuggestions(),
-          ]);
-
-        setBomYieldData(bomYield);
-        setInventoryDiscrepancy(invDisc);
-        setMaterialPriceHistory(priceHistory);
-        setMaterialCostImpacts(costImpacts);
-        setDailyPerformance(dailyPerf);
-        setBudgetItems(budget);
-        setExpenseSummary(expense);
-        setStaffingSuggestions(staffing);
-
-        console.log('[App] Cost Analysis 데이터 로드 완료:', {
-          bomYield: bomYield.length,
-          discrepancy: invDisc.length,
-          priceHistory: priceHistory.length,
-          dailyPerf: dailyPerf.length,
-          budget: budget.length,
-        });
-      } catch (costErr) {
-        console.warn('Cost Analysis 데이터 로드 실패:', costErr);
+      // Insight 분석 (Supabase 실데이터 기반)
+      if (gsResult) {
+        try {
+          const computed = computeAllInsights(
+            gsResult.dailySales || [],
+            gsResult.salesDetail || [],
+            gsResult.production || [],
+            gsResult.purchases || [],
+            gsResult.utilities || [],
+            inventoryData,
+          );
+          setInsights(computed);
+          console.log('[App] Insights 계산 완료:', {
+            channelRevenue: !!computed.channelRevenue,
+            productProfit: computed.productProfit?.items.length || 0,
+            recommendations: computed.recommendations.length,
+          });
+        } catch (insightErr) {
+          console.warn('Insights 계산 실패:', insightErr);
+        }
       }
 
       // 동기화 결과 메시지 설정
@@ -545,10 +510,10 @@ const App = () => {
         dataToExport = filteredProfitData;
         break;
       case 'cost':
-        dataToExport = budgetItems;
+        dataToExport = gsPurchases;
         break;
       case 'production':
-        dataToExport = bomItems;
+        dataToExport = gsProduction;
         break;
       case 'inventory':
         dataToExport = inventoryData;
@@ -637,31 +602,27 @@ const App = () => {
       case 'profit':
         return (
           <ProfitAnalysisView
-            profitData={filteredProfitData}
-            topItems={topProfitItems}
-            bottomItems={bottomProfitItems}
+            dailySales={gsDailySales}
+            salesDetail={gsSalesDetail}
+            insights={insights}
             onItemClick={handleItemClick}
           />
         );
       case 'cost':
         return (
           <CostManagementView
-            materialPriceHistory={materialPriceHistory}
-            materialCostImpacts={materialCostImpacts}
-            dailyPerformance={dailyPerformance}
-            staffingSuggestions={staffingSuggestions}
-            budgetItems={budgetItems}
-            expenseSummary={expenseSummary}
+            purchases={gsPurchases}
+            utilities={gsUtilities}
+            production={gsProduction}
+            insights={insights}
             onItemClick={handleItemClick}
           />
         );
       case 'production':
         return (
           <ProductionBomView
-            wasteTrendData={filteredWasteData}
-            bomItems={bomItems}
-            yieldData={bomYieldData}
-            discrepancyData={inventoryDiscrepancy}
+            production={gsProduction}
+            insights={insights}
             onItemClick={handleItemClick}
           />
         );
@@ -669,8 +630,9 @@ const App = () => {
         return (
           <InventoryOrderView
             inventoryData={inventoryData}
+            purchases={gsPurchases}
+            insights={insights}
             stocktakeAnomalies={stocktakeAnomalies}
-            orderSuggestions={orderSuggestions}
             onItemClick={handleItemClick}
           />
         );
