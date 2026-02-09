@@ -120,3 +120,24 @@ CREATE TABLE IF NOT EXISTS sync_log (
   completed_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_sync_log_source ON sync_log(source, started_at DESC);
+
+-- 8. 채널 비용
+CREATE TABLE IF NOT EXISTS channel_costs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_name varchar(100) NOT NULL UNIQUE,
+  variable_rate_pct numeric DEFAULT 0,     -- 매출대비 변동비 %
+  variable_per_order numeric DEFAULT 0,    -- 건당 변동비 원
+  fixed_monthly numeric DEFAULT 0,         -- 월 고정비 원
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_channel_costs_name ON channel_costs(channel_name);
+
+-- 9. 에이전트 상태 저장
+CREATE TABLE IF NOT EXISTS agent_state (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id varchar(100) NOT NULL UNIQUE,
+  state jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_agent_state_agent ON agent_state(agent_id);

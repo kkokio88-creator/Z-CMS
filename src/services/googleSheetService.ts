@@ -11,6 +11,7 @@ import {
   directFetchPurchases,
   directFetchUtilities,
 } from './supabaseClient';
+import { loadBusinessConfig } from '../config/businessConfig';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
@@ -407,11 +408,13 @@ function formatDateForDisplay(dateStr: string): string {
 }
 
 function buildProfitTrend(dailySales: DailySalesData[]): ChannelProfitItem[] {
+  const config = loadBusinessConfig();
+  const marginRate = config.defaultMarginRate;
   return dailySales.map(d => ({
     date: formatDateForDisplay(d.date),
     revenue: d.totalRevenue,
-    profit: Math.round(d.totalRevenue * 0.3),
-    marginRate: 30,
+    profit: Math.round(d.totalRevenue * marginRate),
+    marginRate: Math.round(marginRate * 100),
     channels: {
       jasa: d.jasaPrice,
       coupang: d.coupangPrice,
@@ -440,14 +443,16 @@ function buildProfitRanking(salesDetail: SalesDetailData[]): {
     productProfits.set(sale.productCode, existing);
   });
 
+  const config = loadBusinessConfig();
+  const marginRate = config.defaultMarginRate;
   const sorted = Array.from(productProfits.entries())
     .map(([code, d]) => ({
       id: code,
       skuName: d.name,
       channel: d.channel,
       revenue: d.revenue,
-      profit: Math.round(d.revenue * 0.3),
-      margin: 30,
+      profit: Math.round(d.revenue * marginRate),
+      margin: Math.round(marginRate * 100),
     }))
     .sort((a, b) => b.revenue - a.revenue);
 

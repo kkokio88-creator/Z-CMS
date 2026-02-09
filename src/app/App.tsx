@@ -11,6 +11,10 @@ import { InventoryOrderView } from '../components/InventoryOrderView.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { AgentProvider } from '../agents/AgentContext.tsx';
 import { AIInsightSidebar } from '../components/AIInsightSidebar.tsx';
+import { SettingsProvider } from '../contexts/SettingsContext.tsx';
+import { DataProvider, DataContextType } from '../contexts/DataContext.tsx';
+import { UIProvider, UIContextType, ViewType as UIViewType } from '../contexts/UIContext.tsx';
+import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
 import {
   MOCK_COST_BREAKDOWN,
   MOCK_INVENTORY_HISTORY,
@@ -60,14 +64,9 @@ import {
 } from '../services/googleSheetService';
 import { computeAllInsights, DashboardInsights } from '../services/insightService';
 import { checkDataSource, directFetchSyncStatus, SyncStatusInfo } from '../services/supabaseClient';
+import { loadBusinessConfig } from '../config/businessConfig';
 
-type ViewType =
-  | 'home'
-  | 'profit'
-  | 'cost'
-  | 'production'
-  | 'inventory'
-  | 'settings';
+type ViewType = UIViewType;
 
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -381,6 +380,7 @@ const App = () => {
       // Insight 분석 (Supabase 실데이터 기반)
       if (gsResult) {
         try {
+          const bizConfig = loadBusinessConfig();
           const computed = computeAllInsights(
             gsResult.dailySales || [],
             gsResult.salesDetail || [],
@@ -388,6 +388,7 @@ const App = () => {
             gsResult.purchases || [],
             gsResult.utilities || [],
             inventoryData,
+            bizConfig,
           );
           setInsights(computed);
           console.log('[App] Insights 계산 완료:', {
@@ -583,78 +584,94 @@ const App = () => {
     switch (activeView) {
       case 'home':
         return (
-          <DashboardHomeView
-            onSync={handleEcountSync}
-            isSyncing={isSyncing}
-            lastSyncTime={lastSyncTime}
-            summaryData={dashboardSummary}
-            profitTrend={profitTrendForChart}
-            wasteTrend={wasteTrendForChart}
-            syncMessage={syncMessage}
-            dataAvailability={dataAvailability}
-            inventoryCount={inventoryData.length}
-            onNavigateToSettings={() => setActiveView('settings')}
-            onNavigate={view => setActiveView(view as ViewType)}
-            dataSource={dataSource}
-            syncStatus={syncStatus}
-          />
+          <ErrorBoundary fallbackTitle="대시보드 로드 중 오류" key="home">
+            <DashboardHomeView
+              onSync={handleEcountSync}
+              isSyncing={isSyncing}
+              lastSyncTime={lastSyncTime}
+              summaryData={dashboardSummary}
+              profitTrend={profitTrendForChart}
+              wasteTrend={wasteTrendForChart}
+              syncMessage={syncMessage}
+              dataAvailability={dataAvailability}
+              inventoryCount={inventoryData.length}
+              onNavigateToSettings={() => setActiveView('settings')}
+              onNavigate={view => setActiveView(view as ViewType)}
+              dataSource={dataSource}
+              syncStatus={syncStatus}
+            />
+          </ErrorBoundary>
         );
       case 'profit':
         return (
-          <ProfitAnalysisView
-            dailySales={gsDailySales}
-            salesDetail={gsSalesDetail}
-            insights={insights}
-            onItemClick={handleItemClick}
-          />
+          <ErrorBoundary fallbackTitle="수익 분석 로드 중 오류" key="profit">
+            <ProfitAnalysisView
+              dailySales={gsDailySales}
+              salesDetail={gsSalesDetail}
+              insights={insights}
+              onItemClick={handleItemClick}
+            />
+          </ErrorBoundary>
         );
       case 'cost':
         return (
-          <CostManagementView
-            purchases={gsPurchases}
-            utilities={gsUtilities}
-            production={gsProduction}
-            insights={insights}
-            onItemClick={handleItemClick}
-          />
+          <ErrorBoundary fallbackTitle="원가 관리 로드 중 오류" key="cost">
+            <CostManagementView
+              purchases={gsPurchases}
+              utilities={gsUtilities}
+              production={gsProduction}
+              insights={insights}
+              onItemClick={handleItemClick}
+            />
+          </ErrorBoundary>
         );
       case 'production':
         return (
-          <ProductionBomView
-            production={gsProduction}
-            insights={insights}
-            onItemClick={handleItemClick}
-          />
+          <ErrorBoundary fallbackTitle="생산/BOM 로드 중 오류" key="production">
+            <ProductionBomView
+              production={gsProduction}
+              insights={insights}
+              onItemClick={handleItemClick}
+            />
+          </ErrorBoundary>
         );
       case 'inventory':
         return (
-          <InventoryOrderView
-            inventoryData={inventoryData}
-            purchases={gsPurchases}
-            insights={insights}
-            stocktakeAnomalies={stocktakeAnomalies}
-            onItemClick={handleItemClick}
-          />
+          <ErrorBoundary fallbackTitle="재고/발주 로드 중 오류" key="inventory">
+            <InventoryOrderView
+              inventoryData={inventoryData}
+              purchases={gsPurchases}
+              insights={insights}
+              stocktakeAnomalies={stocktakeAnomalies}
+              onItemClick={handleItemClick}
+            />
+          </ErrorBoundary>
         );
       case 'settings':
-        return <SettingsView />;
+        return (
+          <ErrorBoundary fallbackTitle="설정 로드 중 오류" key="settings">
+            <SettingsView />
+          </ErrorBoundary>
+        );
       default:
         return (
-          <DashboardHomeView
-            onSync={handleEcountSync}
-            isSyncing={isSyncing}
-            lastSyncTime={lastSyncTime}
-            summaryData={dashboardSummary}
-            profitTrend={profitTrendForChart}
-            wasteTrend={wasteTrendForChart}
-            syncMessage={syncMessage}
-            dataAvailability={dataAvailability}
-            inventoryCount={inventoryData.length}
-            onNavigateToSettings={() => setActiveView('settings')}
-            onNavigate={view => setActiveView(view as ViewType)}
-            dataSource={dataSource}
-            syncStatus={syncStatus}
-          />
+          <ErrorBoundary fallbackTitle="대시보드 로드 중 오류" key="default">
+            <DashboardHomeView
+              onSync={handleEcountSync}
+              isSyncing={isSyncing}
+              lastSyncTime={lastSyncTime}
+              summaryData={dashboardSummary}
+              profitTrend={profitTrendForChart}
+              wasteTrend={wasteTrendForChart}
+              syncMessage={syncMessage}
+              dataAvailability={dataAvailability}
+              inventoryCount={inventoryData.length}
+              onNavigateToSettings={() => setActiveView('settings')}
+              onNavigate={view => setActiveView(view as ViewType)}
+              dataSource={dataSource}
+              syncStatus={syncStatus}
+            />
+          </ErrorBoundary>
         );
     }
   };
@@ -896,7 +913,38 @@ const App = () => {
     );
   };
 
+  // Context values
+  const dataContextValue = useMemo<DataContextType>(() => ({
+    dailySales: gsDailySales,
+    salesDetail: gsSalesDetail,
+    production: gsProduction,
+    purchases: gsPurchases,
+    utilities: gsUtilities,
+    inventoryData,
+    stocktakeAnomalies,
+    insights,
+    isSyncing,
+    lastSyncTime,
+    syncMessage,
+    dataAvailability,
+    dataSource,
+    syncStatus,
+    handleSync: handleEcountSync,
+  }), [gsDailySales, gsSalesDetail, gsProduction, gsPurchases, gsUtilities, inventoryData, stocktakeAnomalies, insights, isSyncing, lastSyncTime, syncMessage, dataAvailability, dataSource, syncStatus]);
+
+  const uiContextValue = useMemo<UIContextType>(() => ({
+    activeView,
+    setActiveView,
+    dateRange,
+    setDateRange,
+    isDarkMode,
+    toggleDarkMode,
+  }), [activeView, dateRange, isDarkMode]);
+
   return (
+    <SettingsProvider>
+    <DataProvider value={dataContextValue}>
+    <UIProvider value={uiContextValue}>
     <AgentProvider autoConnect={true}>
       <div className="flex h-screen bg-background-light dark:bg-background-dark overflow-hidden font-sans">
         <Sidebar
@@ -955,6 +1003,9 @@ const App = () => {
         </Modal>
       </div>
     </AgentProvider>
+    </UIProvider>
+    </DataProvider>
+    </SettingsProvider>
   );
 };
 

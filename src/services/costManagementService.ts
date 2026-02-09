@@ -3,6 +3,8 @@
  * Integrates ECOUNT data, Google Sheets data, and AI agent insights
  */
 
+import { BusinessConfig, loadBusinessConfig } from '../config/businessConfig';
+
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 // Purchase Order Data
@@ -192,14 +194,16 @@ export const fetchInventoryByLocation = async (
     const sbResult = await sbResponse.json();
 
     if (sbResult.success && sbResult.data && sbResult.data.length > 0) {
+      const bizConfig = loadBusinessConfig();
+      const defaultUnitPrice = bizConfig.wasteUnitCost;
       const mapped = sbResult.data.map((inv: any) => ({
         warehouseCode: inv.warehouse_code || '001',
         warehouseName: inv.warehouse_code || '메인창고',
         productCode: inv.product_code || '',
         productName: inv.product_name || inv.product_code || '품목',
         quantity: Number(inv.balance_qty || 0),
-        unitPrice: 1000, // Supabase에는 단가 없음 - 기본값
-        totalValue: Number(inv.balance_qty || 0) * 1000,
+        unitPrice: defaultUnitPrice,
+        totalValue: Number(inv.balance_qty || 0) * defaultUnitPrice,
         category: '일반',
       }));
       console.log('[costManagementService] Supabase 재고:', mapped.length, '건');

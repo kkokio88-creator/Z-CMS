@@ -22,6 +22,8 @@ import {
   DrilldownType,
 } from '../types';
 
+import { loadBusinessConfig } from '../config/businessConfig';
+
 // Backend API URL
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
@@ -254,11 +256,16 @@ export const fetchBudgetAlerts = async (): Promise<BudgetAlert[]> => {
  */
 export const determineAnomalyLevel = (
   gap: number,
-  thresholds = { warning: 5, critical: 10 }
+  thresholds?: { warning: number; critical: number }
 ): AnomalyLevel => {
+  const config = loadBusinessConfig();
+  const t = thresholds || {
+    warning: config.anomalyWarningThreshold,
+    critical: config.anomalyCriticalThreshold,
+  };
   const absGap = Math.abs(gap);
-  if (absGap >= thresholds.critical) return 'critical';
-  if (absGap >= thresholds.warning) return 'warning';
+  if (absGap >= t.critical) return 'critical';
+  if (absGap >= t.warning) return 'warning';
   return 'normal';
 };
 
@@ -270,11 +277,12 @@ export const determineBudgetStatus = (
   daysElapsed: number,
   daysInMonth: number
 ): BudgetStatus => {
+  const config = loadBusinessConfig();
   const expectedBurnRate = (daysElapsed / daysInMonth) * 100;
   const deviation = burnRate - expectedBurnRate;
 
-  if (deviation > 15 || burnRate > 95) return 'critical';
-  if (deviation > 8 || burnRate > 80) return 'warning';
+  if (deviation > config.budgetWarningDeviation * 2 || burnRate > config.budgetCriticalBurnRate) return 'critical';
+  if (deviation > config.budgetWarningDeviation || burnRate > config.budgetCriticalBurnRate - 15) return 'warning';
   return 'normal';
 };
 
@@ -284,8 +292,11 @@ export const determineBudgetStatus = (
 export const determinePerformanceStatus = (
   actual: number,
   target: number,
-  tolerance = 5
+  tolerance?: number
 ): PerformanceStatus => {
+  if (tolerance === undefined) {
+    tolerance = loadBusinessConfig().performanceTolerance;
+  }
   const ratio = (actual / target) * 100;
   if (ratio > 100 + tolerance) return 'above-target';
   if (ratio < 100 - tolerance) return 'below-target';

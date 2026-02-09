@@ -12,6 +12,7 @@ import type {
 } from './googleSheetService';
 import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
+import { BusinessConfig, DEFAULT_BUSINESS_CONFIG } from '../config/businessConfig';
 
 // ==============================
 // 타입 정의
@@ -257,7 +258,11 @@ export function computeProductProfit(
   };
 }
 
-export function computeRevenueTrend(dailySales: DailySalesData[]): RevenueTrendInsight {
+export function computeRevenueTrend(
+  dailySales: DailySalesData[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+): RevenueTrendInsight {
+  const marginRate = config.defaultMarginRate;
   // 월별 그룹핑
   const monthlyMap = new Map<string, { revenue: number; count: number }>();
   dailySales.forEach(d => {
@@ -273,8 +278,8 @@ export function computeRevenueTrend(dailySales: DailySalesData[]): RevenueTrendI
     .map(([month, data]) => ({
       month,
       revenue: data.revenue,
-      profit: Math.round(data.revenue * 0.3), // 추정 마진 30%
-      marginRate: 30,
+      profit: Math.round(data.revenue * marginRate),
+      marginRate: Math.round(marginRate * 100),
       count: data.count,
     }));
 
@@ -384,12 +389,15 @@ export function computeUtilityCosts(
   return { monthly, totalCost };
 }
 
-export function computeWasteAnalysis(production: ProductionData[]): WasteAnalysisInsight {
-  const COST_PER_UNIT = 1000; // 개당 추정 폐기 비용 (원)
+export function computeWasteAnalysis(
+  production: ProductionData[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+): WasteAnalysisInsight {
+  const costPerUnit = config.wasteUnitCost;
   let totalEstimatedCost = 0;
 
   const daily = production.map(p => {
-    const estimatedCost = p.wasteFinishedEa * COST_PER_UNIT;
+    const estimatedCost = p.wasteFinishedEa * costPerUnit;
     totalEstimatedCost += estimatedCost;
     return {
       date: p.date,
@@ -407,7 +415,7 @@ export function computeWasteAnalysis(production: ProductionData[]): WasteAnalysi
     : 0;
 
   const highWasteDays = daily
-    .filter(d => d.wasteFinishedPct > 3)
+    .filter(d => d.wasteFinishedPct > config.wasteThresholdPct)
     .sort((a, b) => b.wasteFinishedPct - a.wasteFinishedPct)
     .map(d => ({ date: d.date, rate: d.wasteFinishedPct, qty: d.wasteFinishedEa }));
 
@@ -482,7 +490,8 @@ function isSubMaterial(productName: string): boolean {
 export function computeCostBreakdown(
   purchases: PurchaseData[],
   utilities: UtilityData[],
-  production: ProductionData[]
+  production: ProductionData[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
 ): CostBreakdownInsight {
   // 원재료 / 부재료 분류
   const rawItems: PurchaseData[] = [];
@@ -498,10 +507,10 @@ export function computeCostBreakdown(
   const totalRaw = rawItems.reduce((s, p) => s + p.total, 0);
   const totalSub = subItems.reduce((s, p) => s + p.total, 0);
   const totalUtility = utilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
-  // 노무비 추정: 총 원가(원재료+부재료+공과금)의 25%로 추정
-  const totalLabor = Math.round((totalRaw + totalSub + totalUtility) * 0.25);
-  // 경비 = 공과금 + 기타 간접비(총 구매비의 5%)
-  const otherOverhead = Math.round((totalRaw + totalSub) * 0.05);
+  // 노무비 추정: 총 원가(원재료+부재료+공과금)의 설정 비율로 추정
+  const totalLabor = Math.round((totalRaw + totalSub + totalUtility) * config.laborCostRatio);
+  // 경비 = 공과금 + 기타 간접비(총 구매비의 설정 비율)
+  const otherOverhead = Math.round((totalRaw + totalSub) * config.overheadRatio);
   const totalOverhead = totalUtility + otherOverhead;
 
   // 월별 4요소 원가 추이
@@ -529,8 +538,8 @@ export function computeCostBreakdown(
   const monthly = Array.from(monthlyMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([month, data]) => {
-      const labor = Math.round((data.raw + data.sub + data.overhead) * 0.25);
-      const overhead = data.overhead + Math.round((data.raw + data.sub) * 0.05);
+      const labor = Math.round((data.raw + data.sub + data.overhead) * config.laborCostRatio);
+      const overhead = data.overhead + Math.round((data.raw + data.sub) * config.overheadRatio);
       return {
         month,
         rawMaterial: data.raw,
@@ -599,7 +608,7 @@ export function computeCostBreakdown(
     subMaterialDetail,
     laborDetail: {
       estimated: totalLabor,
-      note: '총 원가(원재료+부재료+경비)의 25% 추정값',
+      note: `총 원가(원재료+부재료+경비)의 ${Math.round(config.laborCostRatio * 100)}% 추정값`,
     },
     overheadDetail: {
       utilities: totalUtility,
@@ -616,12 +625,14 @@ export function computeCostBreakdown(
 export function computeStatisticalOrder(
   inventoryData: InventorySafetyItem[],
   purchases: PurchaseData[],
-  serviceLevel = 95
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
+  serviceLevel?: number
 ): StatisticalOrderInsight {
-  const zScore = getZScore(serviceLevel);
-  const DEFAULT_LEAD_TIME = 3; // 기본 리드타임 3일
-  const ORDER_COST = 50000; // 주문 비용 50,000원
-  const HOLDING_RATE = 0.20; // 재고유지비 = 단가의 20%/년
+  const sl = serviceLevel ?? config.defaultServiceLevel;
+  const zScore = getZScore(sl);
+  const leadTimeDefault = config.defaultLeadTime;
+  const orderCost = config.orderCost;
+  const holdingRate = config.holdingCostRate;
 
   // 품목별 일별 구매량 집계 (최근 데이터 기준)
   const dailyDemandMap = new Map<string, { name: string; dailyQtys: Map<string, number>; unitPrice: number }>();
@@ -672,14 +683,18 @@ export function computeStatisticalOrder(
     const stdDevDemand = Math.sqrt(variance);
 
     // 통계적 발주 계산
-    const leadTime = DEFAULT_LEAD_TIME;
-    const safetyStock = Math.ceil(zScore * stdDevDemand * Math.sqrt(leadTime));
+    const leadTime = leadTimeDefault;
+    const leadTimeStd = config.leadTimeStdDev;
+    // 개선된 안전재고: SS = Z × √(L × σ_demand² + μ_demand² × σ_leadtime²)
+    const safetyStock = Math.ceil(
+      zScore * Math.sqrt(leadTime * stdDevDemand ** 2 + avgDailyDemand ** 2 * leadTimeStd ** 2)
+    );
     const rop = Math.ceil(avgDailyDemand * leadTime + safetyStock);
 
     // EOQ = √(2DS/H) where D=연간수요, S=주문비용, H=단위당 연간 유지비용
     const annualDemand = avgDailyDemand * 365;
-    const holdingCost = data.unitPrice * HOLDING_RATE;
-    const eoq = holdingCost > 0 ? Math.ceil(Math.sqrt((2 * annualDemand * ORDER_COST) / holdingCost)) : 0;
+    const holdingCost = data.unitPrice * holdingRate;
+    const eoq = holdingCost > 0 ? Math.ceil(Math.sqrt((2 * annualDemand * orderCost) / holdingCost)) : 0;
 
     // 현재 재고 조회 (skuName 매핑)
     const stockInfo = stockMap.get(data.name);
@@ -725,7 +740,7 @@ export function computeStatisticalOrder(
 
   return {
     items,
-    serviceLevel,
+    serviceLevel: sl,
     totalItems: items.length,
     urgentCount: items.filter(i => i.status === 'urgent').length,
     shortageCount: items.filter(i => i.status === 'shortage').length,
@@ -736,7 +751,8 @@ export function generateRecommendations(
   materialPrices: MaterialPriceInsight | null,
   wasteAnalysis: WasteAnalysisInsight | null,
   utilityCosts: UtilityCostInsight | null,
-  productProfit: ProductProfitInsight | null
+  productProfit: ProductProfitInsight | null,
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
 ): CostRecommendation[] {
   const recs: CostRecommendation[] = [];
   let id = 1;
@@ -759,17 +775,18 @@ export function generateRecommendations(
       });
   }
 
-  // 2. 폐기율 3% 초과일
+  // 2. 폐기율 임계값 초과일
   if (wasteAnalysis && wasteAnalysis.highWasteDays.length > 0) {
-    const totalWasteCost = wasteAnalysis.highWasteDays.reduce((s, d) => s + d.qty * 1000, 0);
+    const wasteCostPerUnit = config.wasteUnitCost;
+    const totalWasteCost = wasteAnalysis.highWasteDays.reduce((s, d) => s + d.qty * wasteCostPerUnit, 0);
     recs.push({
       id: `rec-${id++}`,
       type: 'waste',
       priority: wasteAnalysis.highWasteDays.length >= 5 ? 'high' : 'medium',
-      title: `폐기율 3% 초과일 ${wasteAnalysis.highWasteDays.length}일 발생`,
+      title: `폐기율 ${config.wasteThresholdPct}% 초과일 ${wasteAnalysis.highWasteDays.length}일 발생`,
       description: `해당일 공정 점검이 필요합니다. 최고 폐기율 ${wasteAnalysis.highWasteDays[0].rate.toFixed(1)}% (${wasteAnalysis.highWasteDays[0].date}).`,
       estimatedSaving: totalWasteCost,
-      evidence: `추정 폐기 비용 총 ₩${totalWasteCost.toLocaleString()} (개당 ₩1,000 기준)`,
+      evidence: `추정 폐기 비용 총 ₩${totalWasteCost.toLocaleString()} (개당 ₩${wasteCostPerUnit.toLocaleString()} 기준)`,
     });
   }
 
@@ -803,7 +820,7 @@ export function generateRecommendations(
           priority: p.marginRate < 10 ? 'high' : 'medium',
           title: `${p.productName} 마진율 ${p.marginRate.toFixed(1)}%로 낮음`,
           description: `매출 대비 마진이 낮습니다. 가격 재협상 또는 원가 절감을 검토하세요.`,
-          estimatedSaving: Math.round(p.revenue * 0.05), // 5% 개선 가정
+          estimatedSaving: Math.round(p.revenue * config.overheadRatio), // 설정 비율 개선 가정
           evidence: `매출 ₩${p.revenue.toLocaleString()}, 비용 ₩${p.cost.toLocaleString()}, 마진 ₩${p.margin.toLocaleString()}`,
         });
       });
@@ -825,29 +842,31 @@ export function computeAllInsights(
   production: ProductionData[],
   purchases: PurchaseData[],
   utilities: UtilityData[],
-  inventoryData?: InventorySafetyItem[]
+  inventoryData?: InventorySafetyItem[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
 ): DashboardInsights {
   const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales) : null;
   const productProfit = salesDetail.length > 0 ? computeProductProfit(salesDetail, purchases) : null;
-  const revenueTrend = dailySales.length > 0 ? computeRevenueTrend(dailySales) : null;
+  const revenueTrend = dailySales.length > 0 ? computeRevenueTrend(dailySales, config) : null;
   const materialPrices = purchases.length > 0 ? computeMaterialPrices(purchases) : null;
   const utilityCosts = utilities.length > 0 ? computeUtilityCosts(utilities, production) : null;
-  const wasteAnalysis = production.length > 0 ? computeWasteAnalysis(production) : null;
+  const wasteAnalysis = production.length > 0 ? computeWasteAnalysis(production, config) : null;
   const productionEfficiency = production.length > 0 ? computeProductionEfficiency(production) : null;
 
   const costBreakdown = purchases.length > 0
-    ? computeCostBreakdown(purchases, utilities, production)
+    ? computeCostBreakdown(purchases, utilities, production, config)
     : null;
 
   const statisticalOrder = (inventoryData && inventoryData.length > 0 && purchases.length > 0)
-    ? computeStatisticalOrder(inventoryData, purchases)
+    ? computeStatisticalOrder(inventoryData, purchases, config)
     : null;
 
   const recommendations = generateRecommendations(
     materialPrices,
     wasteAnalysis,
     utilityCosts,
-    productProfit
+    productProfit,
+    config
   );
 
   return {

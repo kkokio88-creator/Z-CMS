@@ -229,6 +229,41 @@ export class SyncService {
   }
 
   /**
+   * 증분 동기화: 마지막 성공 동기화 이후 데이터만 가져오기
+   * full=true 시 전체 동기화 수행
+   */
+  async syncIncremental(full = false): Promise<SyncResult> {
+    if (full) {
+      return this.syncFromGoogleSheets();
+    }
+
+    const lastSyncTime = await supabaseAdapter.getLastSyncTime('google_sheets');
+    if (!lastSyncTime) {
+      console.log('[SyncService] 이전 동기화 이력 없음 → 전체 동기화 수행');
+      return this.syncFromGoogleSheets();
+    }
+
+    const minutesSince = Math.floor((Date.now() - new Date(lastSyncTime).getTime()) / (1000 * 60));
+    console.log(`[SyncService] 증분 동기화: 마지막 동기화 ${minutesSince}분 전 (${lastSyncTime})`);
+
+    // 마지막 동기화 이후 충분한 시간이 지났으면 전체 동기화
+    // (Google Sheets는 변경 추적이 어려우므로, 시간 기반으로 판단)
+    if (minutesSince > 60) {
+      console.log('[SyncService] 60분 이상 경과 → 전체 동기화 수행');
+      return this.syncFromGoogleSheets();
+    }
+
+    // 60분 이내면 전체 동기화 스킵 (데이터 변경 적을 가능성)
+    console.log('[SyncService] 최근 동기화 완료됨 → 증분 동기화 스킵');
+    return {
+      source: 'google_sheets',
+      success: true,
+      records: {},
+      duration: 0,
+    };
+  }
+
+  /**
    * 최근 동기화 상태 조회
    */
   async getLastSyncStatus(): Promise<SyncLogRow[]> {

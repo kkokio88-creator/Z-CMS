@@ -5,6 +5,8 @@ import {
   updateEcountConfig,
   EcountConfig,
 } from '../services/ecountService';
+import { useSettings } from '../contexts/SettingsContext';
+import { ChannelCostAdmin } from './ChannelCostAdmin';
 
 // 데이터 소스 연결 타입 정의
 type DataSourceType = 'googleSheets' | 'ecount' | 'none';
@@ -54,6 +56,7 @@ const defaultDataSourcesConfig: DataSourcesConfig = {
 };
 
 export const SettingsView: React.FC = () => {
+  const { config, updateConfig, resetConfig } = useSettings();
   const [safetyDays, setSafetyDays] = useState(14);
   const [aiSensitivity, setAiSensitivity] = useState(80);
   const [marginAlert, setMarginAlert] = useState(10);
@@ -708,6 +711,467 @@ export const SettingsView: React.FC = () => {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* 원가 관련 설정 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-orange-50 dark:bg-orange-900/20">
+          <h3 className="font-bold text-orange-900 dark:text-orange-200 flex items-center">
+            <span className="material-icons-outlined mr-2">calculate</span>
+            원가 관련 설정
+          </h3>
+          <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
+            이익률, 폐기 단가, 경비 비율 등 원가 계산에 사용되는 기준값입니다.
+          </p>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              기본 이익률
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={Math.round(config.defaultMarginRate * 100)}
+                onChange={e => updateConfig({ defaultMarginRate: Number(e.target.value) / 100 })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">실제 비용 데이터 없을 때 사용하는 추정 마진율</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              폐기 기본 단가
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="100"
+                min="0"
+                value={config.wasteUnitCost}
+                onChange={e => updateConfig({ wasteUnitCost: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">원/개</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">품목별 단가가 없을 때 사용하는 기본 폐기 비용</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              노무비 추정 비율
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={Math.round(config.laborCostRatio * 100)}
+                onChange={e => updateConfig({ laborCostRatio: Number(e.target.value) / 100 })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">총 원가 대비 노무비 추정 비율 (실데이터 없을 때)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              간접 경비 비율
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={Math.round(config.overheadRatio * 100)}
+                onChange={e => updateConfig({ overheadRatio: Number(e.target.value) / 100 })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">구매비 대비 기타 간접 경비 비율</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              월 고정경비
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="10000"
+                min="0"
+                value={config.monthlyFixedOverhead}
+                onChange={e => updateConfig({ monthlyFixedOverhead: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">원</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              재고 보유비 비율
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={Math.round(config.holdingCostRate * 100)}
+                onChange={e => updateConfig({ holdingCostRate: Number(e.target.value) / 100 })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">단가 대비 연간 재고 보유비 비율</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 재고 분류 기준 (ABC-XYZ) */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-teal-50 dark:bg-teal-900/20">
+          <h3 className="font-bold text-teal-900 dark:text-teal-200 flex items-center">
+            <span className="material-icons-outlined mr-2">grid_view</span>
+            재고 분류 기준 (ABC-XYZ)
+          </h3>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              ABC A등급 기준 (금액 비중)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="5"
+                min="0"
+                max="100"
+                value={config.abcClassAThreshold}
+                onChange={e => updateConfig({ abcClassAThreshold: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">상위 금액 비중이 이 값 이하인 품목을 A등급으로 분류</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              ABC B등급 기준 (금액 비중)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="5"
+                min="0"
+                max="100"
+                value={config.abcClassBThreshold}
+                onChange={e => updateConfig({ abcClassBThreshold: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              XYZ X등급 변동계수 상한
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="5"
+                value={config.xyzClassXThreshold}
+                onChange={e => updateConfig({ xyzClassXThreshold: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">변동계수(CV)가 이 값 이하이면 X등급 (안정 수요)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              XYZ Y등급 변동계수 상한
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="5"
+                value={config.xyzClassYThreshold}
+                onChange={e => updateConfig({ xyzClassYThreshold: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 이상 감지 기준 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-red-50 dark:bg-red-900/20">
+          <h3 className="font-bold text-red-900 dark:text-red-200 flex items-center">
+            <span className="material-icons-outlined mr-2">notification_important</span>
+            이상 감지 기준
+          </h3>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              폐기율 경고 임계값
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                max="100"
+                value={config.wasteThresholdPct}
+                onChange={e => updateConfig({ wasteThresholdPct: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 비율을 초과하면 폐기 경고 발생</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              레시피 오차 허용률
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={config.recipeVarianceTolerance}
+                onChange={e => updateConfig({ recipeVarianceTolerance: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              이상 감지 주의 임계값
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={config.anomalyWarningThreshold}
+                onChange={e => updateConfig({ anomalyWarningThreshold: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              이상 감지 위험 임계값
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={config.anomalyCriticalThreshold}
+                onChange={e => updateConfig({ anomalyCriticalThreshold: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              수율 저하 허용률
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                max="100"
+                value={config.yieldDropTolerance}
+                onChange={e => updateConfig({ yieldDropTolerance: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              성능 허용 오차
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={config.performanceTolerance}
+                onChange={e => updateConfig({ performanceTolerance: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 노무비 관리 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
+          <h3 className="font-bold text-purple-900 dark:text-purple-200 flex items-center">
+            <span className="material-icons-outlined mr-2">groups</span>
+            노무비 관리
+          </h3>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              반별 평균 인건비
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1000"
+                min="0"
+                value={config.avgHourlyWage}
+                onChange={e => updateConfig({ avgHourlyWage: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">원/시간</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              초과근무 할증률
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                min="1"
+                max="5"
+                value={config.overtimeMultiplier}
+                onChange={e => updateConfig({ overtimeMultiplier: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">배</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">기본급 대비 초과근무 할증 배수</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 발주 파라미터 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-cyan-50 dark:bg-cyan-900/20">
+          <h3 className="font-bold text-cyan-900 dark:text-cyan-200 flex items-center">
+            <span className="material-icons-outlined mr-2">local_shipping</span>
+            발주 파라미터
+          </h3>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              기본 리드타임
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="1"
+                max="90"
+                value={config.defaultLeadTime}
+                onChange={e => updateConfig({ defaultLeadTime: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">일</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              리드타임 표준편차
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                max="30"
+                value={config.leadTimeStdDev}
+                onChange={e => updateConfig({ leadTimeStdDev: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">일</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">납품기간 변동성 (클수록 안전재고 증가)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              기본 서비스 수준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="50"
+                max="99"
+                value={config.defaultServiceLevel}
+                onChange={e => updateConfig({ defaultServiceLevel: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">품절 방지 목표 확률 (높을수록 안전재고 증가)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              주문 비용 (건당)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="5000"
+                min="0"
+                value={config.orderCost}
+                onChange={e => updateConfig({ orderCost: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">원</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">EOQ 계산에 사용되는 1회 주문 비용</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 채널 비용 관리 */}
+      <ChannelCostAdmin />
+
+      {/* 설정 초기화 */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => {
+            if (window.confirm('모든 비즈니스 설정을 기본값으로 초기화하시겠습니까?')) {
+              resetConfig();
+            }
+          }}
+          className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-300 rounded-md text-sm font-medium transition-colors flex items-center"
+        >
+          <span className="material-icons-outlined text-sm mr-1">restart_alt</span>
+          비즈니스 설정 초기화
+        </button>
       </div>
     </div>
   );

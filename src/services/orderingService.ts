@@ -266,16 +266,26 @@ export const calculateStockDays = (availableStock: number, dailyConsumption: num
 };
 
 /**
- * 서비스 수준별 Z-Score 반환
+ * 오차함수(erf) 역함수 근사
+ * Abramowitz & Stegun 근사식 기반, |erfInv(x)| 정확도 ~4.5e-4
+ */
+function erfInv(x: number): number {
+  const a = 0.147;
+  const ln1MinusX2 = Math.log(1 - x * x);
+  const term1 = 2 / (Math.PI * a) + ln1MinusX2 / 2;
+  const term2 = ln1MinusX2 / a;
+  const sign = x < 0 ? -1 : 1;
+  return sign * Math.sqrt(Math.sqrt(term1 * term1 - term2) - term1);
+}
+
+/**
+ * 정규분포 역함수 (probit) — 서비스 수준(0~100%)을 Z-Score로 변환
+ * 1~99% 연속 서비스 수준 지원
  */
 export const getZScore = (serviceLevel: number): number => {
-  const zScoreTable: Record<number, number> = {
-    90: 1.28,
-    95: 1.65,
-    97: 1.88,
-    99: 2.33,
-  };
-  return zScoreTable[serviceLevel] || 1.65;
+  // 범위 제한 (1~99%)
+  const p = Math.max(0.01, Math.min(0.99, serviceLevel / 100));
+  return Math.SQRT2 * erfInv(2 * p - 1);
 };
 
 /**

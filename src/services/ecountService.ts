@@ -18,11 +18,11 @@ import {
 // Backend API URL
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
-// Default Configuration
+// Default Configuration — 빈 값으로 초기화 (보안: 인증 정보 하드코딩 금지)
 const DEFAULT_CONFIG = {
-  COM_CODE: '89445',
-  USER_ID: 'JANG_HOYEON',
-  API_KEY: '1e679c653fd184e999f5a74df7a6bf0699',
+  COM_CODE: '',
+  USER_ID: '',
+  API_KEY: '',
   ZONE: 'CD',
 };
 

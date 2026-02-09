@@ -418,6 +418,103 @@ export class SupabaseAdapter {
   // Health Check
   // ==============================
 
+  /**
+   * 배치 트랜잭션: 여러 테이블에 동시 저장
+   * Supabase RPC를 사용할 수 없는 경우, 순서 보장 + 에러 롤백 로깅
+   */
+  async batchUpsert(operations: {
+    dailySales?: DailySalesRow[];
+    salesDetail?: SalesDetailRow[];
+    production?: ProductionDailyRow[];
+    purchases?: PurchaseRow[];
+    utilities?: UtilityRow[];
+    inventory?: InventoryRow[];
+  }): Promise<{ success: boolean; records: Record<string, number>; errors: string[] }> {
+    const records: Record<string, number> = {};
+    const errors: string[] = [];
+
+    // 순서대로 저장, 실패 시 에러 기록하되 나머지는 계속 진행
+    if (operations.dailySales?.length) {
+      try {
+        records.dailySales = await this.upsertDailySales(operations.dailySales);
+      } catch (e: any) {
+        errors.push(`dailySales: ${e.message}`);
+      }
+    }
+    if (operations.salesDetail?.length) {
+      try {
+        records.salesDetail = await this.upsertSalesDetail(operations.salesDetail);
+      } catch (e: any) {
+        errors.push(`salesDetail: ${e.message}`);
+      }
+    }
+    if (operations.production?.length) {
+      try {
+        records.production = await this.upsertProductionDaily(operations.production);
+      } catch (e: any) {
+        errors.push(`production: ${e.message}`);
+      }
+    }
+    if (operations.purchases?.length) {
+      try {
+        records.purchases = await this.upsertPurchases(operations.purchases);
+      } catch (e: any) {
+        errors.push(`purchases: ${e.message}`);
+      }
+    }
+    if (operations.utilities?.length) {
+      try {
+        records.utilities = await this.upsertUtilities(operations.utilities);
+      } catch (e: any) {
+        errors.push(`utilities: ${e.message}`);
+      }
+    }
+    if (operations.inventory?.length) {
+      try {
+        records.inventory = await this.upsertInventory(operations.inventory);
+      } catch (e: any) {
+        errors.push(`inventory: ${e.message}`);
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      records,
+      errors,
+    };
+  }
+
+  // ==============================
+  // 에이전트 상태 영구 저장
+  // ==============================
+
+  async saveAgentState(agentId: string, state: Record<string, any>): Promise<void> {
+    const client = this.getClient();
+    const { error } = await client
+      .from('agent_state')
+      .upsert({
+        agent_id: agentId,
+        state,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'agent_id' });
+
+    if (error) {
+      console.error(`[SupabaseAdapter] 에이전트 상태 저장 실패 (${agentId}):`, error.message);
+    }
+  }
+
+  async loadAgentState(agentId: string): Promise<Record<string, any> | null> {
+    const client = this.getClient();
+    const { data, error } = await client
+      .from('agent_state')
+      .select('state')
+      .eq('agent_id', agentId)
+      .single();
+
+    if (error || !data) return null;
+    return data.state;
+  }
+
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
       const client = this.getClient();

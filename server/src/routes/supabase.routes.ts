@@ -214,4 +214,37 @@ router.get('/data/health', async (_req: Request, res: Response) => {
   }
 });
 
+// ==============================
+// 에이전트 상태 영구 저장
+// ==============================
+
+/**
+ * PUT /api/agent-state/:agentId
+ * 에이전트 상태 저장
+ */
+router.put('/agent-state/:agentId', async (req: Request, res: Response) => {
+  try {
+    const agentId = req.params.agentId as string;
+    const state = req.body;
+    await supabaseAdapter.saveAgentState(agentId, state);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/agent-state/:agentId
+ * 에이전트 상태 조회
+ */
+router.get('/agent-state/:agentId', async (req: Request, res: Response) => {
+  try {
+    const agentId = req.params.agentId as string;
+    const state = await supabaseAdapter.loadAgentState(agentId);
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
