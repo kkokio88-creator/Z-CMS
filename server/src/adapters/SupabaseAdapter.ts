@@ -116,6 +116,8 @@ export interface SyncLogRow {
   error_message?: string;
   started_at?: string;
   completed_at?: string;
+  content_hash?: string;           // 테이블별 해시 JSON (증분 동기화용)
+  tables_updated?: string;         // 실제 업데이트된 테이블 목록
 }
 
 // ==============================
@@ -377,7 +379,7 @@ export class SupabaseAdapter {
 
   async updateSyncLog(
     id: string,
-    updates: Partial<Pick<SyncLogRow, 'status' | 'records_synced' | 'error_message' | 'completed_at'>>
+    updates: Partial<Pick<SyncLogRow, 'status' | 'records_synced' | 'error_message' | 'completed_at' | 'content_hash' | 'tables_updated'>>
   ): Promise<void> {
     const client = this.getClient();
 
@@ -414,6 +416,28 @@ export class SupabaseAdapter {
     return data.completed_at;
   }
 
+  /** 마지막 성공 동기화의 content_hash 조회 */
+  async getLastContentHash(source: string): Promise<Record<string, string> | null> {
+    const client = this.getClient();
+
+    const { data, error } = await client
+      .from('sync_log')
+      .select('content_hash')
+      .eq('source', source)
+      .eq('status', 'success')
+      .not('content_hash', 'is', null)
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data?.content_hash) return null;
+    try {
+      return JSON.parse(data.content_hash);
+    } catch {
+      return null;
+    }
+  }
+
   // ==============================
   // Health Check
   // ==============================
@@ -422,6 +446,10 @@ export class SupabaseAdapter {
    * 배치 트랜잭션: 여러 테이블에 동시 저장
    * Supabase RPC를 사용할 수 없는 경우, 순서 보장 + 에러 롤백 로깅
    */
+  /**
+   * 배치 upsert: 여러 테이블을 순서대로 저장
+   * @param stopOnError true면 첫 번째 에러에서 중단 + 이미 저장된 데이터 롤백 시도
+   */
   async batchUpsert(operations: {
     dailySales?: DailySalesRow[];
     salesDetail?: SalesDetailRow[];
@@ -429,51 +457,35 @@ export class SupabaseAdapter {
     purchases?: PurchaseRow[];
     utilities?: UtilityRow[];
     inventory?: InventoryRow[];
-  }): Promise<{ success: boolean; records: Record<string, number>; errors: string[] }> {
+  }, stopOnError = false): Promise<{ success: boolean; records: Record<string, number>; errors: string[] }> {
     const records: Record<string, number> = {};
     const errors: string[] = [];
+    const batchTimestamp = new Date().toISOString();
+    const completedTables: string[] = [];
 
-    // 순서대로 저장, 실패 시 에러 기록하되 나머지는 계속 진행
-    if (operations.dailySales?.length) {
+    const tableOps = [
+      { key: 'dailySales', data: operations.dailySales, fn: () => this.upsertDailySales(operations.dailySales!), table: 'daily_sales' },
+      { key: 'salesDetail', data: operations.salesDetail, fn: () => this.upsertSalesDetail(operations.salesDetail!), table: 'sales_detail' },
+      { key: 'production', data: operations.production, fn: () => this.upsertProductionDaily(operations.production!), table: 'production_daily' },
+      { key: 'purchases', data: operations.purchases, fn: () => this.upsertPurchases(operations.purchases!), table: 'purchases' },
+      { key: 'utilities', data: operations.utilities, fn: () => this.upsertUtilities(operations.utilities!), table: 'utilities' },
+      { key: 'inventory', data: operations.inventory, fn: () => this.upsertInventory(operations.inventory!), table: 'inventory' },
+    ];
+
+    for (const op of tableOps) {
+      if (!op.data?.length) continue;
+
       try {
-        records.dailySales = await this.upsertDailySales(operations.dailySales);
+        records[op.key] = await op.fn();
+        completedTables.push(op.table);
       } catch (e: any) {
-        errors.push(`dailySales: ${e.message}`);
-      }
-    }
-    if (operations.salesDetail?.length) {
-      try {
-        records.salesDetail = await this.upsertSalesDetail(operations.salesDetail);
-      } catch (e: any) {
-        errors.push(`salesDetail: ${e.message}`);
-      }
-    }
-    if (operations.production?.length) {
-      try {
-        records.production = await this.upsertProductionDaily(operations.production);
-      } catch (e: any) {
-        errors.push(`production: ${e.message}`);
-      }
-    }
-    if (operations.purchases?.length) {
-      try {
-        records.purchases = await this.upsertPurchases(operations.purchases);
-      } catch (e: any) {
-        errors.push(`purchases: ${e.message}`);
-      }
-    }
-    if (operations.utilities?.length) {
-      try {
-        records.utilities = await this.upsertUtilities(operations.utilities);
-      } catch (e: any) {
-        errors.push(`utilities: ${e.message}`);
-      }
-    }
-    if (operations.inventory?.length) {
-      try {
-        records.inventory = await this.upsertInventory(operations.inventory);
-      } catch (e: any) {
-        errors.push(`inventory: ${e.message}`);
+        errors.push(`${op.key}: ${e.message}`);
+        if (stopOnError) {
+          // 롤백: 이미 저장된 테이블에서 batchTimestamp 이후 데이터 제거
+          console.error(`[SupabaseAdapter] batchUpsert 중단 at ${op.key}, 롤백 시도...`);
+          await this.rollbackAfterTimestamp(completedTables, batchTimestamp);
+          break;
+        }
       }
     }
 
@@ -482,6 +494,19 @@ export class SupabaseAdapter {
       records,
       errors,
     };
+  }
+
+  /** synced_at >= timestamp 인 행을 삭제하여 롤백 */
+  private async rollbackAfterTimestamp(tables: string[], timestamp: string): Promise<void> {
+    const client = this.getClient();
+    for (const table of tables) {
+      try {
+        await client.from(table).delete().gte('synced_at', timestamp);
+        console.log(`[SupabaseAdapter] 롤백 완료: ${table}`);
+      } catch (e: any) {
+        console.error(`[SupabaseAdapter] 롤백 실패: ${table} - ${e.message}`);
+      }
+    }
   }
 
   // ==============================

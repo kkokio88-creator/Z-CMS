@@ -471,21 +471,19 @@ async function runAutoSync() {
       return;
     }
 
-    // 마지막 동기화 시간 확인
-    const gsMinutes = await syncService.getMinutesSinceLastSync('google_sheets');
+    // Google Sheets: 증분 동기화 (해시 기반, 변경분만 저장)
+    const gsResult = await syncService.syncIncremental(false);
+    if (gsResult.records && Object.keys(gsResult.records).length > 0) {
+      console.log(`[AutoSync] GS 동기화 완료: ${JSON.stringify(gsResult.records)}`);
+      if (gsResult.skippedTables?.length) {
+        console.log(`[AutoSync] GS 스킵 테이블: ${gsResult.skippedTables.join(', ')}`);
+      }
+    }
+
+    // ECOUNT: 재고 동기화 (1시간 간격)
     const ecountMinutes = await syncService.getMinutesSinceLastSync('ecount');
-
-    const needsGsSync = gsMinutes === null || gsMinutes >= 60;
-    const needsEcountSync = ecountMinutes === null || ecountMinutes >= 60;
-
-    if (needsGsSync || needsEcountSync) {
-      console.log('[AutoSync] 동기화 필요 - 실행 중...');
-      const tasks: Promise<any>[] = [];
-      if (needsGsSync) tasks.push(syncService.syncFromGoogleSheets());
-      if (needsEcountSync) tasks.push(syncService.syncFromEcount());
-      await Promise.allSettled(tasks);
-    } else {
-      console.log(`[AutoSync] 동기화 불필요 (GS: ${gsMinutes}분 전, ECOUNT: ${ecountMinutes}분 전)`);
+    if (ecountMinutes === null || ecountMinutes >= 60) {
+      await syncService.syncFromEcount();
     }
   } catch (err: any) {
     console.error('[AutoSync] 오류:', err.message);

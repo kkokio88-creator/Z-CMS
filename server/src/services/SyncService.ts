@@ -1,8 +1,10 @@
 /**
  * Sync Service
  * Google Sheets / ECOUNT → Supabase 동기화
+ * P2-4: 해시 기반 증분 동기화 — 변경된 테이블만 쓰기
  */
 
+import { createHash } from 'crypto';
 import { googleSheetAdapter } from '../adapters/GoogleSheetAdapter.js';
 import { ecountAdapter } from '../adapters/EcountAdapter.js';
 import {
@@ -22,19 +24,28 @@ export interface SyncResult {
   records: Record<string, number>;
   error?: string;
   duration: number;
+  skippedTables?: string[];  // 변경 없어서 스킵된 테이블
+}
+
+/** 데이터 배열의 콘텐츠 해시 계산 (MD5, 충분히 빠름) */
+function computeHash(data: any[]): string {
+  if (data.length === 0) return 'empty';
+  const content = JSON.stringify(data);
+  return createHash('md5').update(content).digest('hex');
 }
 
 export class SyncService {
   /**
    * Google Sheets → Supabase 동기화
+   * incremental=true 시 해시 비교로 변경된 테이블만 저장
    */
-  async syncFromGoogleSheets(): Promise<SyncResult> {
+  async syncFromGoogleSheets(incremental = false): Promise<SyncResult> {
     const startTime = Date.now();
     const records: Record<string, number> = {};
+    const skippedTables: string[] = [];
     let logId: string | undefined;
 
     try {
-      // 동기화 로그 시작
       logId = await supabaseAdapter.createSyncLog({
         source: 'google_sheets',
         status: 'in_progress',
@@ -42,12 +53,12 @@ export class SyncService {
         started_at: new Date().toISOString(),
       });
 
-      console.log('[SyncService] Google Sheets 동기화 시작...');
+      console.log(`[SyncService] Google Sheets 동기화 시작... (${incremental ? '증분' : '전체'})`);
 
       // Google Sheets에서 데이터 가져오기
       const sheetData = await googleSheetAdapter.syncAllData();
 
-      // 1. Daily Sales 저장
+      // 데이터를 Supabase Row 형식으로 변환
       const dailySalesRows: DailySalesRow[] = sheetData.dailySales.map(d => ({
         date: d.date,
         jasa_price: d.jasaPrice,
@@ -65,10 +76,7 @@ export class SyncService {
         production_qty: d.productionQty,
         production_revenue: d.productionRevenue,
       }));
-      records.dailySales = await supabaseAdapter.upsertDailySales(dailySalesRows);
-      console.log(`[SyncService] daily_sales: ${records.dailySales}건 저장`);
 
-      // 2. Sales Detail 저장
       const salesDetailRows: SalesDetailRow[] = sheetData.salesDetail.map(d => ({
         product_code: d.productCode,
         product_name: d.productName,
@@ -81,10 +89,7 @@ export class SyncService {
         vat: d.vat,
         total: d.total,
       }));
-      records.salesDetail = await supabaseAdapter.upsertSalesDetail(salesDetailRows);
-      console.log(`[SyncService] sales_detail: ${records.salesDetail}건 저장`);
 
-      // 3. Production Daily 저장
       const productionRows: ProductionDailyRow[] = sheetData.production.map(d => ({
         date: d.date,
         prod_qty_normal: d.prodQtyNormal,
@@ -103,10 +108,7 @@ export class SyncService {
         waste_semi_kg: d.wasteSemiKg,
         waste_semi_pct: d.wasteSemiPct,
       }));
-      records.production = await supabaseAdapter.upsertProductionDaily(productionRows);
-      console.log(`[SyncService] production_daily: ${records.production}건 저장`);
 
-      // 4. Purchases 저장
       const purchaseRows: PurchaseRow[] = sheetData.purchases.map(d => ({
         date: d.date,
         product_code: d.productCode,
@@ -119,10 +121,7 @@ export class SyncService {
         inbound_price: d.inboundPrice,
         inbound_total: d.inboundTotal,
       }));
-      records.purchases = await supabaseAdapter.upsertPurchases(purchaseRows);
-      console.log(`[SyncService] purchases: ${records.purchases}건 저장`);
 
-      // 5. Utilities 저장
       const utilityRows: UtilityRow[] = sheetData.utilities.map(d => ({
         date: d.date,
         elec_prev: d.elecPrev,
@@ -138,22 +137,63 @@ export class SyncService {
         gas_usage: d.gasUsage,
         gas_cost: d.gasCost,
       }));
-      records.utilities = await supabaseAdapter.upsertUtilities(utilityRows);
-      console.log(`[SyncService] utilities: ${records.utilities}건 저장`);
+
+      // 테이블별 콘텐츠 해시 계산
+      const currentHashes: Record<string, string> = {
+        dailySales: computeHash(dailySalesRows),
+        salesDetail: computeHash(salesDetailRows),
+        production: computeHash(productionRows),
+        purchases: computeHash(purchaseRows),
+        utilities: computeHash(utilityRows),
+      };
+
+      // 증분 모드: 이전 해시와 비교하여 변경된 테이블만 식별
+      let prevHashes: Record<string, string> | null = null;
+      if (incremental) {
+        prevHashes = await supabaseAdapter.getLastContentHash('google_sheets');
+        if (prevHashes) {
+          console.log('[SyncService] 이전 동기화 해시 발견, 변경 감지 시작...');
+        }
+      }
+
+      // 각 테이블별 저장 (해시 변경 시에만)
+      const tables = [
+        { key: 'dailySales', rows: dailySalesRows, upsert: () => supabaseAdapter.upsertDailySales(dailySalesRows), label: 'daily_sales' },
+        { key: 'salesDetail', rows: salesDetailRows, upsert: () => supabaseAdapter.upsertSalesDetail(salesDetailRows), label: 'sales_detail' },
+        { key: 'production', rows: productionRows, upsert: () => supabaseAdapter.upsertProductionDaily(productionRows), label: 'production_daily' },
+        { key: 'purchases', rows: purchaseRows, upsert: () => supabaseAdapter.upsertPurchases(purchaseRows), label: 'purchases' },
+        { key: 'utilities', rows: utilityRows, upsert: () => supabaseAdapter.upsertUtilities(utilityRows), label: 'utilities' },
+      ];
+
+      for (const table of tables) {
+        const hashChanged = !prevHashes || prevHashes[table.key] !== currentHashes[table.key];
+
+        if (incremental && !hashChanged) {
+          skippedTables.push(table.label);
+          console.log(`[SyncService] ${table.label}: 변경 없음 → 스킵`);
+          continue;
+        }
+
+        records[table.key] = await table.upsert();
+        console.log(`[SyncService] ${table.label}: ${records[table.key]}건 저장${hashChanged && prevHashes ? ' (변경 감지)' : ''}`);
+      }
 
       const totalRecords = Object.values(records).reduce((a, b) => a + b, 0);
+      const tablesUpdated = Object.keys(records).filter(k => records[k] > 0);
 
-      // 로그 업데이트
       await supabaseAdapter.updateSyncLog(logId, {
         status: 'success',
         records_synced: totalRecords,
         completed_at: new Date().toISOString(),
+        content_hash: JSON.stringify(currentHashes),
+        tables_updated: tablesUpdated.join(','),
       });
 
       const duration = Date.now() - startTime;
-      console.log(`[SyncService] Google Sheets 동기화 완료: ${totalRecords}건 (${duration}ms)`);
+      const skipMsg = skippedTables.length > 0 ? ` (스킵: ${skippedTables.join(', ')})` : '';
+      console.log(`[SyncService] Google Sheets 동기화 완료: ${totalRecords}건 (${duration}ms)${skipMsg}`);
 
-      return { source: 'google_sheets', success: true, records, duration };
+      return { source: 'google_sheets', success: true, records, duration, skippedTables };
     } catch (error: any) {
       const duration = Date.now() - startTime;
       console.error('[SyncService] Google Sheets 동기화 실패:', error.message);
@@ -229,38 +269,32 @@ export class SyncService {
   }
 
   /**
-   * 증분 동기화: 마지막 성공 동기화 이후 데이터만 가져오기
-   * full=true 시 전체 동기화 수행
+   * 증분 동기화: 해시 비교로 변경된 테이블만 저장
+   * full=true 시 전체 동기화 수행 (해시 비교 없이)
    */
   async syncIncremental(full = false): Promise<SyncResult> {
     if (full) {
-      return this.syncFromGoogleSheets();
+      return this.syncFromGoogleSheets(false); // 전체 모드
     }
 
     const lastSyncTime = await supabaseAdapter.getLastSyncTime('google_sheets');
     if (!lastSyncTime) {
       console.log('[SyncService] 이전 동기화 이력 없음 → 전체 동기화 수행');
-      return this.syncFromGoogleSheets();
+      return this.syncFromGoogleSheets(false);
     }
 
     const minutesSince = Math.floor((Date.now() - new Date(lastSyncTime).getTime()) / (1000 * 60));
     console.log(`[SyncService] 증분 동기화: 마지막 동기화 ${minutesSince}분 전 (${lastSyncTime})`);
 
-    // 마지막 동기화 이후 충분한 시간이 지났으면 전체 동기화
-    // (Google Sheets는 변경 추적이 어려우므로, 시간 기반으로 판단)
-    if (minutesSince > 60) {
-      console.log('[SyncService] 60분 이상 경과 → 전체 동기화 수행');
-      return this.syncFromGoogleSheets();
+    if (minutesSince < 5) {
+      // 5분 이내면 완전 스킵 (너무 자주 호출 방지)
+      console.log('[SyncService] 5분 이내 → 동기화 스킵');
+      return { source: 'google_sheets', success: true, records: {}, duration: 0 };
     }
 
-    // 60분 이내면 전체 동기화 스킵 (데이터 변경 적을 가능성)
-    console.log('[SyncService] 최근 동기화 완료됨 → 증분 동기화 스킵');
-    return {
-      source: 'google_sheets',
-      success: true,
-      records: {},
-      duration: 0,
-    };
+    // 5분 이상 경과 → 해시 기반 증분 동기화 (변경분만 저장)
+    console.log('[SyncService] 해시 기반 증분 동기화 수행...');
+    return this.syncFromGoogleSheets(true); // 증분 모드
   }
 
   /**

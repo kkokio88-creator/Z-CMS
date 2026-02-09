@@ -117,7 +117,9 @@ CREATE TABLE IF NOT EXISTS sync_log (
   records_synced integer DEFAULT 0,
   error_message text,
   started_at timestamptz DEFAULT now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  content_hash text,                -- 테이블별 MD5 해시 JSON (증분 동기화용)
+  tables_updated text               -- 실제 업데이트된 테이블 목록
 );
 CREATE INDEX IF NOT EXISTS idx_sync_log_source ON sync_log(source, started_at DESC);
 

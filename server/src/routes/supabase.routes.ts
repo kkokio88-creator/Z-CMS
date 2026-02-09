@@ -17,16 +17,18 @@ const router = Router();
  * POST /api/sync/google-sheets
  * Google Sheets → Supabase 동기화
  */
-router.post('/sync/google-sheets', async (_req: Request, res: Response) => {
+router.post('/sync/google-sheets', async (req: Request, res: Response) => {
   try {
-    const result = await syncService.syncFromGoogleSheets();
+    const incremental = req.query.incremental === 'true';
+    const result = await syncService.syncFromGoogleSheets(incremental);
     res.json({
       success: result.success,
       message: result.success
-        ? `Google Sheets 동기화 완료 (${result.duration}ms)`
+        ? `Google Sheets 동기화 완료 (${result.duration}ms)${result.skippedTables?.length ? ` [스킵: ${result.skippedTables.join(',')}]` : ''}`
         : `동기화 실패: ${result.error}`,
       records: result.records,
       duration: result.duration,
+      skippedTables: result.skippedTables,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
