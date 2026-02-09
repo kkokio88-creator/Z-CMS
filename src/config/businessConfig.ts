@@ -66,6 +66,16 @@ export interface BusinessConfig {
   /** XYZ 분류 Y등급 변동계수 상한 */
   xyzClassYThreshold: number;
 
+  // === 현금 흐름 ===
+  /** 자사몰 입금 주기 (일) */
+  channelCollectionDaysJasa: number;
+  /** 쿠팡 입금 주기 (일) */
+  channelCollectionDaysCoupang: number;
+  /** 컬리 입금 주기 (일) */
+  channelCollectionDaysKurly: number;
+  /** 품절 기회비용 배율 (0~1) */
+  stockoutCostMultiplier: number;
+
   // === 레시피/생산 ===
   /** 레시피 오차 허용률 (%) */
   recipeVarianceTolerance: number;
@@ -81,6 +91,16 @@ export interface BusinessConfig {
   // === 채널 이익 계산 ===
   /** 평균 주문 단가 (원) — 건당 변동비 산출에 사용 */
   averageOrderValue: number;
+
+  // === 월간 예산 (원) ===
+  /** 원재료 월 예산 */
+  budgetRawMaterial: number;
+  /** 부재료 월 예산 */
+  budgetSubMaterial: number;
+  /** 노무비 월 예산 */
+  budgetLabor: number;
+  /** 경비 월 예산 */
+  budgetOverhead: number;
 
   // === 뷰 표시 임계값 ===
   /** 마진율 양호 기준 (%, 예: 20 = 20% 이상이면 녹색) */
@@ -142,6 +162,12 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
   xyzClassXThreshold: 0.5,
   xyzClassYThreshold: 1.0,
 
+  // 현금 흐름
+  channelCollectionDaysJasa: 0,
+  channelCollectionDaysCoupang: 14,
+  channelCollectionDaysKurly: 7,
+  stockoutCostMultiplier: 0.5,
+
   // 레시피/생산
   recipeVarianceTolerance: 5,
   yieldDropTolerance: 3,
@@ -152,6 +178,12 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
 
   // 채널 이익 계산
   averageOrderValue: 50000,
+
+  // 월간 예산
+  budgetRawMaterial: 50000000,   // 5천만원
+  budgetSubMaterial: 15000000,   // 1천5백만원
+  budgetLabor: 20000000,         // 2천만원
+  budgetOverhead: 10000000,      // 1천만원
 
   // 뷰 표시 임계값
   profitMarginGood: 20,

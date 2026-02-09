@@ -60,6 +60,17 @@ export interface ProductProfitInsight {
   totalMargin: number;
 }
 
+export interface WeeklyTrendEntry {
+  weekLabel: string;
+  revenue: number;
+  cost: number;
+  profit1: number;
+  profit2: number;
+  profit: number;
+  marginRate: number;
+  prevWeekChange: number;
+}
+
 export interface RevenueTrendInsight {
   monthly: {
     month: string;
@@ -71,6 +82,7 @@ export interface RevenueTrendInsight {
     marginRate: number;  // 3단계 마진율
     prevMonthChange: number;
   }[];
+  weekly: WeeklyTrendEntry[];
 }
 
 export interface MaterialPriceInsight {
@@ -297,6 +309,78 @@ export interface ProductBEPInsight {
   avgContributionRate: number;
 }
 
+// ==============================
+// P4-4 현금 흐름 타입
+// ==============================
+
+interface CashFlowMonthly {
+  month: string;
+  cashInflow: number;
+  cashOutflow: number;
+  netCashFlow: number;
+  cumulativeCash: number;
+}
+
+interface ChannelCashCycle {
+  channelName: string;
+  revenue: number;
+  collectionDays: number;
+  monthlyCollected: number;
+}
+
+export interface CashFlowInsight {
+  monthly: CashFlowMonthly[];
+  channelCycles: ChannelCashCycle[];
+  inventoryTurnover: number;
+  inventoryTurnoverDays: number;
+  avgCollectionPeriod: number;
+  cashConversionCycle: number;
+  totalCashInflow: number;
+  totalCashOutflow: number;
+  netCashPosition: number;
+}
+
+// ==============================
+// P4-5 재고비용 최적화 타입
+// ==============================
+
+interface InventoryCostItem {
+  productCode: string;
+  productName: string;
+  abcClass: string | null;
+  avgStock: number;
+  unitPrice: number;
+  holdingCost: number;
+  annualDemand: number;
+  eoq: number;
+  orderFrequency: number;
+  orderingCost: number;
+  stockoutRisk: number;
+  estimatedStockoutCost: number;
+  wasteCost: number;
+  totalCost: number;
+  eoqSaving: number;
+  strategy: string;
+}
+
+export interface InventoryCostInsight {
+  items: InventoryCostItem[];
+  summary: {
+    totalHoldingCost: number;
+    totalOrderingCost: number;
+    totalStockoutCost: number;
+    totalWasteCost: number;
+    grandTotal: number;
+  };
+  abcStrategies: {
+    abcClass: string;
+    itemCount: number;
+    totalCost: number;
+    strategy: string;
+  }[];
+  costComposition: { name: string; value: number }[];
+}
+
 export interface DashboardInsights {
   channelRevenue: ChannelRevenueInsight | null;
   productProfit: ProductProfitInsight | null;
@@ -314,6 +398,8 @@ export interface DashboardInsights {
   bomVariance: BomVarianceInsight | null;
   productBEP: ProductBEPInsight | null;
   yieldTracking: YieldTrackingInsight | null;
+  cashFlow: CashFlowInsight | null;
+  inventoryCost: InventoryCostInsight | null;
 }
 
 export interface YieldDailyItem {
@@ -562,7 +648,58 @@ export function computeRevenueTrend(
       : 0,
   }));
 
-  return { monthly };
+  // 주간 집계
+  const weeklyMap = new Map<string, { revenue: number; cost: number }>();
+  dailySales.forEach(d => {
+    const dt = new Date(d.date);
+    const day = dt.getDay();
+    const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(dt.getFullYear(), dt.getMonth(), diff);
+    const key = monday.toISOString().slice(0, 10);
+    const existing = weeklyMap.get(key) || { revenue: 0, cost: 0 };
+    existing.revenue += d.totalRevenue;
+    weeklyMap.set(key, existing);
+  });
+  purchases.forEach(p => {
+    const dt = new Date(p.date);
+    const day = dt.getDay();
+    const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(dt.getFullYear(), dt.getMonth(), diff);
+    const key = monday.toISOString().slice(0, 10);
+    const existing = weeklyMap.get(key) || { revenue: 0, cost: 0 };
+    existing.cost += p.total;
+    weeklyMap.set(key, existing);
+  });
+
+  const weeklyRaw = Array.from(weeklyMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, data]) => {
+      const monday = new Date(key);
+      const sunday = new Date(monday);
+      sunday.setDate(sunday.getDate() + 6);
+      const label = `${String(monday.getMonth() + 1).padStart(2, '0')}/${String(monday.getDate()).padStart(2, '0')}~${String(sunday.getMonth() + 1).padStart(2, '0')}/${String(sunday.getDate()).padStart(2, '0')}`;
+      const profit1 = hasPurchases ? data.revenue - data.cost : Math.round(data.revenue * config.defaultMarginRate);
+      let channelVar = 0;
+      if (channelCosts.length > 0) {
+        const avgVarRate = totalVarRatePct / (channelCosts.length || 1);
+        channelVar += Math.round(data.revenue * avgVarRate / 100);
+      }
+      const profit2 = profit1 - channelVar;
+      const weeklyFixed = Math.round(totalFixedMonthly * 7 / 30);
+      const profit3 = profit2 - weeklyFixed;
+      const profit = channelCosts.length > 0 ? profit3 : profit1;
+      const marginRate = data.revenue > 0 ? Math.round((profit / data.revenue) * 1000) / 10 : 0;
+      return { weekLabel: label, revenue: data.revenue, cost: data.cost, profit1, profit2, profit, marginRate };
+    });
+
+  const weekly: WeeklyTrendEntry[] = weeklyRaw.map((w, idx) => ({
+    ...w,
+    prevWeekChange: idx > 0 && weeklyRaw[idx - 1].revenue > 0
+      ? Math.round(((w.revenue - weeklyRaw[idx - 1].revenue) / weeklyRaw[idx - 1].revenue) * 1000) / 10
+      : 0,
+  }));
+
+  return { monthly, weekly };
 }
 
 export function computeMaterialPrices(purchases: PurchaseData[]): MaterialPriceInsight {
@@ -1709,6 +1846,340 @@ export function computeYieldTracking(
 }
 
 // ==============================
+// P4-4 현금 흐름 대시보드
+// ==============================
+
+function computeCashFlow(
+  dailySales: DailySalesData[],
+  purchases: PurchaseData[],
+  utilities: UtilityData[],
+  inventoryData: InventorySafetyItem[],
+  channelRevenue: ChannelRevenueInsight | null,
+  costBreakdown: CostBreakdownInsight | null,
+  config: BusinessConfig
+): CashFlowInsight {
+  // 월별 유입/유출 집계
+  const monthlyInflowMap = new Map<string, number>();
+  const monthlyOutflowMap = new Map<string, number>();
+
+  dailySales.forEach(d => {
+    const month = d.date.slice(0, 7);
+    monthlyInflowMap.set(month, (monthlyInflowMap.get(month) || 0) + d.totalRevenue);
+  });
+
+  purchases.forEach(p => {
+    const month = p.date.slice(0, 7);
+    monthlyOutflowMap.set(month, (monthlyOutflowMap.get(month) || 0) + p.total);
+  });
+
+  utilities.forEach(u => {
+    const month = u.date.slice(0, 7);
+    const utilCost = u.elecCost + u.waterCost + u.gasCost;
+    monthlyOutflowMap.set(month, (monthlyOutflowMap.get(month) || 0) + utilCost);
+  });
+
+  // 노무비 추정 (costBreakdown이 있으면 활용)
+  if (costBreakdown) {
+    costBreakdown.monthly.forEach(m => {
+      const existing = monthlyOutflowMap.get(m.month) || 0;
+      // 유출에 구매+경비는 이미 위에서 집계됨. 노무비만 추가
+      monthlyOutflowMap.set(m.month, existing + m.labor);
+    });
+  }
+
+  // 모든 월 수집
+  const allMonths = new Set([...monthlyInflowMap.keys(), ...monthlyOutflowMap.keys()]);
+  const sortedMonths = Array.from(allMonths).sort();
+
+  let cumulativeCash = 0;
+  let totalCashInflow = 0;
+  let totalCashOutflow = 0;
+
+  const monthly: CashFlowMonthly[] = sortedMonths.map(month => {
+    const cashInflow = monthlyInflowMap.get(month) || 0;
+    const cashOutflow = monthlyOutflowMap.get(month) || 0;
+    const netCashFlow = cashInflow - cashOutflow;
+    cumulativeCash += netCashFlow;
+    totalCashInflow += cashInflow;
+    totalCashOutflow += cashOutflow;
+    return { month, cashInflow, cashOutflow, netCashFlow, cumulativeCash };
+  });
+
+  // 채널별 현금회수 주기
+  const channelCycles: ChannelCashCycle[] = [];
+  if (channelRevenue) {
+    const channelCollectionMap: Record<string, number> = {
+      '자사몰': config.channelCollectionDaysJasa,
+      '쿠팡': config.channelCollectionDaysCoupang,
+      '컬리': config.channelCollectionDaysKurly,
+    };
+    channelRevenue.channels.forEach(ch => {
+      const collectionDays = channelCollectionMap[ch.name] ?? 0;
+      // 월 기준 회수예정액 = 매출 / 조회기간일수 * 30
+      const periodDays = dailySales.length || 1;
+      const monthlyCollected = Math.round(ch.revenue / periodDays * 30);
+      channelCycles.push({
+        channelName: ch.name,
+        revenue: ch.revenue,
+        collectionDays,
+        monthlyCollected,
+      });
+    });
+  }
+
+  // 재고회전율 = 연간매출원가 / 평균재고금액
+  const totalPurchaseCost = purchases.reduce((s, p) => s + p.total, 0);
+  const allDates = purchases.length > 0 ? purchases.map(p => p.date).sort() : [];
+  const periodDaysP = allDates.length > 1
+    ? Math.max(1, Math.ceil((new Date(allDates[allDates.length - 1]).getTime() - new Date(allDates[0]).getTime()) / (1000 * 60 * 60 * 24)))
+    : 30;
+  const annualizedCOGS = totalPurchaseCost * (365 / periodDaysP);
+
+  // 평균재고금액: 각 재고 품목의 currentStock * 평균단가
+  const unitPriceMap = new Map<string, number>();
+  purchases.forEach(p => {
+    if (p.quantity > 0 && p.unitPrice > 0) {
+      unitPriceMap.set(p.productName, p.unitPrice);
+    }
+  });
+
+  let avgInventoryValue = 0;
+  inventoryData.forEach(inv => {
+    const price = unitPriceMap.get(inv.skuName) || 0;
+    avgInventoryValue += inv.currentStock * price;
+  });
+
+  const inventoryTurnover = avgInventoryValue > 0
+    ? Math.round((annualizedCOGS / avgInventoryValue) * 10) / 10
+    : 0;
+  const inventoryTurnoverDays = inventoryTurnover > 0
+    ? Math.round(365 / inventoryTurnover)
+    : 0;
+
+  // 평균 현금회수기간
+  const avgCollectionPeriod = channelCycles.length > 0
+    ? Math.round(
+        channelCycles.reduce((s, c) => s + c.collectionDays * c.revenue, 0) /
+        Math.max(1, channelCycles.reduce((s, c) => s + c.revenue, 0))
+      )
+    : 0;
+
+  // CCC = 재고회전일수 + 평균회수기간 - 매입결제기간(defaultLeadTime)
+  const cashConversionCycle = inventoryTurnoverDays + avgCollectionPeriod - config.defaultLeadTime;
+
+  return {
+    monthly,
+    channelCycles,
+    inventoryTurnover,
+    inventoryTurnoverDays,
+    avgCollectionPeriod,
+    cashConversionCycle,
+    totalCashInflow,
+    totalCashOutflow,
+    netCashPosition: totalCashInflow - totalCashOutflow,
+  };
+}
+
+// ==============================
+// P4-5 재고비용 최적화
+// ==============================
+
+function computeInventoryCost(
+  purchases: PurchaseData[],
+  inventoryData: InventorySafetyItem[],
+  statisticalOrder: StatisticalOrderInsight | null,
+  abcxyz: ABCXYZInsight | null,
+  wasteAnalysis: WasteAnalysisInsight | null,
+  config: BusinessConfig
+): InventoryCostInsight {
+  const holdingRate = config.holdingCostRate;
+  const orderCostPerOrder = config.orderCost;
+  const stockoutMul = config.stockoutCostMultiplier;
+  const leadTime = config.defaultLeadTime;
+
+  // statisticalOrder 맵 생성
+  const soMap = new Map<string, StatisticalOrderItem>();
+  if (statisticalOrder) {
+    statisticalOrder.items.forEach(item => soMap.set(item.productCode, item));
+  }
+
+  // ABC 분류 맵
+  const abcMap = new Map<string, string>();
+  if (abcxyz) {
+    abcxyz.items.forEach(item => abcMap.set(item.productCode, item.abcClass));
+  }
+
+  // 품목별 구매 집계
+  const purchaseAgg = new Map<string, { name: string; totalQty: number; totalSpent: number; days: Set<string> }>();
+  purchases.forEach(p => {
+    if (!p.productCode || p.quantity === 0) return;
+    const existing = purchaseAgg.get(p.productCode) || { name: p.productName, totalQty: 0, totalSpent: 0, days: new Set<string>() };
+    existing.totalQty += p.quantity;
+    existing.totalSpent += p.total;
+    existing.days.add(p.date);
+    purchaseAgg.set(p.productCode, existing);
+  });
+
+  // 총 기간
+  const allDates = purchases.map(p => p.date).sort();
+  const periodDays = allDates.length > 1
+    ? Math.max(1, Math.ceil((new Date(allDates[allDates.length - 1]).getTime() - new Date(allDates[0]).getTime()) / (1000 * 60 * 60 * 24)))
+    : 30;
+
+  // 재고 맵
+  const stockMap = new Map<string, number>();
+  inventoryData.forEach(inv => {
+    stockMap.set(inv.skuName, inv.currentStock);
+  });
+
+  // 폐기비용 총액
+  const totalWasteCost = wasteAnalysis?.totalEstimatedCost || 0;
+  // 총 매출원가 (배분 기준)
+  const totalSpent = Array.from(purchaseAgg.values()).reduce((s, v) => s + v.totalSpent, 0);
+
+  let sumHolding = 0;
+  let sumOrdering = 0;
+  let sumStockout = 0;
+  let sumWaste = 0;
+
+  const items: InventoryCostItem[] = Array.from(purchaseAgg.entries()).map(([code, data]) => {
+    const unitPrice = data.totalQty > 0 ? Math.round(data.totalSpent / data.totalQty) : 0;
+    const avgDailyDemand = data.totalQty / periodDays;
+    const annualDemand = Math.round(avgDailyDemand * 365);
+
+    // 평균 재고: statisticalOrder의 현재재고 또는 재고 맵
+    const soItem = soMap.get(code);
+    const currentStock = soItem?.currentStock ?? (stockMap.get(data.name) || 0);
+    const avgStock = Math.max(currentStock, Math.round(avgDailyDemand * 15)); // 최소 15일치
+
+    // 보유비용 = 평균재고 * 단가 * 보유비율 (연간)
+    const holdingCost = Math.round(avgStock * unitPrice * holdingRate);
+
+    // EOQ
+    const holdingCostPerUnit = unitPrice * holdingRate;
+    const eoq = holdingCostPerUnit > 0
+      ? Math.ceil(Math.sqrt((2 * annualDemand * orderCostPerOrder) / holdingCostPerUnit))
+      : annualDemand;
+
+    // 현재 발주 횟수 추정: 실제 발주일 수
+    const actualOrderCount = data.days.size;
+    const annualizedOrderCount = Math.round(actualOrderCount * (365 / periodDays));
+    const orderFrequency = annualizedOrderCount || 1;
+
+    // 발주비용 = 연간 발주횟수 * 건당 발주비
+    const orderingCost = Math.round(orderFrequency * orderCostPerOrder);
+
+    // 품절 위험도
+    let stockoutRisk = 0;
+    if (soItem) {
+      if (soItem.status === 'shortage') stockoutRisk = 0.8;
+      else if (soItem.status === 'urgent') stockoutRisk = 0.4;
+      else if (soItem.status === 'normal') stockoutRisk = 0.05;
+      else stockoutRisk = 0.01;
+    }
+
+    // 품절비용 = stockoutRisk * 일평균수요 * 단가 * 리드타임 * 배율
+    const estimatedStockoutCost = Math.round(stockoutRisk * avgDailyDemand * unitPrice * leadTime * stockoutMul);
+
+    // 폐기비용: 전체 폐기비용을 매출비중으로 배분
+    const spendShare = totalSpent > 0 ? data.totalSpent / totalSpent : 0;
+    const wasteCost = Math.round(totalWasteCost * spendShare);
+
+    const totalCost = holdingCost + orderingCost + estimatedStockoutCost + wasteCost;
+
+    // EOQ 적용 시 절감: EOQ 기반 발주비용 + 보유비용 vs 현재
+    const eoqOrderFreq = annualDemand > 0 && eoq > 0 ? Math.round(annualDemand / eoq) : 1;
+    const eoqOrderingCost = eoqOrderFreq * orderCostPerOrder;
+    const eoqAvgStock = Math.round(eoq / 2);
+    const eoqHoldingCost = Math.round(eoqAvgStock * unitPrice * holdingRate);
+    const eoqTotalCost = eoqHoldingCost + eoqOrderingCost + estimatedStockoutCost + wasteCost;
+    const eoqSaving = Math.max(0, totalCost - eoqTotalCost);
+
+    // ABC 전략
+    const abcClass = abcMap.get(code) || null;
+    let strategy = '일반 관리';
+    if (abcClass === 'A') strategy = '실시간 모니터링 + JIT';
+    else if (abcClass === 'B') strategy = '정기 EOQ 발주';
+    else if (abcClass === 'C') strategy = '대량 발주로 비용 최소화';
+
+    sumHolding += holdingCost;
+    sumOrdering += orderingCost;
+    sumStockout += estimatedStockoutCost;
+    sumWaste += wasteCost;
+
+    return {
+      productCode: code,
+      productName: data.name,
+      abcClass,
+      avgStock,
+      unitPrice,
+      holdingCost,
+      annualDemand,
+      eoq,
+      orderFrequency,
+      orderingCost,
+      stockoutRisk,
+      estimatedStockoutCost,
+      wasteCost,
+      totalCost,
+      eoqSaving,
+      strategy,
+    };
+  }).sort((a, b) => b.totalCost - a.totalCost);
+
+  const grandTotal = sumHolding + sumOrdering + sumStockout + sumWaste;
+
+  // ABC 전략 요약
+  const abcGroups = new Map<string, { count: number; cost: number }>();
+  items.forEach(item => {
+    const cls = item.abcClass || 'N/A';
+    const existing = abcGroups.get(cls) || { count: 0, cost: 0 };
+    existing.count++;
+    existing.cost += item.totalCost;
+    abcGroups.set(cls, existing);
+  });
+
+  const strategyMap: Record<string, string> = {
+    'A': '실시간 모니터링 + JIT',
+    'B': '정기 EOQ 발주',
+    'C': '대량 발주로 비용 최소화',
+    'N/A': '분류 미완료',
+  };
+
+  const abcStrategies = Array.from(abcGroups.entries())
+    .sort((a, b) => {
+      const order: Record<string, number> = { 'A': 0, 'B': 1, 'C': 2, 'N/A': 3 };
+      return (order[a[0]] ?? 9) - (order[b[0]] ?? 9);
+    })
+    .map(([cls, data]) => ({
+      abcClass: cls,
+      itemCount: data.count,
+      totalCost: data.cost,
+      strategy: strategyMap[cls] || '일반 관리',
+    }));
+
+  const costComposition = [
+    { name: '보유비용', value: sumHolding },
+    { name: '발주비용', value: sumOrdering },
+    { name: '품절비용', value: sumStockout },
+    { name: '폐기비용', value: sumWaste },
+  ];
+
+  return {
+    items,
+    summary: {
+      totalHoldingCost: sumHolding,
+      totalOrderingCost: sumOrdering,
+      totalStockoutCost: sumStockout,
+      totalWasteCost: sumWaste,
+      grandTotal,
+    },
+    abcStrategies,
+    costComposition,
+  };
+}
+
+// ==============================
 // 통합 인사이트 계산
 // ==============================
 
@@ -1758,6 +2229,14 @@ export function computeAllInsights(
     ? computeYieldTracking(production, purchases, config)
     : null;
 
+  const cashFlow = (dailySales.length > 0 && purchases.length > 0)
+    ? computeCashFlow(dailySales, purchases, utilities, inventoryData || [], channelRevenue, costBreakdown, config)
+    : null;
+
+  const inventoryCost = (purchases.length > 0 && inventoryData && inventoryData.length > 0)
+    ? computeInventoryCost(purchases, inventoryData, statisticalOrder, abcxyz, wasteAnalysis, config)
+    : null;
+
   const recommendations = generateRecommendations(
     materialPrices,
     wasteAnalysis,
@@ -1783,5 +2262,7 @@ export function computeAllInsights(
     bomVariance,
     productBEP,
     yieldTracking,
+    cashFlow,
+    inventoryCost,
   };
 }

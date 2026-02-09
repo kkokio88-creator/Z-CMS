@@ -179,10 +179,12 @@ const App = () => {
       // 데이터 가용성 추적
       let hasEcountData = false;
       let hasGsData = false;
+      let currentInventoryData: InventorySafetyItem[] = [];
 
       // ECOUNT 데이터 적용 (재고)
       if (ecountResult && ecountResult.inventory?.length > 0) {
         hasEcountData = true;
+        currentInventoryData = ecountResult.inventory;
         setInventoryData(ecountResult.inventory);
         setStocktakeAnomalies(ecountResult.anomalies);
         setOrderSuggestions(ecountResult.suggestions);
@@ -287,6 +289,7 @@ const App = () => {
               };
             });
 
+          currentInventoryData = inventoryFromPurchases;
           setInventoryData(inventoryFromPurchases);
 
           // 발주 제안 생성 (OrderSuggestion 타입에 맞춤)
@@ -389,7 +392,7 @@ const App = () => {
             gsResult.production || [],
             gsResult.purchases || [],
             gsResult.utilities || [],
-            inventoryData,
+            currentInventoryData,
             channelCosts,
             bizConfig,
           );
@@ -611,6 +614,7 @@ const App = () => {
             <ProfitAnalysisView
               dailySales={gsDailySales}
               salesDetail={gsSalesDetail}
+              purchases={gsPurchases}
               insights={insights}
               onItemClick={handleItemClick}
             />

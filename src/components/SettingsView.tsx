@@ -1331,6 +1331,57 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
+      {/* 채널 정산주기 설정 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <span className="material-icons-outlined text-purple-500">schedule</span>
+          채널 정산주기 설정
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">각 채널의 매출 입금까지 소요되는 일수를 설정합니다. 현금흐름 분석에 반영됩니다.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">자사몰 (일)</label>
+            <input type="number" value={config.channelCollectionDaysJasa} onChange={e => updateConfig({ channelCollectionDaysJasa: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+            <p className="text-xs text-gray-500 mt-1">0 = 즉시 입금</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">쿠팡 (일)</label>
+            <input type="number" value={config.channelCollectionDaysCoupang} onChange={e => updateConfig({ channelCollectionDaysCoupang: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">컬리 (일)</label>
+            <input type="number" value={config.channelCollectionDaysKurly} onChange={e => updateConfig({ channelCollectionDaysKurly: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+          </div>
+        </div>
+      </div>
+
+      {/* 월간 예산 설정 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <span className="material-icons-outlined text-orange-500">account_balance_wallet</span>
+          월간 예산 설정
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">비용 요소별 월간 예산을 설정합니다. 예산 대비 실적 분석에 활용됩니다.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">원재료 예산 (원)</label>
+            <input type="number" value={config.budgetRawMaterial} onChange={e => updateConfig({ budgetRawMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">부재료 예산 (원)</label>
+            <input type="number" value={config.budgetSubMaterial} onChange={e => updateConfig({ budgetSubMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">노무비 예산 (원)</label>
+            <input type="number" value={config.budgetLabor} onChange={e => updateConfig({ budgetLabor: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">경비 예산 (원)</label>
+            <input type="number" value={config.budgetOverhead} onChange={e => updateConfig({ budgetOverhead: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+          </div>
+        </div>
+      </div>
+
       {/* 노무비 관리 */}
       <LaborRecordAdmin />
 
