@@ -141,3 +141,18 @@ CREATE TABLE IF NOT EXISTS agent_state (
   updated_at timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_agent_state_agent ON agent_state(agent_id);
+
+-- 10. 노무비 월별 기록 (반별 생산성 관리)
+CREATE TABLE IF NOT EXISTS labor_monthly_records (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  month varchar(7) NOT NULL,           -- YYYY-MM
+  shift_name varchar(50) NOT NULL,     -- 반 이름
+  headcount integer NOT NULL DEFAULT 0,
+  work_days integer NOT NULL DEFAULT 22,
+  regular_hours_per_day numeric NOT NULL DEFAULT 8,
+  overtime_hours_total numeric NOT NULL DEFAULT 0,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(month, shift_name)
+);
+CREATE INDEX IF NOT EXISTS idx_labor_month ON labor_monthly_records(month);

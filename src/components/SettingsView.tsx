@@ -7,6 +7,7 @@ import {
 } from '../services/ecountService';
 import { useSettings } from '../contexts/SettingsContext';
 import { ChannelCostAdmin } from './ChannelCostAdmin';
+import { LaborRecordAdmin } from './LaborRecordAdmin';
 
 // 데이터 소스 연결 타입 정의
 type DataSourceType = 'googleSheets' | 'ecount' | 'none';
@@ -1329,6 +1330,9 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 노무비 관리 */}
+      <LaborRecordAdmin />
 
       {/* 채널 비용 관리 */}
       <ChannelCostAdmin />

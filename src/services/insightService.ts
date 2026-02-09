@@ -14,6 +14,7 @@ import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
 import { BusinessConfig, DEFAULT_BUSINESS_CONFIG } from '../config/businessConfig';
 import type { ChannelCostSummary } from '../components/ChannelCostAdmin';
+import { getLaborMonthlySummaries, getMonthlyLaborCost, getTotalLaborCost } from '../components/LaborRecordAdmin';
 
 // ==============================
 // 타입 정의
@@ -655,8 +656,12 @@ export function computeCostBreakdown(
   const totalUtility = utilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
   const totalProduction = production.reduce((s, p) => s + p.quantity, 0);
 
-  // 노무비 추정: 총 원가(원재료+부재료+공과금)의 설정 비율로 추정
-  const totalLabor = Math.round((totalRaw + totalSub + totalUtility) * config.laborCostRatio);
+  // 노무비: 실제 기록이 있으면 사용, 없으면 비율 추정
+  const actualLaborCost = getTotalLaborCost(config.avgHourlyWage, config.overtimeMultiplier);
+  const totalLabor = actualLaborCost > 0
+    ? actualLaborCost
+    : Math.round((totalRaw + totalSub + totalUtility) * config.laborCostRatio);
+  const laborIsActual = actualLaborCost > 0;
 
   // 경비 계산: 고정비 + 변동비 + 공과금
   // 고정비: 월 고정경비 설정값 (설정되지 않으면 기존 overheadRatio 방식 폴백)
@@ -700,7 +705,11 @@ export function computeCostBreakdown(
   const monthly = Array.from(monthlyMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([month, data]) => {
-      const labor = Math.round((data.raw + data.sub + data.utility) * config.laborCostRatio);
+      // 노무비: 해당 월 실제 기록 우선, 없으면 비율 추정
+      const monthlyActualLabor = getMonthlyLaborCost(month, config.avgHourlyWage, config.overtimeMultiplier);
+      const labor = monthlyActualLabor !== null
+        ? monthlyActualLabor
+        : Math.round((data.raw + data.sub + data.utility) * config.laborCostRatio);
       // 경비: 고정비+변동비 방식 또는 기존 비율 방식
       const monthlyOther = hasFixedOverhead
         ? config.monthlyFixedOverhead + Math.round(data.prodQty * config.variableOverheadPerUnit)
@@ -774,7 +783,9 @@ export function computeCostBreakdown(
     subMaterialDetail,
     laborDetail: {
       estimated: totalLabor,
-      note: `총 원가(원재료+부재료+경비)의 ${Math.round(config.laborCostRatio * 100)}% 추정값`,
+      note: laborIsActual
+        ? '반별 근무 기록 기반 실제 노무비'
+        : `총 원가(원재료+부재료+경비)의 ${Math.round(config.laborCostRatio * 100)}% 추정값`,
     },
     overheadDetail: {
       utilities: totalUtility,
