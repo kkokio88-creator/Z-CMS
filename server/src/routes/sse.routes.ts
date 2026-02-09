@@ -4,25 +4,39 @@ import type { AgentMessage } from '../types/index.js';
 
 const router = Router();
 
+let eventCounter = 0;
+const activeConnections = new Map<string, { connectedAt: Date; lastEventId: number }>();
+
 // SSE endpoint for real-time agent updates
 router.get('/', (req: Request, res: Response) => {
   const eventBus = req.app.locals.eventBus as EventBus;
+  const connId = `sse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const lastEventId = req.headers['last-event-id']
+    ? parseInt(req.headers['last-event-id'] as string, 10)
+    : 0;
 
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('X-SSE-Connection-Id', connId);
+
+  activeConnections.set(connId, { connectedAt: new Date(), lastEventId });
 
   // Send initial connection message
-  res.write(
-    `data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`
-  );
+  const connectEvent = {
+    type: 'connected',
+    connectionId: connId,
+    timestamp: new Date().toISOString(),
+    resumedFrom: lastEventId || null,
+  };
+  res.write(`id: ${++eventCounter}\nevent: connected\ndata: ${JSON.stringify(connectEvent)}\n\n`);
 
   // Subscribe to all agent messages
   const unsubscribe = eventBus.subscribeAll((message: AgentMessage) => {
-    // Filter to only send relevant messages to frontend
     if (['INSIGHT_SHARE', 'STATE_SYNC', 'TASK_RESULT'].includes(message.type)) {
+      const currentId = ++eventCounter;
       const data = {
         id: message.id,
         type: message.type,
@@ -31,15 +45,16 @@ router.get('/', (req: Request, res: Response) => {
         payload: message.payload,
       };
 
-      res.write(`event: ${message.type.toLowerCase()}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      res.write(`id: ${currentId}\nevent: ${message.type.toLowerCase()}\ndata: ${JSON.stringify(data)}\n\n`);
+      activeConnections.get(connId)!.lastEventId = currentId;
     }
   });
 
   // Send heartbeat every 30 seconds
   const heartbeat = setInterval(() => {
+    const hbId = ++eventCounter;
     res.write(
-      `event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`
+      `id: ${hbId}\nevent: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`
     );
   }, 30000);
 
@@ -47,7 +62,8 @@ router.get('/', (req: Request, res: Response) => {
   req.on('close', () => {
     clearInterval(heartbeat);
     unsubscribe();
-    console.log('SSE client disconnected');
+    activeConnections.delete(connId);
+    console.log(`SSE client disconnected: ${connId}`);
   });
 });
 
@@ -59,6 +75,21 @@ router.get('/state', (req: Request, res: Response) => {
     success: true,
     data: stateManager.getAllState(),
     timestamp: new Date().toISOString(),
+  });
+});
+
+// Get active SSE connections
+router.get('/connections', (_req: Request, res: Response) => {
+  const connections = Array.from(activeConnections.entries()).map(([id, info]) => ({
+    id,
+    connectedAt: info.connectedAt.toISOString(),
+    lastEventId: info.lastEventId,
+  }));
+
+  res.json({
+    success: true,
+    count: connections.length,
+    connections,
   });
 });
 

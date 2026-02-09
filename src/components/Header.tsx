@@ -1,4 +1,5 @@
 import React from 'react';
+import { SSEStatusIndicator } from './SSEStatusIndicator';
 
 interface HeaderProps {
   toggleDarkMode: () => void;
@@ -57,6 +58,8 @@ export const Header: React.FC<HeaderProps> = ({
             placeholder="분석 검색..."
           />
         </div>
+
+        <SSEStatusIndicator />
 
         <button
           onClick={toggleDarkMode}
