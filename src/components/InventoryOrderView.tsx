@@ -1,15 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
-  LineChart, Line,
+  LineChart, Line, PieChart, Pie,
 } from 'recharts';
 import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatQty } from '../utils/format';
 import { InventorySafetyItem, StocktakeAnomalyItem } from '../types';
 import type { PurchaseData } from '../services/googleSheetService';
-import type { DashboardInsights, StatisticalOrderInsight, ABCXYZInsight, FreshnessInsight, FreshnessGrade } from '../services/insightService';
+import type { DashboardInsights, StatisticalOrderInsight, ABCXYZInsight, FreshnessInsight, FreshnessGrade, InventoryCostInsight } from '../services/insightService';
 import { computeStatisticalOrder } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
+import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
 
 interface Props {
   inventoryData: InventorySafetyItem[];
@@ -188,11 +189,59 @@ export const InventoryOrderView: React.FC<Props> = ({
   const abcxyz = insights?.abcxyz || null;
   const freshness = insights?.freshness || null;
 
+  const [invFilter, setInvFilter] = useState('all');
+  const [anomalySort, setAnomalySort] = useState<'score' | 'diff'>('score');
+  const [supplierFilter, setSupplierFilter] = useState<string>('all');
+  const [expandedAbc, setExpandedAbc] = useState<string | null>('A');
+
+  // D1: inventoryData 기반 이상징후 자동 생성
+  const autoAnomalies: StocktakeAnomalyItem[] = useMemo(() => {
+    if (stocktakeAnomalies.length > 0) return stocktakeAnomalies;
+    return inventoryData
+      .map((item) => {
+        let score = 0;
+        let reason = '';
+        const deviation = item.safetyStock > 0
+          ? Math.abs(item.currentStock - item.safetyStock) / item.safetyStock
+          : 0;
+        // 안전재고 대비 크게 벗어난 경우
+        if (item.status === 'Shortage' && deviation > 0.3) {
+          score += Math.min(Math.round(deviation * 60), 80);
+          reason = `안전재고 대비 ${Math.round(deviation * 100)}% 부족`;
+        } else if (item.status === 'Overstock' && deviation > 1) {
+          score += Math.min(Math.round(deviation * 30), 60);
+          reason = `안전재고 대비 ${Math.round(deviation * 100)}% 과잉`;
+        }
+        // 재고회전율 이상치
+        if (item.turnoverRate < 0.3 && item.currentStock > 0) {
+          score += 25;
+          reason += (reason ? ' / ' : '') + `회전율 극저(${item.turnoverRate.toFixed(2)})`;
+        } else if (item.turnoverRate > 10) {
+          score += 15;
+          reason += (reason ? ' / ' : '') + `회전율 과대(${item.turnoverRate.toFixed(1)})`;
+        }
+        if (score < 20) return null;
+        return {
+          id: item.id,
+          materialName: item.skuName,
+          location: item.warehouse || '-',
+          systemQty: item.safetyStock,
+          countedQty: item.currentStock,
+          aiExpectedQty: item.safetyStock,
+          anomalyScore: Math.min(score, 100),
+          reason,
+        } as StocktakeAnomalyItem;
+      })
+      .filter((x): x is StocktakeAnomalyItem => x !== null)
+      .sort((a, b) => b.anomalyScore - a.anomalyScore);
+  }, [inventoryData, stocktakeAnomalies]);
+
   const tabs = [
     { key: 'inventory', label: '재고 현황', icon: 'inventory_2' },
     { key: 'anomaly', label: '이상징후 분석', icon: 'warning' },
     { key: 'statistical', label: '통계적 발주', icon: 'calculate' },
     { key: 'purchase', label: '발주 분석', icon: 'shopping_cart' },
+    { key: 'inventoryCost', label: '재고비용', icon: 'savings' },
   ];
 
   const handleOrder = (productName: string, productCode: string, quantity: number) => {
@@ -242,8 +291,14 @@ export const InventoryOrderView: React.FC<Props> = ({
             const overstockCount = inventoryData.filter(i => i.status === 'Overstock').length;
             const normalCount = inventoryData.filter(i => i.status === 'Normal').length;
 
-            const riskItems = inventoryData
-              .filter(i => i.status !== 'Normal')
+            // 상태 필터 적용
+            const filteredInventory = invFilter === 'all' ? inventoryData
+              : invFilter === 'shortage' ? inventoryData.filter(i => i.status === 'Shortage')
+              : invFilter === 'overstock' ? inventoryData.filter(i => i.status === 'Overstock')
+              : inventoryData.filter(i => i.status === 'Normal');
+
+            const riskItems = filteredInventory
+              .filter(i => invFilter === 'all' ? i.status !== 'Normal' : true)
               .slice(0, 15)
               .map(i => ({
                 name: i.skuName.length > 10 ? i.skuName.slice(0, 10) + '...' : i.skuName,
@@ -252,9 +307,29 @@ export const InventoryOrderView: React.FC<Props> = ({
                 status: i.status,
               }));
 
+            // 회전율 분포 데이터
+            const turnoverDist = [
+              { range: '0~0.5', count: inventoryData.filter(i => i.turnoverRate < 0.5).length, color: '#EF4444' },
+              { range: '0.5~1', count: inventoryData.filter(i => i.turnoverRate >= 0.5 && i.turnoverRate < 1).length, color: '#F59E0B' },
+              { range: '1~2', count: inventoryData.filter(i => i.turnoverRate >= 1 && i.turnoverRate < 2).length, color: '#3B82F6' },
+              { range: '2~5', count: inventoryData.filter(i => i.turnoverRate >= 2 && i.turnoverRate < 5).length, color: '#10B981' },
+              { range: '5+', count: inventoryData.filter(i => i.turnoverRate >= 5).length, color: '#8B5CF6' },
+            ];
+
+            // 상태 분포 파이 데이터
+            const statusPie = [
+              { name: '부족', value: shortageCount, color: '#EF4444' },
+              { name: '과잉', value: overstockCount, color: '#F59E0B' },
+              { name: '정상', value: normalCount, color: '#10B981' },
+            ].filter(d => d.value > 0);
+
             return (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">총 품목</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{inventoryData.length}건</p>
+                  </div>
                   <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                     <p className="text-xs text-gray-500 dark:text-gray-400">부족</p>
                     <p className={`text-2xl font-bold mt-1 ${shortageCount > 0 ? 'text-red-600' : 'text-green-600'}`}>{shortageCount}건</p>
@@ -269,35 +344,94 @@ export const InventoryOrderView: React.FC<Props> = ({
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">재고 과부족 현황</h3>
-                  {riskItems.length > 0 ? (
-                    <div className="h-72">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={riskItems} layout="vertical" margin={{ left: 10, right: 20 }}>
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                          <XAxis type="number" tick={{ fontSize: 10 }} />
-                          <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 10 }} />
-                          <Tooltip />
-                          <Legend wrapperStyle={{ fontSize: 11 }} />
-                          <Bar dataKey="안전재고" fill="#9CA3AF" radius={[0, 4, 4, 0]} />
-                          <Bar dataKey="현재재고" radius={[0, 4, 4, 0]}>
-                            {riskItems.map((entry, i) => (
-                              <Cell key={i} fill={entry.status === 'Shortage' ? '#EF4444' : '#F59E0B'} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : <p className="text-gray-400 text-center py-10">리스크 재고 없음 (모두 정상)</p>}
+                {/* 상태 필터 */}
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'all', label: '전체', color: '#6B7280' },
+                    { key: 'shortage', label: `부족 (${shortageCount})`, color: '#EF4444' },
+                    { key: 'overstock', label: `과잉 (${overstockCount})`, color: '#F59E0B' },
+                    { key: 'normal', label: `정상 (${normalCount})`, color: '#10B981' },
+                  ].map(f => (
+                    <button
+                      key={f.key}
+                      onClick={() => setInvFilter(f.key)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                        invFilter === f.key
+                          ? 'text-white shadow-sm'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                      style={invFilter === f.key ? { backgroundColor: f.color } : undefined}
+                    >
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
+                      {f.label}
+                    </button>
+                  ))}
                 </div>
 
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* 재고 과부족 차트 */}
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">재고 과부족 현황</h3>
+                    {riskItems.length > 0 ? (
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={riskItems} layout="vertical" margin={{ left: 10, right: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" tick={{ fontSize: 10 }} />
+                            <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="안전재고" fill="#9CA3AF" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="현재재고" radius={[0, 4, 4, 0]}>
+                              {riskItems.map((entry, i) => (
+                                <Cell key={i} fill={entry.status === 'Shortage' ? '#EF4444' : entry.status === 'Overstock' ? '#F59E0B' : '#10B981'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : <p className="text-gray-400 text-center py-10">{invFilter !== 'all' ? '해당 상태 품목 없음' : '리스크 재고 없음 (모두 정상)'}</p>}
+                  </div>
+
+                  {/* 회전율 분포 + 상태 분포 */}
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">회전율 분포 & 상태 비율</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={turnoverDist}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="range" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip formatter={(v: number) => `${v}건`} />
+                            <Bar dataKey="count" name="품목수" radius={[4, 4, 0, 0]}>
+                              {turnoverDist.map((e, i) => <Cell key={i} fill={e.color} />)}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={statusPie} cx="50%" cy="50%" innerRadius={30} outerRadius={55} paddingAngle={3} dataKey="value">
+                              {statusPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                            </Pie>
+                            <Tooltip formatter={(v: number) => `${v}건`} />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 필터된 품목 테이블 */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-red-500">warning</span>
-                    리스크 품목
+                    <span className="material-icons-outlined text-red-500">inventory_2</span>
+                    재고 상세 <span className="text-sm text-gray-400 font-normal">({filteredInventory.length}건)</span>
                   </h3>
-                  {inventoryData.filter(i => i.status !== 'Normal').length > 0 ? (
+                  {filteredInventory.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -307,31 +441,40 @@ export const InventoryOrderView: React.FC<Props> = ({
                             <th className="text-right py-2 px-3 text-gray-500">현재재고</th>
                             <th className="text-right py-2 px-3 text-gray-500">안전재고</th>
                             <th className="text-right py-2 px-3 text-gray-500">괴리율</th>
+                            <th className="text-right py-2 px-3 text-gray-500">회전율</th>
+                            <th className="text-left py-2 px-3 text-gray-500">창고</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {inventoryData.filter(i => i.status !== 'Normal').slice(0, 20).map((item, i) => (
+                          {filteredInventory.slice(0, 25).map((item, i) => (
                             <tr key={item.id || i} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onItemClick(item)}>
                               <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.skuName}</td>
                               <td className="py-2 px-3 text-center">
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                                   item.status === 'Shortage' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  : item.status === 'Overstock' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                 }`}>
-                                  {item.status === 'Shortage' ? '부족' : '과잉'}
+                                  {item.status === 'Shortage' ? '부족' : item.status === 'Overstock' ? '과잉' : '정상'}
                                 </span>
                               </td>
                               <td className="py-2 px-3 text-right font-bold text-gray-900 dark:text-white">{item.currentStock}</td>
                               <td className="py-2 px-3 text-right text-gray-500">{item.safetyStock}</td>
-                              <td className="py-2 px-3 text-right text-gray-500">
+                              <td className={`py-2 px-3 text-right font-medium ${
+                                item.currentStock < item.safetyStock ? 'text-red-600' : item.currentStock > item.safetyStock * 3 ? 'text-orange-600' : 'text-gray-500'
+                              }`}>
                                 {item.safetyStock > 0 ? Math.round(((item.currentStock - item.safetyStock) / item.safetyStock) * 100) : 0}%
                               </td>
+                              <td className={`py-2 px-3 text-right ${item.turnoverRate < config.lowTurnoverThreshold ? 'text-orange-600' : 'text-gray-600'}`}>
+                                {item.turnoverRate.toFixed(1)}
+                              </td>
+                              <td className="py-2 px-3 text-gray-500 text-xs">{item.warehouse || '-'}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                  ) : <p className="text-gray-400 text-center py-6">리스크 항목 없음</p>}
+                  ) : <p className="text-gray-400 text-center py-6">해당 상태의 품목이 없습니다</p>}
                 </div>
 
                 {/* ABC-XYZ 분류 매트릭스 */}
@@ -502,7 +645,10 @@ export const InventoryOrderView: React.FC<Props> = ({
 
           // ========== 이상징후 분석 ==========
           if (activeTab === 'anomaly') {
-            const sortedAnomalies = [...stocktakeAnomalies].sort((a, b) => b.anomalyScore - a.anomalyScore);
+            const sortedAnomalies = [...autoAnomalies].sort((a, b) =>
+              anomalySort === 'score' ? b.anomalyScore - a.anomalyScore
+              : Math.abs(b.countedQty - b.systemQty) - Math.abs(a.countedQty - a.systemQty)
+            );
             const highScoreCount = sortedAnomalies.filter(a => a.anomalyScore >= config.anomalyScoreHigh).length;
             const avgScore = sortedAnomalies.length > 0
               ? Math.round(sortedAnomalies.reduce((s, a) => s + a.anomalyScore, 0) / sortedAnomalies.length)
@@ -525,11 +671,54 @@ export const InventoryOrderView: React.FC<Props> = ({
                   </div>
                 </div>
 
+                {/* 정렬 옵션 + 이상점수 분포 */}
+                {sortedAnomalies.length > 0 && (
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">이상점수 분포</h3>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={sortedAnomalies.slice(0, 15).map(a => ({
+                          name: a.materialName.length > 8 ? a.materialName.slice(0, 8) + '...' : a.materialName,
+                          이상점수: a.anomalyScore,
+                          차이수량: Math.abs(a.countedQty - a.systemQty),
+                        }))} margin={{ left: 10, right: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={50} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Bar dataKey="이상점수" radius={[4, 4, 0, 0]}>
+                            {sortedAnomalies.slice(0, 15).map((a, i) => (
+                              <Cell key={i} fill={
+                                a.anomalyScore >= config.anomalyScoreCritical ? '#EF4444'
+                                : a.anomalyScore >= config.anomalyScoreWarning ? '#F59E0B'
+                                : '#3B82F6'
+                              } />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-orange-500">search</span>
-                    재고 실사 이상징후
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <span className="material-icons-outlined text-orange-500">search</span>
+                      재고 실사 이상징후
+                    </h3>
+                    <div className="flex gap-2">
+                      {([
+                        { key: 'score' as const, label: '점수순' },
+                        { key: 'diff' as const, label: '차이순' },
+                      ]).map(s => (
+                        <button key={s.key} onClick={() => setAnomalySort(s.key)}
+                          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                            anomalySort === s.key ? 'bg-orange-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                          }`}>{s.label}</button>
+                      ))}
+                    </div>
+                  </div>
                   {sortedAnomalies.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -588,10 +777,20 @@ export const InventoryOrderView: React.FC<Props> = ({
 
           // ========== 통계적 발주 ==========
           if (activeTab === 'statistical') {
-            const items = statisticalOrder?.items || [];
+            const allItems = statisticalOrder?.items || [];
+            // D2: 업체별 필터링
+            const items = supplierFilter === 'all'
+              ? allItems
+              : allItems.filter(i => getSupplierForProduct(i.productCode).id === supplierFilter);
             const shortageCount = items.filter(i => i.status === 'shortage').length;
             const urgentCount = items.filter(i => i.status === 'urgent').length;
             const orderNeeded = items.filter(i => i.suggestedOrderQty > 0).length;
+            // 업체별 발주 합계
+            const supplierOrderSummary = SUPPLIERS.map(s => {
+              const sItems = allItems.filter(i => getSupplierForProduct(i.productCode).id === s.id);
+              const orderQty = sItems.reduce((sum, i) => sum + i.suggestedOrderQty, 0);
+              return { ...s, itemCount: sItems.length, orderQty };
+            });
 
             // 재고일수 Horizontal Bar 차트 데이터 (상위 15개)
             const daysBarData = items
@@ -648,9 +847,62 @@ export const InventoryOrderView: React.FC<Props> = ({
                   </div>
                 </div>
 
+                {/* D2: 업체별 탭 */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSupplierFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      supplierFilter === 'all'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+                    }`}
+                  >
+                    전체 ({allItems.length})
+                  </button>
+                  {supplierOrderSummary.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSupplierFilter(s.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        supplierFilter === s.id
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+                      }`}
+                    >
+                      {s.name} ({s.itemCount})
+                      {s.orderQty > 0 && <span className="ml-1 text-red-300">!</span>}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 선택 업체 발주 KPI */}
+                {supplierFilter !== 'all' && (() => {
+                  const sel = supplierOrderSummary.find(s => s.id === supplierFilter);
+                  return sel ? (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800 flex items-center gap-6">
+                      <div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">발주처</p>
+                        <p className="font-bold text-gray-900 dark:text-white">{sel.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">발주 방법</p>
+                        <p className="font-medium text-gray-700 dark:text-gray-300">{sel.methodLabel}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">리드타임</p>
+                        <p className="font-medium text-gray-700 dark:text-gray-300">{sel.leadTime}일</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">발주 필요 수량</p>
+                        <p className={`font-bold ${sel.orderQty > 0 ? 'text-red-600' : 'text-green-600'}`}>{sel.orderQty.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
                 {/* 재고일수 Bar 차트 */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">품목별 재고일수</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">품목별 재고일수{supplierFilter !== 'all' ? ` (${supplierOrderSummary.find(s => s.id === supplierFilter)?.name})` : ''}</h3>
                   {daysBarData.length > 0 ? (
                     <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
@@ -800,13 +1052,253 @@ export const InventoryOrderView: React.FC<Props> = ({
             );
           }
 
+          // ========== 재고비용 최적화 ==========
+          if (activeTab === 'inventoryCost') {
+            const ic = insights?.inventoryCost;
+            const COST_COLORS = ['#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'];
+            const ABC_COLORS: Record<string, string> = { A: '#EF4444', B: '#F59E0B', C: '#3B82F6', 'N/A': '#9CA3AF' };
+
+            // EOQ 비교 차트 데이터 (상위 10개)
+            const eoqCompare = (ic?.items || [])
+              .filter(item => item.eoq > 0 && item.annualDemand > 0)
+              .slice(0, 10)
+              .map(item => ({
+                name: item.productName.length > 10 ? item.productName.slice(0, 10) + '...' : item.productName,
+                현재발주량: item.annualDemand > 0 && item.orderFrequency > 0
+                  ? Math.round(item.annualDemand / item.orderFrequency)
+                  : 0,
+                EOQ: item.eoq,
+              }));
+
+            return (
+              <div className="space-y-6">
+                {/* KPI 카드 4개 */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">총 보유비용</p>
+                    <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(ic?.summary.totalHoldingCost || 0)}</p>
+                    <p className="text-xs text-gray-400 mt-1">연간 추정</p>
+                  </div>
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">총 발주비용</p>
+                    <p className="text-2xl font-bold text-yellow-600 mt-1">{formatCurrency(ic?.summary.totalOrderingCost || 0)}</p>
+                    <p className="text-xs text-gray-400 mt-1">연간 추정</p>
+                  </div>
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">총 품절비용</p>
+                    <p className={`text-2xl font-bold mt-1 ${(ic?.summary.totalStockoutCost || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {formatCurrency(ic?.summary.totalStockoutCost || 0)}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">기회비용 추정</p>
+                  </div>
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">총 재고비용</p>
+                    <p className="text-2xl font-bold text-purple-600 mt-1">{formatCurrency(ic?.summary.grandTotal || 0)}</p>
+                    <p className="text-xs text-gray-400 mt-1">보유+발주+품절+폐기</p>
+                  </div>
+                </div>
+
+                {/* 비용 구조 + EOQ 비교 */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* 비용 구조 파이차트 */}
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <span className="material-icons-outlined text-purple-500">donut_large</span>
+                      재고비용 구조
+                    </h3>
+                    {(ic?.costComposition?.length || 0) > 0 ? (
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={ic!.costComposition}
+                              cx="50%" cy="50%"
+                              innerRadius={50} outerRadius={80}
+                              paddingAngle={3}
+                              dataKey="value"
+                              nameKey="name"
+                              label={({ name, value }) => `${name} ${formatCurrency(value)}`}
+                            >
+                              {ic!.costComposition.map((_, i) => (
+                                <Cell key={i} fill={COST_COLORS[i % COST_COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                            <Legend wrapperStyle={{ fontSize: 12 }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
+                  </div>
+
+                  {/* EOQ vs 현재 발주량 비교 */}
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <span className="material-icons-outlined text-blue-500">compare_arrows</span>
+                      EOQ vs 현재 발주량
+                    </h3>
+                    {eoqCompare.length > 0 ? (
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={eoqCompare} layout="vertical" margin={{ left: 10, right: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" tick={{ fontSize: 10 }} />
+                            <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="현재발주량" fill="#9CA3AF" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="EOQ" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
+                  </div>
+                </div>
+
+                {/* D4: ABC 분류별 접기/펼치기 + 추천 액션 3개씩 */}
+                {(ic?.abcStrategies?.length || 0) > 0 && (() => {
+                  const ABC_ACTIONS: Record<string, { icon: string; title: string; desc: string }[]> = {
+                    A: [
+                      { icon: 'monitor_heart', title: '실시간 재고 모니터링', desc: '일 1회 이상 재고 수준 확인, 안전재고 근접 시 즉시 알림' },
+                      { icon: 'speed', title: 'JIT 발주 전환', desc: '적시 발주로 재고 보유비용 최소화, 리드타임 단축 협상' },
+                      { icon: 'tune', title: '안전재고 최적화', desc: '수요 변동 패턴 분석으로 안전재고 수준 주기적 재조정' },
+                    ],
+                    B: [
+                      { icon: 'calculate', title: 'EOQ 기반 정기 발주', desc: '경제적 주문량 계산으로 보유비용+발주비용 균형 최적화' },
+                      { icon: 'event_repeat', title: '발주 주기 표준화', desc: '주 1회 또는 격주 정기 발주로 관리 효율 향상' },
+                      { icon: 'diversity_3', title: '공급처 다변화', desc: '2~3개 대체 공급처 확보로 공급 리스크 분산' },
+                    ],
+                    C: [
+                      { icon: 'shopping_bag', title: '대량 구매 할인 협상', desc: '분기/반기 단위 대량 발주로 단가 절감 협상' },
+                      { icon: 'merge', title: '발주 통합', desc: '유사 품목 묶음 발주로 발주 횟수 및 물류비 절감' },
+                      { icon: 'smart_toy', title: '최소 관리 자동화', desc: '자동 발주 시스템 설정, 수동 관리 최소화' },
+                    ],
+                  };
+
+                  const abcGroups = ic!.abcStrategies.filter(s => s.abcClass !== 'N/A');
+                  const groupItems = (abcClass: string) =>
+                    (ic?.items || []).filter(item => item.abcClass === abcClass);
+
+                  return (
+                    <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span className="material-icons-outlined text-orange-500">category</span>
+                        ABC 분류별 전략 & 품목
+                      </h3>
+                      <div className="space-y-3">
+                        {abcGroups.map(s => {
+                          const isExpanded = expandedAbc === s.abcClass;
+                          const gItems = groupItems(s.abcClass);
+                          const actions = ABC_ACTIONS[s.abcClass] || [];
+                          return (
+                            <div key={s.abcClass} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                              {/* 헤더 (클릭 시 접기/펼치기) */}
+                              <button
+                                onClick={() => setExpandedAbc(isExpanded ? null : s.abcClass)}
+                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className="px-2.5 py-1 rounded text-sm font-bold text-white" style={{ backgroundColor: ABC_COLORS[s.abcClass] || '#9CA3AF' }}>
+                                    {s.abcClass}등급
+                                  </span>
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">{s.itemCount}개 품목</span>
+                                  <span className="text-sm text-gray-500">|</span>
+                                  <span className="text-sm font-medium text-gray-900 dark:text-white">총 비용: {formatCurrency(s.totalCost)}</span>
+                                </div>
+                                <span className="material-icons-outlined text-gray-400 transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                                  expand_more
+                                </span>
+                              </button>
+
+                              {/* 펼쳐진 내용 */}
+                              {isExpanded && (
+                                <div className="px-4 pb-4 space-y-4 border-t border-gray-100 dark:border-gray-800">
+                                  {/* 추천 액션 3개 */}
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                                    {actions.map((action, idx) => (
+                                      <div key={idx} className="rounded-lg p-3 border border-gray-200 dark:border-gray-700" style={{ backgroundColor: `${ABC_COLORS[s.abcClass]}08` }}>
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                          <span className="material-icons-outlined text-sm" style={{ color: ABC_COLORS[s.abcClass] }}>{action.icon}</span>
+                                          <span className="text-sm font-medium text-gray-900 dark:text-white">{action.title}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500">{action.desc}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* 그룹 품목 테이블 */}
+                                  {gItems.length > 0 && (
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                                            <th className="text-left py-2 px-2 text-gray-500">품목</th>
+                                            <th className="text-right py-2 px-2 text-blue-600">보유비용</th>
+                                            <th className="text-right py-2 px-2 text-yellow-600">발주비용</th>
+                                            <th className="text-right py-2 px-2 text-red-600">품절비용</th>
+                                            <th className="text-right py-2 px-2 text-gray-500">총비용</th>
+                                            <th className="text-right py-2 px-2 text-green-600">EOQ절감</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {gItems.slice(0, 15).map(item => (
+                                            <tr key={item.productCode} className="border-b border-gray-100 dark:border-gray-800">
+                                              <td className="py-1.5 px-2 text-gray-800 dark:text-gray-200 text-xs">{item.productName}</td>
+                                              <td className="py-1.5 px-2 text-right text-blue-600 text-xs">{formatCurrency(item.holdingCost)}</td>
+                                              <td className="py-1.5 px-2 text-right text-yellow-600 text-xs">{formatCurrency(item.orderingCost)}</td>
+                                              <td className="py-1.5 px-2 text-right text-red-500 text-xs">{formatCurrency(item.estimatedStockoutCost)}</td>
+                                              <td className="py-1.5 px-2 text-right font-medium text-gray-900 dark:text-white text-xs">{formatCurrency(item.totalCost)}</td>
+                                              <td className={`py-1.5 px-2 text-right text-xs font-medium ${item.eoqSaving > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                                {item.eoqSaving > 0 ? formatCurrency(item.eoqSaving) : '-'}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                          {/* 그룹 합계 */}
+                                          <tr className="border-t-2 border-gray-300 dark:border-gray-600 font-bold">
+                                            <td className="py-2 px-2 text-gray-900 dark:text-white text-xs">합계 ({gItems.length}개)</td>
+                                            <td className="py-2 px-2 text-right text-blue-600 text-xs">{formatCurrency(gItems.reduce((s, it) => s + it.holdingCost, 0))}</td>
+                                            <td className="py-2 px-2 text-right text-yellow-600 text-xs">{formatCurrency(gItems.reduce((s, it) => s + it.orderingCost, 0))}</td>
+                                            <td className="py-2 px-2 text-right text-red-500 text-xs">{formatCurrency(gItems.reduce((s, it) => s + it.estimatedStockoutCost, 0))}</td>
+                                            <td className="py-2 px-2 text-right text-gray-900 dark:text-white text-xs">{formatCurrency(gItems.reduce((s, it) => s + it.totalCost, 0))}</td>
+                                            <td className="py-2 px-2 text-right text-green-600 text-xs">{formatCurrency(gItems.reduce((s, it) => s + it.eoqSaving, 0))}</td>
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 수식 참고 */}
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-2">비용 계산 공식</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-500">
+                    <div><span className="font-medium">보유비용</span> = 평균재고 × 단가 × {Math.round(config.holdingCostRate * 100)}%/년</div>
+                    <div><span className="font-medium">발주비용</span> = 연간발주횟수 × {config.orderCost.toLocaleString()}원/건</div>
+                    <div><span className="font-medium">품절비용</span> = 위험도 × 일수요 × 단가 × 리드타임 × {config.stockoutCostMultiplier}</div>
+                    <div><span className="font-medium">EOQ</span> = &radic;(2 × 연수요 × 주문비 / 단위유지비)</div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
           // ========== 발주 분석 ==========
+          if (activeTab !== 'purchase') return null;
+
           const totalPurchaseAmount = purchases.reduce((s, p) => s + p.total, 0);
-          const supplierMap = new Map<string, number>();
+          const productAmountMap = new Map<string, number>();
           purchases.forEach(p => {
-            supplierMap.set(p.productName, (supplierMap.get(p.productName) || 0) + p.total);
+            productAmountMap.set(p.productName, (productAmountMap.get(p.productName) || 0) + p.total);
           });
-          const supplierData = Array.from(supplierMap.entries())
+          const top10Products = Array.from(productAmountMap.entries())
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10)
             .map(([name, amount]) => ({
@@ -814,14 +1306,32 @@ export const InventoryOrderView: React.FC<Props> = ({
               금액: amount,
             }));
 
-          const monthlyMap = new Map<string, number>();
-          purchases.forEach(p => {
-            const month = p.date.slice(0, 7);
-            monthlyMap.set(month, (monthlyMap.get(month) || 0) + p.total);
+          // D3: 상위 5개 품목 주간 구매추이
+          const top5Names = Array.from(productAmountMap.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([name]) => name);
+
+          const TOP5_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6'];
+
+          const weeklyPurchaseMap = groupByWeek(purchases, 'date');
+          const weeklyTop5Data = getSortedWeekEntries(weeklyPurchaseMap).map(([wk, items]) => {
+            const entry: Record<string, any> = { week: weekKeyToLabel(wk) };
+            top5Names.forEach(name => {
+              entry[name] = items.filter(p => p.productName === name).reduce((s, p) => s + p.total, 0);
+            });
+            return entry;
           });
-          const monthlyData = Array.from(monthlyMap.entries())
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([month, total]) => ({ month, 구매액: total }));
+
+          // 공급처별(품목별) 구매 비중 PieChart
+          const supplierPieData = Array.from(productAmountMap.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8)
+            .map(([name, amount]) => ({
+              name: name.length > 12 ? name.slice(0, 12) + '...' : name,
+              value: amount,
+            }));
+          const PIE_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#6366F1'];
 
           const uniqueProducts = new Set(purchases.map(p => p.productCode)).size;
 
@@ -846,35 +1356,79 @@ export const InventoryOrderView: React.FC<Props> = ({
                 </div>
               </div>
 
+              {/* D3: 상위 5개 품목 주간 구매추이 */}
+              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <span className="material-icons-outlined text-blue-500">trending_up</span>
+                  주요 품목 주간 구매추이 (상위 5)
+                </h3>
+                {weeklyTop5Data.length > 0 ? (
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={weeklyTop5Data} margin={{ left: 10, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="week" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" height={45} />
+                        <YAxis tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
+                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        {top5Names.map((name, idx) => (
+                          <Line
+                            key={name}
+                            type="monotone"
+                            dataKey={name}
+                            stroke={TOP5_COLORS[idx]}
+                            strokeWidth={2}
+                            dot={{ r: 2 }}
+                            name={name.length > 12 ? name.slice(0, 12) + '...' : name}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : <p className="text-gray-400 text-center py-10">구매 데이터 없음</p>}
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 품목별 구매금액 Top10 */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">품목별 구매 금액</h3>
-                  {supplierData.length > 0 ? (
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">품목별 구매 금액 Top10</h3>
+                  {top10Products.length > 0 ? (
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={supplierData} layout="vertical" margin={{ left: 10, right: 20 }}>
+                        <BarChart data={top10Products} layout="vertical" margin={{ left: 10, right: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                           <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
                           <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 10 }} />
-                          <Tooltip formatter={(v: number) => `₩${v.toLocaleString()}`} />
+                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
                           <Bar dataKey="금액" fill="#3B82F6" radius={[0, 4, 4, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">구매 데이터 없음</p>}
                 </div>
+
+                {/* D3: 공급처별 구매 비중 PieChart */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">월별 구매 추이</h3>
-                  {monthlyData.length > 0 ? (
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">품목별 구매 비중</h3>
+                  {supplierPieData.length > 0 ? (
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={monthlyData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
-                          <Tooltip formatter={(v: number) => `₩${v.toLocaleString()}`} />
-                          <Line type="monotone" dataKey="구매액" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
-                        </LineChart>
+                        <PieChart>
+                          <Pie
+                            data={supplierPieData}
+                            cx="50%" cy="50%"
+                            innerRadius={45} outerRadius={75}
+                            paddingAngle={2}
+                            dataKey="value"
+                            nameKey="name"
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          >
+                            {supplierPieData.map((_, i) => (
+                              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        </PieChart>
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">구매 데이터 없음</p>}
@@ -902,6 +1456,39 @@ export const InventoryOrderView: React.FC<Props> = ({
                             <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.skuName}</td>
                             <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{item.currentStock}</td>
                             <td className="py-2 px-3 text-right text-orange-600 font-medium">{item.turnoverRate.toFixed(1)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 주간 구매 추이 테이블 */}
+              {weeklyTop5Data.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 구매 추이 (상위 5 품목)</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 text-gray-500">주차</th>
+                          {top5Names.map((name, idx) => (
+                            <th key={name} className="text-right py-2 px-3" style={{ color: TOP5_COLORS[idx] }}>
+                              {name.length > 8 ? name.slice(0, 8) + '...' : name}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {weeklyTop5Data.slice(-8).map((row, i) => (
+                          <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
+                            <td className="py-2 px-3 text-gray-600 dark:text-gray-400 text-xs">{row.week}</td>
+                            {top5Names.map(name => (
+                              <td key={name} className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">
+                                {(row[name] as number) > 0 ? formatCurrency(row[name] as number) : '-'}
+                              </td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>
