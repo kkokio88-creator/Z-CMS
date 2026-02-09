@@ -1156,6 +1156,160 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
+      {/* 뷰 표시 임계값 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/20">
+          <h3 className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center">
+            <span className="material-icons-outlined mr-2">tune</span>
+            뷰 표시 임계값
+          </h3>
+          <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">각 대시보드 화면의 색상 분기·경고 기준값</p>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              마진율 양호 기준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={config.profitMarginGood}
+                onChange={e => updateConfig({ profitMarginGood: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 값 이상이면 녹색(양호)으로 표시</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              단가상승 경고 기준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value={config.priceIncreaseThreshold}
+                onChange={e => updateConfig({ priceIncreaseThreshold: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 값 이상 상승한 원재료를 경고 표시</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              이상점수 주의 기준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="5"
+                min="0"
+                max="100"
+                value={config.anomalyScoreWarning}
+                onChange={e => updateConfig({ anomalyScoreWarning: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">점</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 점수 이상이면 주의(주황) 표시</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              이상점수 고위험 기준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="5"
+                min="0"
+                max="100"
+                value={config.anomalyScoreHigh}
+                onChange={e => updateConfig({ anomalyScoreHigh: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">점</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 점수 이상이면 고위험으로 분류</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              이상점수 위험 기준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="5"
+                min="0"
+                max="100"
+                value={config.anomalyScoreCritical}
+                onChange={e => updateConfig({ anomalyScoreCritical: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">점</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 점수 이상이면 위험(빨강) 표시</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              재고일수 긴급 기준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                value={config.stockDaysUrgent}
+                onChange={e => updateConfig({ stockDaysUrgent: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">일</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 일수 미만이면 긴급(빨강) 표시</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              재고일수 주의 기준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                value={config.stockDaysWarning}
+                onChange={e => updateConfig({ stockDaysWarning: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">일</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 일수 미만이면 주의(주황) 표시</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              저회전 판단 기준
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                value={config.lowTurnoverThreshold}
+                onChange={e => updateConfig({ lowTurnoverThreshold: Number(e.target.value) })}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
+              />
+              <span className="text-sm text-gray-500">회전율</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">이 값 미만이면 저회전 품목으로 분류</p>
+          </div>
+        </div>
+      </div>
+
       {/* 채널 비용 관리 */}
       <ChannelCostAdmin />
 

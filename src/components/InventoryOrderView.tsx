@@ -9,6 +9,7 @@ import { InventorySafetyItem, StocktakeAnomalyItem } from '../types';
 import type { PurchaseData } from '../services/googleSheetService';
 import type { DashboardInsights, StatisticalOrderInsight } from '../services/insightService';
 import { computeStatisticalOrder } from '../services/insightService';
+import { useBusinessConfig } from '../contexts/SettingsContext';
 
 interface Props {
   inventoryData: InventorySafetyItem[];
@@ -162,6 +163,7 @@ export const InventoryOrderView: React.FC<Props> = ({
   stocktakeAnomalies,
   onItemClick,
 }) => {
+  const config = useBusinessConfig();
   const materialPrices = insights?.materialPrices;
   const [serviceLevel, setServiceLevel] = useState(95);
   const [orderDate, setOrderDate] = useState(formatDateStr(new Date()));
@@ -174,14 +176,14 @@ export const InventoryOrderView: React.FC<Props> = ({
 
   // 서비스 수준 변경 시 재계산
   const statisticalOrder: StatisticalOrderInsight | null = useMemo(() => {
-    if (insights?.statisticalOrder && serviceLevel === 95) {
+    if (insights?.statisticalOrder && serviceLevel === config.defaultServiceLevel) {
       return insights.statisticalOrder;
     }
     if (inventoryData.length > 0 && purchases.length > 0) {
-      return computeStatisticalOrder(inventoryData, purchases, serviceLevel);
+      return computeStatisticalOrder(inventoryData, purchases, config, serviceLevel);
     }
     return null;
-  }, [inventoryData, purchases, serviceLevel, insights?.statisticalOrder]);
+  }, [inventoryData, purchases, serviceLevel, config, insights?.statisticalOrder]);
 
   const tabs = [
     { key: 'inventory', label: '재고 현황', icon: 'inventory_2' },
@@ -335,7 +337,7 @@ export const InventoryOrderView: React.FC<Props> = ({
           // ========== 이상징후 분석 ==========
           if (activeTab === 'anomaly') {
             const sortedAnomalies = [...stocktakeAnomalies].sort((a, b) => b.anomalyScore - a.anomalyScore);
-            const highScoreCount = sortedAnomalies.filter(a => a.anomalyScore >= 70).length;
+            const highScoreCount = sortedAnomalies.filter(a => a.anomalyScore >= config.anomalyScoreHigh).length;
             const avgScore = sortedAnomalies.length > 0
               ? Math.round(sortedAnomalies.reduce((s, a) => s + a.anomalyScore, 0) / sortedAnomalies.length)
               : 0;
@@ -348,12 +350,12 @@ export const InventoryOrderView: React.FC<Props> = ({
                     <p className="text-2xl font-bold text-red-600 mt-1">{sortedAnomalies.length}건</p>
                   </div>
                   <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">고위험 (70점+)</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">고위험 ({config.anomalyScoreHigh}점+)</p>
                     <p className={`text-2xl font-bold mt-1 ${highScoreCount > 0 ? 'text-red-600' : 'text-green-600'}`}>{highScoreCount}건</p>
                   </div>
                   <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                     <p className="text-xs text-gray-500 dark:text-gray-400">평균 이상점수</p>
-                    <p className={`text-2xl font-bold mt-1 ${avgScore >= 60 ? 'text-orange-600' : 'text-green-600'}`}>{avgScore}점</p>
+                    <p className={`text-2xl font-bold mt-1 ${avgScore >= config.anomalyScoreWarning ? 'text-orange-600' : 'text-green-600'}`}>{avgScore}점</p>
                   </div>
                 </div>
 
@@ -392,8 +394,8 @@ export const InventoryOrderView: React.FC<Props> = ({
                                 <td className="py-2 px-3 text-right text-purple-600">{item.aiExpectedQty}</td>
                                 <td className="py-2 px-3 text-center">
                                   <span className={`inline-block w-10 text-center px-1 py-0.5 rounded text-xs font-bold ${
-                                    item.anomalyScore >= 80 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                    : item.anomalyScore >= 60 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                    item.anomalyScore >= config.anomalyScoreCritical ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                    : item.anomalyScore >= config.anomalyScoreWarning ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
                                     : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                                   }`}>
                                     {item.anomalyScore}
@@ -570,7 +572,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                                 <td className="py-2 px-2 text-right text-blue-600 font-medium">{item.rop}</td>
                                 <td className="py-2 px-2 text-right text-purple-600">{item.safetyStock}</td>
                                 <td className={`py-2 px-2 text-right font-medium ${
-                                  item.daysOfStock < 3 ? 'text-red-600' : item.daysOfStock < 7 ? 'text-orange-600' : 'text-gray-600'
+                                  item.daysOfStock < config.stockDaysUrgent ? 'text-red-600' : item.daysOfStock < config.stockDaysWarning ? 'text-orange-600' : 'text-gray-600'
                                 }`}>
                                   {item.daysOfStock >= 999 ? '-' : `${item.daysOfStock}일`}
                                 </td>
@@ -626,7 +628,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                       <span className="font-medium">EOQ</span> = &radic;(2DS / H)
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">* 리드타임: 발주처별 상이, 주문비용: 50,000원, 유지비율: 단가의 20%/년</p>
+                  <p className="text-xs text-gray-400 mt-2">* 리드타임: {config.defaultLeadTime}일(±{config.leadTimeStdDev}), 주문비용: {config.orderCost.toLocaleString()}원, 유지비율: 단가의 {Math.round(config.holdingCostRate * 100)}%/년</p>
                 </div>
               </div>
             );
@@ -658,7 +660,7 @@ export const InventoryOrderView: React.FC<Props> = ({
           const uniqueProducts = new Set(purchases.map(p => p.productCode)).size;
 
           const lowTurnover = inventoryData
-            .filter(i => i.turnoverRate < 1 && i.currentStock > 0)
+            .filter(i => i.turnoverRate < config.lowTurnoverThreshold && i.currentStock > 0)
             .sort((a, b) => a.turnoverRate - b.turnoverRate);
 
           return (
@@ -717,7 +719,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-icons-outlined text-orange-500">hourglass_empty</span>
-                    저회전 품목 (회전율 &lt; 1)
+                    저회전 품목 (회전율 &lt; {config.lowTurnoverThreshold})
                   </h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">

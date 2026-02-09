@@ -7,6 +7,7 @@ import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW } from '../utils/format';
 import type { PurchaseData, UtilityData, ProductionData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation } from '../services/insightService';
+import { useBusinessConfig } from '../contexts/SettingsContext';
 
 interface Props {
   purchases: PurchaseData[];
@@ -84,6 +85,7 @@ export const CostManagementView: React.FC<Props> = ({
   insights,
   onItemClick,
 }) => {
+  const config = useBusinessConfig();
   const costBreakdown = insights?.costBreakdown;
   const materialPrices = insights?.materialPrices;
   const utilityCosts = insights?.utilityCosts;
@@ -98,7 +100,7 @@ export const CostManagementView: React.FC<Props> = ({
   const allRawItems = materialPrices?.items || [];
   const filteredRawItems = (() => {
     switch (rawFilter) {
-      case 'priceUp': return allRawItems.filter(m => m.changeRate >= 10);
+      case 'priceUp': return allRawItems.filter(m => m.changeRate >= config.priceIncreaseThreshold);
       case 'priceDown': return allRawItems.filter(m => m.changeRate < 0);
       case 'top10': return [...allRawItems].sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 10);
       default: return allRawItems;
@@ -213,7 +215,7 @@ export const CostManagementView: React.FC<Props> = ({
         // ========== 원재료 ==========
         if (activeTab === 'raw') {
           const rawDetail = costBreakdown?.rawMaterialDetail;
-          const priceUpCount = allRawItems.filter(m => m.changeRate >= 10).length;
+          const priceUpCount = allRawItems.filter(m => m.changeRate >= config.priceIncreaseThreshold).length;
           const selectedItem = selectedMaterial ? allRawItems.find(m => m.productCode === selectedMaterial) : null;
 
           // 필터에 따른 월별 데이터
@@ -238,7 +240,7 @@ export const CostManagementView: React.FC<Props> = ({
                   <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(rawDetail?.total || 0)}</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">단가 10%↑ 품목</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">단가 {config.priceIncreaseThreshold}%↑ 품목</p>
                   <p className={`text-2xl font-bold mt-1 ${priceUpCount > 0 ? 'text-red-600' : 'text-green-600'}`}>{priceUpCount}건</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -251,7 +253,7 @@ export const CostManagementView: React.FC<Props> = ({
               <FilterBar
                 filters={[
                   { key: 'all', label: '전체' },
-                  { key: 'priceUp', label: '단가상승(10%↑)' },
+                  { key: 'priceUp', label: `단가상승(${config.priceIncreaseThreshold}%↑)` },
                   { key: 'priceDown', label: '단가하락' },
                   { key: 'top10', label: '상위10(금액순)' },
                 ]}
@@ -291,7 +293,7 @@ export const CostManagementView: React.FC<Props> = ({
                           <Tooltip formatter={(v: number) => `₩${v.toLocaleString()}`} />
                           <Bar dataKey="금액" radius={[0, 4, 4, 0]}>
                             {filteredBarData.map((entry, i) => (
-                              <Cell key={i} fill={entry.변동률 >= 10 ? '#EF4444' : entry.변동률 < 0 ? '#10B981' : '#3B82F6'} />
+                              <Cell key={i} fill={entry.변동률 >= config.priceIncreaseThreshold ? '#EF4444' : entry.변동률 < 0 ? '#10B981' : '#3B82F6'} />
                             ))}
                           </Bar>
                         </BarChart>

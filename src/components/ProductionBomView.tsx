@@ -7,6 +7,7 @@ import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
 import type { ProductionData } from '../services/googleSheetService';
 import type { DashboardInsights } from '../services/insightService';
+import { useBusinessConfig } from '../contexts/SettingsContext';
 
 interface Props {
   production: ProductionData[];
@@ -65,6 +66,7 @@ const FilterBar: React.FC<{
 );
 
 export const ProductionBomView: React.FC<Props> = ({ production, insights, onItemClick }) => {
+  const config = useBusinessConfig();
   const wasteAnalysis = insights?.wasteAnalysis;
   const prodEfficiency = insights?.productionEfficiency;
 
@@ -298,13 +300,13 @@ export const ProductionBomView: React.FC<Props> = ({ production, insights, onIte
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">평균 폐기율</p>
-                  <p className={`text-2xl font-bold mt-1 ${avgRate > 2.5 ? 'text-red-600' : 'text-green-600'}`}>
+                  <p className={`text-2xl font-bold mt-1 ${avgRate > config.wasteThresholdPct ? 'text-red-600' : 'text-green-600'}`}>
                     {formatPercent(avgRate)}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">목표: 2.5%</p>
+                  <p className="text-xs text-gray-400 mt-1">목표: {config.wasteThresholdPct}%</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">3% 초과일</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{config.wasteThresholdPct}% 초과일</p>
                   <p className={`text-2xl font-bold mt-1 ${highDays.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {highDays.length}일
                   </p>
@@ -336,12 +338,12 @@ export const ProductionBomView: React.FC<Props> = ({ production, insights, onIte
                 ) : <p className="text-gray-400 text-center py-10">생산 데이터 없음</p>}
               </div>
 
-              {/* 3% 초과일 테이블 */}
+              {/* 폐기율 초과일 테이블 */}
               {highDays.length > 0 && (
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-icons-outlined text-red-500">warning</span>
-                    폐기율 3% 초과일
+                    폐기율 {config.wasteThresholdPct}% 초과일
                   </h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -359,7 +361,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, insights, onIte
                             <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
                             <td className="py-2 px-3 text-right font-medium text-red-600">{formatPercent(d.rate)}</td>
                             <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.qty)}</td>
-                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.qty * 1000)}</td>
+                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.qty * config.wasteUnitCost)}</td>
                           </tr>
                         ))}
                       </tbody>

@@ -7,6 +7,7 @@ import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { DailySalesData, SalesDetailData } from '../services/googleSheetService';
 import type { DashboardInsights } from '../services/insightService';
+import { useBusinessConfig } from '../contexts/SettingsContext';
 
 interface Props {
   dailySales: DailySalesData[];
@@ -25,6 +26,7 @@ const formatDate = (d: string) => {
 };
 
 export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, insights, onItemClick }) => {
+  const config = useBusinessConfig();
   const channelRevenue = insights?.channelRevenue;
   const productProfit = insights?.productProfit;
   const revenueTrend = insights?.revenueTrend;
@@ -186,7 +188,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, i
                             <td className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(item.revenue)}</td>
                             <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.cost)}</td>
                             <td className={`py-2 px-3 text-right font-medium ${item.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(item.margin)}</td>
-                            <td className={`py-2 px-3 text-right ${item.marginRate >= 20 ? 'text-green-600' : item.marginRate >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                            <td className={`py-2 px-3 text-right ${item.marginRate >= config.profitMarginGood ? 'text-green-600' : item.marginRate >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
                               {formatPercent(item.marginRate)}
                             </td>
                           </tr>
