@@ -313,6 +313,34 @@ export interface DashboardInsights {
   limitPrice: LimitPriceInsight | null;
   bomVariance: BomVarianceInsight | null;
   productBEP: ProductBEPInsight | null;
+  yieldTracking: YieldTrackingInsight | null;
+}
+
+export interface YieldDailyItem {
+  date: string;
+  productionQty: number;       // 생산 수량
+  productionKg: number;        // 생산 kg
+  wasteQty: number;            // 완성품 폐기 수량
+  wasteKg: number;             // 반제품 폐기 kg
+  yieldRate: number;           // 수율 (%, 수량 기준)
+  yieldRateKg: number;         // 수율 (%, kg 기준)
+  standardYield: number;       // 기준 수율
+  yieldGap: number;            // 수율 차이 (실제 - 기준)
+  unitCost: number;            // 단위당 원가
+  adjustedUnitCost: number;    // 수율 반영 환산단가
+}
+
+export interface YieldTrackingInsight {
+  daily: YieldDailyItem[];
+  weekly: { weekLabel: string; avgYield: number; avgYieldKg: number; standardYield: number; totalQty: number; totalWaste: number; avgAdjustedCost: number }[];
+  avgYieldRate: number;        // 평균 수율
+  standardYield: number;       // 기준 수율
+  yieldGap: number;            // 수율 차이
+  avgUnitCost: number;         // 평균 단위원가
+  avgAdjustedUnitCost: number; // 평균 환산단가
+  costImpact: number;          // 수율 손실 금액
+  lowYieldDays: number;        // 기준 미달 일수
+  totalDays: number;           // 총 생산 일수
 }
 
 // ==============================
@@ -1564,6 +1592,123 @@ export function computeProductBEP(
 }
 
 // ==============================
+// P4-3 수율 추적 대시보드
+// ==============================
+
+export function computeYieldTracking(
+  production: ProductionData[],
+  purchases: PurchaseData[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+): YieldTrackingInsight {
+  if (production.length === 0) {
+    return {
+      daily: [], weekly: [],
+      avgYieldRate: 0, standardYield: 0, yieldGap: 0,
+      avgUnitCost: 0, avgAdjustedUnitCost: 0, costImpact: 0,
+      lowYieldDays: 0, totalDays: 0,
+    };
+  }
+
+  const standardYield = 100 - (config.wasteThresholdPct || 3);
+
+  // 총 구매금액 (원가 추정용)
+  const totalPurchaseCost = purchases.reduce((s, p) => s + p.total, 0);
+  const totalProductionQty = production.reduce((s, p) => s + p.prodQtyTotal, 0);
+  const avgUnitCost = totalProductionQty > 0 ? Math.round(totalPurchaseCost / totalProductionQty) : 0;
+
+  // 일별 수율
+  const sorted = [...production].sort((a, b) => a.date.localeCompare(b.date));
+  let lowYieldDays = 0;
+  let yieldSum = 0;
+  let yieldKgSum = 0;
+  let adjustedCostSum = 0;
+  let validDays = 0;
+  let totalWasteQty = 0;
+
+  const daily: YieldDailyItem[] = sorted
+    .filter(p => p.prodQtyTotal > 0)
+    .map(p => {
+      const yieldRate = 100 - p.wasteFinishedPct;
+      const yieldRateKg = p.prodKgTotal > 0 && p.wasteSemiKg >= 0
+        ? Math.round((1 - p.wasteSemiPct / 100) * 1000) / 10
+        : yieldRate;
+
+      const yieldGap = Math.round((yieldRate - standardYield) * 10) / 10;
+      if (yieldRate < standardYield) lowYieldDays++;
+
+      // 환산단가 = 단위원가 / (수율/100)
+      const adjustedUnitCost = yieldRate > 0 ? Math.round(avgUnitCost / (yieldRate / 100)) : 0;
+
+      yieldSum += yieldRate;
+      yieldKgSum += yieldRateKg;
+      adjustedCostSum += adjustedUnitCost;
+      validDays++;
+      totalWasteQty += p.wasteFinishedEa;
+
+      return {
+        date: p.date,
+        productionQty: p.prodQtyTotal,
+        productionKg: p.prodKgTotal,
+        wasteQty: p.wasteFinishedEa,
+        wasteKg: p.wasteSemiKg,
+        yieldRate: Math.round(yieldRate * 10) / 10,
+        yieldRateKg: Math.round(yieldRateKg * 10) / 10,
+        standardYield,
+        yieldGap,
+        unitCost: avgUnitCost,
+        adjustedUnitCost,
+      };
+    });
+
+  // 주간 집계
+  const weekMap = new Map<string, { yields: number[]; yieldsKg: number[]; totalQty: number; totalWaste: number; adjustedCosts: number[] }>();
+  daily.forEach(d => {
+    const date = new Date(d.date);
+    const dayOfWeek = date.getDay();
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - ((dayOfWeek + 6) % 7));
+    const weekLabel = `${(monday.getMonth() + 1).toString().padStart(2, '0')}/${monday.getDate().toString().padStart(2, '0')}`;
+
+    const existing = weekMap.get(weekLabel) || { yields: [], yieldsKg: [], totalQty: 0, totalWaste: 0, adjustedCosts: [] };
+    existing.yields.push(d.yieldRate);
+    existing.yieldsKg.push(d.yieldRateKg);
+    existing.totalQty += d.productionQty;
+    existing.totalWaste += d.wasteQty;
+    existing.adjustedCosts.push(d.adjustedUnitCost);
+    weekMap.set(weekLabel, existing);
+  });
+
+  const weekly = Array.from(weekMap.entries()).map(([weekLabel, data]) => ({
+    weekLabel,
+    avgYield: Math.round(data.yields.reduce((s, v) => s + v, 0) / data.yields.length * 10) / 10,
+    avgYieldKg: Math.round(data.yieldsKg.reduce((s, v) => s + v, 0) / data.yieldsKg.length * 10) / 10,
+    standardYield,
+    totalQty: data.totalQty,
+    totalWaste: data.totalWaste,
+    avgAdjustedCost: Math.round(data.adjustedCosts.reduce((s, v) => s + v, 0) / data.adjustedCosts.length),
+  }));
+
+  const avgYieldRate = validDays > 0 ? Math.round(yieldSum / validDays * 10) / 10 : 0;
+  const avgAdjustedUnitCost = validDays > 0 ? Math.round(adjustedCostSum / validDays) : 0;
+
+  // 수율 손실 비용 = 폐기수량 × 단위원가
+  const costImpact = totalWasteQty * avgUnitCost;
+
+  return {
+    daily,
+    weekly,
+    avgYieldRate,
+    standardYield,
+    yieldGap: Math.round((avgYieldRate - standardYield) * 10) / 10,
+    avgUnitCost,
+    avgAdjustedUnitCost,
+    costImpact,
+    lowYieldDays,
+    totalDays: validDays,
+  };
+}
+
+// ==============================
 // 통합 인사이트 계산
 // ==============================
 
@@ -1609,6 +1754,10 @@ export function computeAllInsights(
     ? computeProductBEP(productProfit, channelRevenue, config)
     : null;
 
+  const yieldTracking = production.length > 0
+    ? computeYieldTracking(production, purchases, config)
+    : null;
+
   const recommendations = generateRecommendations(
     materialPrices,
     wasteAnalysis,
@@ -1633,5 +1782,6 @@ export function computeAllInsights(
     limitPrice,
     bomVariance,
     productBEP,
+    yieldTracking,
   };
 }

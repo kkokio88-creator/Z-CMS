@@ -6,7 +6,7 @@ import {
 import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
 import type { ProductionData, PurchaseData } from '../services/googleSheetService';
-import type { DashboardInsights, BomVarianceInsight } from '../services/insightService';
+import type { DashboardInsights, BomVarianceInsight, YieldTrackingInsight } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 
 interface Props {
@@ -71,6 +71,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
   const wasteAnalysis = insights?.wasteAnalysis;
   const prodEfficiency = insights?.productionEfficiency;
   const bomVariance = insights?.bomVariance || null;
+  const yieldTracking = insights?.yieldTracking || null;
 
   const [prodFilter, setProdFilter] = useState('all');
   const [wasteFilter, setWasteFilter] = useState('all');
@@ -116,6 +117,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
     { key: 'waste', label: '폐기 분석', icon: 'delete_outline' },
     { key: 'efficiency', label: '생산성 분석', icon: 'speed' },
     { key: 'bomVariance', label: 'BOM 오차', icon: 'compare_arrows' },
+    { key: 'yield', label: '수율 추적', icon: 'science' },
   ];
 
   return (
@@ -612,6 +614,155 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   </div>
                 ) : <p className="text-gray-400 text-center py-10">구매/생산 데이터가 충분하지 않습니다.</p>}
               </div>
+            </div>
+          );
+        }
+
+        // ========== 수율 추적 ==========
+        if (activeTab === 'yield') {
+          return (
+            <div className="space-y-6">
+              {/* KPI */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">기준 수율</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{yieldTracking?.standardYield || 0}%</p>
+                  <p className="text-xs text-gray-400 mt-1">폐기 허용 {config.wasteThresholdPct}%</p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">실제 수율</p>
+                  <p className={`text-2xl font-bold mt-1 ${
+                    (yieldTracking?.avgYieldRate || 0) >= (yieldTracking?.standardYield || 0) ? 'text-green-600' : 'text-red-600'
+                  }`}>{yieldTracking?.avgYieldRate || 0}%</p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">수율 차이</p>
+                  <p className={`text-2xl font-bold mt-1 ${
+                    (yieldTracking?.yieldGap || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {(yieldTracking?.yieldGap || 0) > 0 ? '+' : ''}{yieldTracking?.yieldGap || 0}%p
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">환산단가</p>
+                  <p className="text-2xl font-bold text-indigo-600 mt-1">{formatCurrency(yieldTracking?.avgAdjustedUnitCost || 0)}</p>
+                  <p className="text-xs text-gray-400 mt-1">원가 {formatCurrency(yieldTracking?.avgUnitCost || 0)}</p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">수율 손실 비용</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(yieldTracking?.costImpact || 0)}</p>
+                  <p className="text-xs text-gray-400 mt-1">기준 미달 {yieldTracking?.lowYieldDays || 0}/{yieldTracking?.totalDays || 0}일</p>
+                </div>
+              </div>
+
+              {/* 주간 수율 추이 차트 */}
+              {yieldTracking && yieldTracking.weekly.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span className="material-icons-outlined text-green-500">show_chart</span>
+                    주간 수율 추이
+                  </h3>
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={yieldTracking.weekly} margin={{ top: 10, right: 40, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="weekLabel" tick={{ fontSize: 11 }} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 10 }} domain={[85, 100]} tickFormatter={v => `${v}%`} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
+                        <Tooltip formatter={(v: number, name: string) =>
+                          name === '환산단가' ? formatCurrency(v) : `${v}%`
+                        } />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="avgYield" name="실제 수율" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="standardYield" name="기준 수율" stroke="#EF4444" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                        <Line yAxisId="right" type="monotone" dataKey="avgAdjustedCost" name="환산단가" stroke="#8B5CF6" strokeWidth={2} dot={{ r: 3 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* 주간 생산/폐기 Bar 차트 */}
+              {yieldTracking && yieldTracking.weekly.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span className="material-icons-outlined text-blue-500">bar_chart</span>
+                    주간 생산량 vs 폐기량
+                  </h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={yieldTracking.weekly} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="weekLabel" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 10 }} tickFormatter={formatQty} />
+                        <Tooltip formatter={(v: number, name: string) => formatQty(v)} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="totalQty" name="생산량" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="totalWaste" name="폐기량" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* 일별 수율 상세 테이블 */}
+              {yieldTracking && yieldTracking.daily.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                    <span className="material-icons-outlined text-orange-500">science</span>
+                    일별 수율 상세
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    환산단가 = 단위원가 / 수율 | 수율 기준 미달일은 빨간 배경
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 text-gray-500">날짜</th>
+                          <th className="text-right py-2 px-3 text-gray-500">생산(ea)</th>
+                          <th className="text-right py-2 px-3 text-gray-500">생산(kg)</th>
+                          <th className="text-right py-2 px-3 text-gray-500">폐기(ea)</th>
+                          <th className="text-right py-2 px-3 text-gray-500">수율(%)</th>
+                          <th className="text-right py-2 px-3 text-gray-500">기준</th>
+                          <th className="text-right py-2 px-3 text-gray-500">차이</th>
+                          <th className="text-right py-2 px-3 text-gray-500">단위원가</th>
+                          <th className="text-right py-2 px-3 text-gray-500">환산단가</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {yieldTracking.daily.slice(-30).reverse().map(d => (
+                          <tr key={d.date} className={`border-b border-gray-100 dark:border-gray-800 ${
+                            d.yieldGap < 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''
+                          }`}>
+                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
+                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.productionQty)}</td>
+                            <td className="py-2 px-3 text-right text-gray-500">{d.productionKg > 0 ? formatQty(d.productionKg) : '-'}</td>
+                            <td className="py-2 px-3 text-right text-red-500">{d.wasteQty > 0 ? formatQty(d.wasteQty) : '-'}</td>
+                            <td className={`py-2 px-3 text-right font-medium ${
+                              d.yieldRate >= d.standardYield ? 'text-green-600' : 'text-red-600'
+                            }`}>{d.yieldRate}%</td>
+                            <td className="py-2 px-3 text-right text-gray-400">{d.standardYield}%</td>
+                            <td className={`py-2 px-3 text-right font-medium ${
+                              d.yieldGap >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {d.yieldGap > 0 ? '+' : ''}{d.yieldGap}%p
+                            </td>
+                            <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(d.unitCost)}</td>
+                            <td className={`py-2 px-3 text-right font-medium ${
+                              d.adjustedUnitCost > d.unitCost * 1.1 ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'
+                            }`}>{formatCurrency(d.adjustedUnitCost)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {(!yieldTracking || yieldTracking.daily.length === 0) && (
+                <p className="text-gray-400 text-center py-10">생산 데이터가 없습니다.</p>
+              )}
             </div>
           );
         }
