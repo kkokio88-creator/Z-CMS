@@ -13,15 +13,35 @@ import type {
 import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
 import { BusinessConfig, DEFAULT_BUSINESS_CONFIG } from '../config/businessConfig';
+import type { ChannelCostSummary } from '../components/ChannelCostAdmin';
 
 // ==============================
 // 타입 정의
 // ==============================
 
+export interface ChannelProfitDetail {
+  name: string;
+  revenue: number;
+  share: number;
+  directCost: number;        // 직접재료비 (매출비례 배분)
+  profit1: number;            // 1단계: 제품이익 = 매출 - 직접재료비
+  channelVariableCost: number; // 채널 변동비 합계
+  profit2: number;            // 2단계: 채널이익 = 1단계 - 채널변동비
+  channelFixedCost: number;   // 채널 고정비 (일할계산)
+  profit3: number;            // 3단계: 사업부이익 = 2단계 - 채널고정비
+  marginRate1: number;        // 1단계 마진율
+  marginRate2: number;        // 2단계 마진율
+  marginRate3: number;        // 3단계 마진율
+}
+
 export interface ChannelRevenueInsight {
-  channels: { name: string; revenue: number; share: number }[];
+  channels: ChannelProfitDetail[];
   dailyTrend: { date: string; jasa: number; coupang: number; kurly: number; total: number }[];
   totalRevenue: number;
+  totalDirectCost: number;
+  totalProfit1: number;
+  totalProfit2: number;
+  totalProfit3: number;
 }
 
 export interface ProductProfitInsight {
@@ -43,8 +63,11 @@ export interface RevenueTrendInsight {
   monthly: {
     month: string;
     revenue: number;
-    profit: number;
-    marginRate: number;
+    cost: number;        // 직접재료비
+    profit1: number;     // 1단계 이익
+    profit2: number;     // 2단계 이익 (채널변동비 차감)
+    profit: number;      // 3단계 이익 (= profit3, 기존 필드 유지)
+    marginRate: number;  // 3단계 마진율
     prevMonthChange: number;
   }[];
 }
@@ -185,7 +208,12 @@ export interface DashboardInsights {
 // 분석 함수
 // ==============================
 
-export function computeChannelRevenue(dailySales: DailySalesData[]): ChannelRevenueInsight {
+export function computeChannelRevenue(
+  dailySales: DailySalesData[],
+  purchases: PurchaseData[] = [],
+  channelCosts: ChannelCostSummary[] = [],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+): ChannelRevenueInsight {
   let totalJasa = 0, totalCoupang = 0, totalKurly = 0;
 
   const dailyTrend = dailySales.map(d => {
@@ -202,14 +230,72 @@ export function computeChannelRevenue(dailySales: DailySalesData[]): ChannelReve
   });
 
   const totalRevenue = totalJasa + totalCoupang + totalKurly;
+  // 직접재료비: 모든 구매비용 합계
+  const totalDirectCost = purchases.reduce((sum, p) => sum + p.total, 0);
+  // 조회 기간 일수 (고정비 일할계산용)
+  const periodDays = dailySales.length || 1;
 
-  const channels = [
-    { name: '자사몰', revenue: totalJasa, share: totalRevenue > 0 ? (totalJasa / totalRevenue) * 100 : 0 },
-    { name: '쿠팡', revenue: totalCoupang, share: totalRevenue > 0 ? (totalCoupang / totalRevenue) * 100 : 0 },
-    { name: '컬리', revenue: totalKurly, share: totalRevenue > 0 ? (totalKurly / totalRevenue) * 100 : 0 },
+  // 채널별 비용 요약 맵
+  const costMap = new Map<string, ChannelCostSummary>();
+  channelCosts.forEach(c => costMap.set(c.channelName, c));
+
+  const channelData: { name: string; revenue: number }[] = [
+    { name: '자사몰', revenue: totalJasa },
+    { name: '쿠팡', revenue: totalCoupang },
+    { name: '컬리', revenue: totalKurly },
   ];
 
-  return { channels, dailyTrend, totalRevenue };
+  let sumProfit1 = 0, sumProfit2 = 0, sumProfit3 = 0;
+
+  const channels: ChannelProfitDetail[] = channelData.map(ch => {
+    const share = totalRevenue > 0 ? (ch.revenue / totalRevenue) * 100 : 0;
+
+    // 1단계: 직접재료비를 매출비례로 배분
+    const directCost = totalRevenue > 0
+      ? Math.round(totalDirectCost * (ch.revenue / totalRevenue))
+      : 0;
+    const profit1 = ch.revenue - directCost;
+
+    // 2단계: 채널 변동비 계산
+    const cc = costMap.get(ch.name);
+    let channelVariableCost = 0;
+    if (cc) {
+      // 매출대비% 변동비
+      channelVariableCost += Math.round(ch.revenue * cc.totalVariableRatePct / 100);
+      // 건당 변동비: 추정 주문 건수 = 매출 / 평균주문단가
+      if (cc.totalVariablePerOrder > 0 && config.averageOrderValue > 0) {
+        const estimatedOrders = Math.round(ch.revenue / config.averageOrderValue);
+        channelVariableCost += estimatedOrders * cc.totalVariablePerOrder;
+      }
+    }
+    const profit2 = profit1 - channelVariableCost;
+
+    // 3단계: 채널 고정비 (월고정비를 일할계산)
+    let channelFixedCost = 0;
+    if (cc && cc.totalFixedMonthly > 0) {
+      channelFixedCost = Math.round(cc.totalFixedMonthly * periodDays / 30);
+    }
+    const profit3 = profit2 - channelFixedCost;
+
+    const marginRate1 = ch.revenue > 0 ? Math.round((profit1 / ch.revenue) * 1000) / 10 : 0;
+    const marginRate2 = ch.revenue > 0 ? Math.round((profit2 / ch.revenue) * 1000) / 10 : 0;
+    const marginRate3 = ch.revenue > 0 ? Math.round((profit3 / ch.revenue) * 1000) / 10 : 0;
+
+    sumProfit1 += profit1;
+    sumProfit2 += profit2;
+    sumProfit3 += profit3;
+
+    return {
+      name: ch.name, revenue: ch.revenue, share,
+      directCost, profit1, channelVariableCost, profit2, channelFixedCost, profit3,
+      marginRate1, marginRate2, marginRate3,
+    };
+  });
+
+  return {
+    channels, dailyTrend, totalRevenue,
+    totalDirectCost, totalProfit1: sumProfit1, totalProfit2: sumProfit2, totalProfit3: sumProfit3,
+  };
 }
 
 export function computeProductProfit(
@@ -260,33 +346,76 @@ export function computeProductProfit(
 
 export function computeRevenueTrend(
   dailySales: DailySalesData[],
+  purchases: PurchaseData[] = [],
+  channelCosts: ChannelCostSummary[] = [],
   config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
 ): RevenueTrendInsight {
-  const marginRate = config.defaultMarginRate;
-  // 월별 그룹핑
+  // 월별 매출 그룹핑
   const monthlyMap = new Map<string, { revenue: number; count: number }>();
   dailySales.forEach(d => {
-    const month = d.date.slice(0, 7); // YYYY-MM
+    const month = d.date.slice(0, 7);
     const existing = monthlyMap.get(month) || { revenue: 0, count: 0 };
     existing.revenue += d.totalRevenue;
     existing.count++;
     monthlyMap.set(month, existing);
   });
 
+  // 월별 구매비용 그룹핑
+  const monthlyCostMap = new Map<string, number>();
+  purchases.forEach(p => {
+    const month = p.date.slice(0, 7);
+    monthlyCostMap.set(month, (monthlyCostMap.get(month) || 0) + p.total);
+  });
+
+  // 채널 변동비율 합계, 건당 변동비 합계, 월 고정비 합계
+  let totalVarRatePct = 0;
+  let totalVarPerOrder = 0;
+  let totalFixedMonthly = 0;
+  channelCosts.forEach(c => {
+    totalVarRatePct += c.totalVariableRatePct;
+    totalVarPerOrder += c.totalVariablePerOrder;
+    totalFixedMonthly += c.totalFixedMonthly;
+  });
+  // 가중평균 비율: 채널별 합산 (3채널 전체 합이 아닌 비중 가중평균은 revenue 기반이 정확하지만, 간편하게 전체 합산 사용)
+
+  const hasPurchases = purchases.length > 0;
+
   const months = Array.from(monthlyMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([month, data]) => ({
-      month,
-      revenue: data.revenue,
-      profit: Math.round(data.revenue * marginRate),
-      marginRate: Math.round(marginRate * 100),
-      count: data.count,
-    }));
+    .map(([month, data]) => {
+      const cost = monthlyCostMap.get(month) || 0;
+      // 1단계: 매출 - 직접재료비
+      const profit1 = hasPurchases ? data.revenue - cost : Math.round(data.revenue * config.defaultMarginRate);
+      // 2단계: 채널 변동비 차감
+      let channelVar = 0;
+      if (channelCosts.length > 0) {
+        // 매출대비% 변동비 (채널별 비율의 가중평균 → 간소화: 전체 합 적용)
+        // 각 채널의 매출 비중에 따른 실제 비율은 computeChannelRevenue에서 정확히 계산
+        // 여기서는 전체 채널 평균으로 추정
+        const avgVarRate = totalVarRatePct / (channelCosts.length || 1);
+        channelVar += Math.round(data.revenue * avgVarRate / 100);
+        // 건당 변동비
+        if (totalVarPerOrder > 0 && config.averageOrderValue > 0) {
+          const avgPerOrder = totalVarPerOrder / (channelCosts.length || 1);
+          const estOrders = Math.round(data.revenue / config.averageOrderValue);
+          channelVar += estOrders * avgPerOrder;
+        }
+      }
+      const profit2 = profit1 - channelVar;
+      // 3단계: 채널 고정비 (월단위 → 그대로 차감)
+      const profit3 = profit2 - totalFixedMonthly;
+      const profit = channelCosts.length > 0 ? profit3 : profit1; // 채널비용 없으면 1단계만
+      const marginRate = data.revenue > 0 ? Math.round((profit / data.revenue) * 1000) / 10 : 0;
 
-  // 전월 대비 변동률 계산
+      return { month, revenue: data.revenue, cost, profit1, profit2, profit, marginRate, count: data.count };
+    });
+
   const monthly = months.map((m, idx) => ({
     month: m.month,
     revenue: m.revenue,
+    cost: m.cost,
+    profit1: m.profit1,
+    profit2: m.profit2,
     profit: m.profit,
     marginRate: m.marginRate,
     prevMonthChange: idx > 0 && months[idx - 1].revenue > 0
@@ -880,11 +1009,12 @@ export function computeAllInsights(
   purchases: PurchaseData[],
   utilities: UtilityData[],
   inventoryData?: InventorySafetyItem[],
+  channelCosts: ChannelCostSummary[] = [],
   config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
 ): DashboardInsights {
-  const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales) : null;
+  const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales, purchases, channelCosts, config) : null;
   const productProfit = salesDetail.length > 0 ? computeProductProfit(salesDetail, purchases) : null;
-  const revenueTrend = dailySales.length > 0 ? computeRevenueTrend(dailySales, config) : null;
+  const revenueTrend = dailySales.length > 0 ? computeRevenueTrend(dailySales, purchases, channelCosts, config) : null;
   const materialPrices = purchases.length > 0 ? computeMaterialPrices(purchases) : null;
   const utilityCosts = utilities.length > 0 ? computeUtilityCosts(utilities, production) : null;
   const wasteAnalysis = production.length > 0 ? computeWasteAnalysis(production, config, purchases) : null;

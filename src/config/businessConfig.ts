@@ -78,6 +78,10 @@ export interface BusinessConfig {
   /** 변동경비 단가 (원/단위) */
   variableOverheadPerUnit: number;
 
+  // === 채널 이익 계산 ===
+  /** 평균 주문 단가 (원) — 건당 변동비 산출에 사용 */
+  averageOrderValue: number;
+
   // === 뷰 표시 임계값 ===
   /** 마진율 양호 기준 (%, 예: 20 = 20% 이상이면 녹색) */
   profitMarginGood: number;
@@ -145,6 +149,9 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
   // 경비
   monthlyFixedOverhead: 0,
   variableOverheadPerUnit: 0,
+
+  // 채널 이익 계산
+  averageOrderValue: 50000,
 
   // 뷰 표시 임계값
   profitMarginGood: 20,

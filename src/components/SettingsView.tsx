@@ -1310,6 +1310,26 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
+      {/* 채널 이익 계산 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <span className="material-icons-outlined text-teal-500">calculate</span>
+          채널 이익 계산 설정
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">평균 주문 단가 (원)</label>
+            <input type="number" value={config.averageOrderValue} onChange={e => updateConfig('averageOrderValue', Number(e.target.value))} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            <p className="text-xs text-gray-500 mt-1">건당 변동비 산출에 사용 (주문 건수 = 매출 / 평균단가)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">기본 이익률 (%)</label>
+            <input type="number" step="0.01" value={Math.round(config.defaultMarginRate * 100)} onChange={e => updateConfig('defaultMarginRate', Number(e.target.value) / 100)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            <p className="text-xs text-gray-500 mt-1">구매 데이터 없을 때 사용하는 추정 이익률</p>
+          </div>
+        </div>
+      </div>
+
       {/* 채널 비용 관리 */}
       <ChannelCostAdmin />
 

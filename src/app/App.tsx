@@ -63,6 +63,7 @@ import {
   ChannelProfitItem,
 } from '../services/googleSheetService';
 import { computeAllInsights, DashboardInsights } from '../services/insightService';
+import { getChannelCostSummaries } from '../components/ChannelCostAdmin';
 import { checkDataSource, directFetchSyncStatus, SyncStatusInfo } from '../services/supabaseClient';
 import { loadBusinessConfig } from '../config/businessConfig';
 
@@ -381,6 +382,7 @@ const App = () => {
       if (gsResult) {
         try {
           const bizConfig = loadBusinessConfig();
+          const channelCosts = getChannelCostSummaries();
           const computed = computeAllInsights(
             gsResult.dailySales || [],
             gsResult.salesDetail || [],
@@ -388,6 +390,7 @@ const App = () => {
             gsResult.purchases || [],
             gsResult.utilities || [],
             inventoryData,
+            channelCosts,
             bizConfig,
           );
           setInsights(computed);
