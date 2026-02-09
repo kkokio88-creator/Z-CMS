@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   testApiConnection,
   getEcountConfig,
@@ -58,6 +58,7 @@ const defaultDataSourcesConfig: DataSourcesConfig = {
 
 export const SettingsView: React.FC = () => {
   const { config, updateConfig, resetConfig } = useSettings();
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [safetyDays, setSafetyDays] = useState(14);
   const [aiSensitivity, setAiSensitivity] = useState(80);
   const [marginAlert, setMarginAlert] = useState(10);
@@ -1387,6 +1388,90 @@ export const SettingsView: React.FC = () => {
 
       {/* 채널 비용 관리 */}
       <ChannelCostAdmin />
+
+      {/* 설정 내보내기/가져오기 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+          <span className="material-icons-outlined text-indigo-500">import_export</span>
+          설정 내보내기/가져오기
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          비즈니스 설정, 채널 비용, 노무 기록, 데이터 소스 설정을 JSON 파일로 백업하거나 복원할 수 있습니다.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              const exportData = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                businessConfig: JSON.parse(localStorage.getItem('ZCMS_BUSINESS_CONFIG') || '{}'),
+                channelCosts: JSON.parse(localStorage.getItem('ZCMS_CHANNEL_COSTS_V2') || '[]'),
+                laborRecords: JSON.parse(localStorage.getItem('ZCMS_LABOR_RECORDS') || '[]'),
+                dataSourceConfig: JSON.parse(localStorage.getItem('ZCMS_DATASOURCE_CONFIG') || '{}'),
+              };
+              const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `zcms-settings-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded-md text-sm font-medium transition-colors flex items-center"
+          >
+            <span className="material-icons-outlined text-sm mr-1">download</span>
+            JSON 내보내기
+          </button>
+          <button
+            onClick={() => importFileRef.current?.click()}
+            className="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 rounded-md text-sm font-medium transition-colors flex items-center"
+          >
+            <span className="material-icons-outlined text-sm mr-1">upload</span>
+            JSON 가져오기
+          </button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                try {
+                  const data = JSON.parse(ev.target?.result as string);
+                  if (!data.version || !data.businessConfig) {
+                    alert('올바른 Z-CMS 설정 파일이 아닙니다.');
+                    return;
+                  }
+                  if (!window.confirm(`설정을 가져오시겠습니까?\n\n내보낸 날짜: ${data.exportedAt || '알 수 없음'}\n\n현재 설정이 덮어씌워집니다.`)) {
+                    return;
+                  }
+                  if (data.businessConfig && Object.keys(data.businessConfig).length > 0) {
+                    localStorage.setItem('ZCMS_BUSINESS_CONFIG', JSON.stringify(data.businessConfig));
+                  }
+                  if (data.channelCosts) {
+                    localStorage.setItem('ZCMS_CHANNEL_COSTS_V2', JSON.stringify(data.channelCosts));
+                  }
+                  if (data.laborRecords) {
+                    localStorage.setItem('ZCMS_LABOR_RECORDS', JSON.stringify(data.laborRecords));
+                  }
+                  if (data.dataSourceConfig && Object.keys(data.dataSourceConfig).length > 0) {
+                    localStorage.setItem('ZCMS_DATASOURCE_CONFIG', JSON.stringify(data.dataSourceConfig));
+                  }
+                  alert('설정을 성공적으로 가져왔습니다. 페이지를 새로고침합니다.');
+                  window.location.reload();
+                } catch {
+                  alert('파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해주세요.');
+                }
+              };
+              reader.readAsText(file);
+              e.target.value = '';
+            }}
+          />
+        </div>
+      </div>
 
       {/* 설정 초기화 */}
       <div className="flex justify-end">
