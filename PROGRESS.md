@@ -18,10 +18,10 @@
 - **관련**: 명세서 §3.1, §9
 - **우선도**: 🔴 가장 시급
 
-### P1-2. 폐기비용 = 개당 1,000원 → 품목별 실제 단가 [🔧 부분완료]
-- **완료**: config.wasteUnitCost로 설정 가능해짐 (하드코딩 제거)
-- **미완료**: 품목별 실제 단가 기반 계산 (폐기비용 = 폐기량 × 해당 품목 단가)
-- **위치**: `insightService.ts` — `computeWasteAnalysis()`, `ProductionBomView.tsx`
+### P1-2. 폐기비용 = 개당 1,000원 → 품목별 실제 단가 [✅ 완료]
+- computeWasteAnalysis()에 purchases 참조 추가 → 품목별 평균단가 맵 구축
+- 품목 매칭 시 실단가, 미매칭 시 config.wasteUnitCost 폴백
+- highWasteDays에 cost 필드 추가, ProductionBomView에서 활용
 - **관련**: 명세서 §5.2
 
 ### P1-3. 노무비 = 25% → 반별 생산성 관리 [❌ 미착수]
@@ -30,10 +30,11 @@
 - **관련**: 명세서 §4.4
 - **DB 필요**: labor_daily_records 테이블
 
-### P1-4. 경비 = 구매액 × 5% → 고정비 + 변동비 분리 [🔧 부분완료]
-- **완료**: config.monthlyFixedOverhead, variableOverheadPerUnit 필드 추가 + 설정 UI
-- **미완료**: insightService의 computeCostBreakdown()에서 실제 적용 안 됨
-- **목표**: 일일경비 = (월고정경비/영업일수) + (변동경비단가 × 당일생산량)
+### P1-4. 경비 = 구매액 × 5% → 고정비 + 변동비 분리 [✅ 완료]
+- config.monthlyFixedOverhead, variableOverheadPerUnit 필드 + 설정 UI
+- insightService computeCostBreakdown(): 고정비+변동비(생산량비례) 적용
+- 고정비/변동비 미설정 시 기존 overheadRatio 방식 폴백 유지
+- 월별 원가 추이에도 생산량 연동 반영
 - **관련**: 명세서 §4.5
 
 ### P1-5. 서비스 수준 4개 → 자유 선택 [✅ 완료]

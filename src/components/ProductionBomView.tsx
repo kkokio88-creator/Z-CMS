@@ -361,7 +361,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, insights, onIte
                             <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
                             <td className="py-2 px-3 text-right font-medium text-red-600">{formatPercent(d.rate)}</td>
                             <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.qty)}</td>
-                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.qty * config.wasteUnitCost)}</td>
+                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.cost || d.qty * config.wasteUnitCost)}</td>
                           </tr>
                         ))}
                       </tbody>

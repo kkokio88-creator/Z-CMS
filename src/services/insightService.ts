@@ -391,13 +391,30 @@ export function computeUtilityCosts(
 
 export function computeWasteAnalysis(
   production: ProductionData[],
-  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
+  purchases: PurchaseData[] = []
 ): WasteAnalysisInsight {
-  const costPerUnit = config.wasteUnitCost;
+  // 품목별 평균 단가 맵 (purchases 데이터가 있으면 활용)
+  const unitPriceMap = new Map<string, number>();
+  if (purchases.length > 0) {
+    const qtyMap = new Map<string, { total: number; qty: number }>();
+    purchases.forEach(p => {
+      const existing = qtyMap.get(p.productName) || { total: 0, qty: 0 };
+      existing.total += p.total;
+      existing.qty += p.quantity;
+      qtyMap.set(p.productName, existing);
+    });
+    qtyMap.forEach((v, k) => {
+      if (v.qty > 0) unitPriceMap.set(k, Math.round(v.total / v.qty));
+    });
+  }
+  const fallbackCost = config.wasteUnitCost;
   let totalEstimatedCost = 0;
 
   const daily = production.map(p => {
-    const estimatedCost = p.wasteFinishedEa * costPerUnit;
+    // 품목별 실제 단가 우선, 없으면 config 폴백
+    const unitCost = unitPriceMap.get(p.productName) || fallbackCost;
+    const estimatedCost = p.wasteFinishedEa * unitCost;
     totalEstimatedCost += estimatedCost;
     return {
       date: p.date,
@@ -417,7 +434,7 @@ export function computeWasteAnalysis(
   const highWasteDays = daily
     .filter(d => d.wasteFinishedPct > config.wasteThresholdPct)
     .sort((a, b) => b.wasteFinishedPct - a.wasteFinishedPct)
-    .map(d => ({ date: d.date, rate: d.wasteFinishedPct, qty: d.wasteFinishedEa }));
+    .map(d => ({ date: d.date, rate: d.wasteFinishedPct, qty: d.wasteFinishedEa, cost: d.estimatedCost }));
 
   return { daily, avgWasteRate, highWasteDays, totalEstimatedCost };
 }
@@ -507,39 +524,59 @@ export function computeCostBreakdown(
   const totalRaw = rawItems.reduce((s, p) => s + p.total, 0);
   const totalSub = subItems.reduce((s, p) => s + p.total, 0);
   const totalUtility = utilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
+  const totalProduction = production.reduce((s, p) => s + p.quantity, 0);
+
   // 노무비 추정: 총 원가(원재료+부재료+공과금)의 설정 비율로 추정
   const totalLabor = Math.round((totalRaw + totalSub + totalUtility) * config.laborCostRatio);
-  // 경비 = 공과금 + 기타 간접비(총 구매비의 설정 비율)
-  const otherOverhead = Math.round((totalRaw + totalSub) * config.overheadRatio);
+
+  // 경비 계산: 고정비 + 변동비 + 공과금
+  // 고정비: 월 고정경비 설정값 (설정되지 않으면 기존 overheadRatio 방식 폴백)
+  // 변동비: 변동경비단가 × 총 생산량
+  const hasFixedOverhead = config.monthlyFixedOverhead > 0 || config.variableOverheadPerUnit > 0;
+  const fixedOverhead = config.monthlyFixedOverhead; // 월 단위 (조회 기간에 따라 비례 배분은 추후)
+  const variableOverhead = Math.round(totalProduction * config.variableOverheadPerUnit);
+  const otherOverhead = hasFixedOverhead
+    ? fixedOverhead + variableOverhead
+    : Math.round((totalRaw + totalSub) * config.overheadRatio);
   const totalOverhead = totalUtility + otherOverhead;
 
   // 월별 4요소 원가 추이
-  const monthlyMap = new Map<string, { raw: number; sub: number; overhead: number }>();
+  const monthlyMap = new Map<string, { raw: number; sub: number; utility: number; prodQty: number }>();
 
   rawItems.forEach(p => {
     const month = p.date.slice(0, 7);
-    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, overhead: 0 };
+    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, prodQty: 0 };
     existing.raw += p.total;
     monthlyMap.set(month, existing);
   });
   subItems.forEach(p => {
     const month = p.date.slice(0, 7);
-    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, overhead: 0 };
+    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, prodQty: 0 };
     existing.sub += p.total;
     monthlyMap.set(month, existing);
   });
   utilities.forEach(u => {
     const month = u.date.slice(0, 7);
-    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, overhead: 0 };
-    existing.overhead += u.elecCost + u.waterCost + u.gasCost;
+    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, prodQty: 0 };
+    existing.utility += u.elecCost + u.waterCost + u.gasCost;
+    monthlyMap.set(month, existing);
+  });
+  production.forEach(p => {
+    const month = p.date.slice(0, 7);
+    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, prodQty: 0 };
+    existing.prodQty += p.quantity;
     monthlyMap.set(month, existing);
   });
 
   const monthly = Array.from(monthlyMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([month, data]) => {
-      const labor = Math.round((data.raw + data.sub + data.overhead) * config.laborCostRatio);
-      const overhead = data.overhead + Math.round((data.raw + data.sub) * config.overheadRatio);
+      const labor = Math.round((data.raw + data.sub + data.utility) * config.laborCostRatio);
+      // 경비: 고정비+변동비 방식 또는 기존 비율 방식
+      const monthlyOther = hasFixedOverhead
+        ? config.monthlyFixedOverhead + Math.round(data.prodQty * config.variableOverheadPerUnit)
+        : Math.round((data.raw + data.sub) * config.overheadRatio);
+      const overhead = data.utility + monthlyOther;
       return {
         month,
         rawMaterial: data.raw,
@@ -850,7 +887,7 @@ export function computeAllInsights(
   const revenueTrend = dailySales.length > 0 ? computeRevenueTrend(dailySales, config) : null;
   const materialPrices = purchases.length > 0 ? computeMaterialPrices(purchases) : null;
   const utilityCosts = utilities.length > 0 ? computeUtilityCosts(utilities, production) : null;
-  const wasteAnalysis = production.length > 0 ? computeWasteAnalysis(production, config) : null;
+  const wasteAnalysis = production.length > 0 ? computeWasteAnalysis(production, config, purchases) : null;
   const productionEfficiency = production.length > 0 ? computeProductionEfficiency(production) : null;
 
   const costBreakdown = purchases.length > 0
