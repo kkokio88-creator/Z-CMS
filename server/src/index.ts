@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { agentRoutes } from './routes/agent.routes.js';
 import { ecountRoutes } from './routes/ecount.routes.js';
@@ -59,6 +60,35 @@ app.use(
   })
 );
 app.use(express.json());
+
+// Rate Limiting
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15분
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '요청이 너무 많습니다. 15분 후에 다시 시도해주세요.' },
+});
+
+const syncLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '동기화 요청이 너무 많습니다. 15분 후에 다시 시도해주세요.' },
+});
+
+const dataLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '데이터 요청이 너무 많습니다. 15분 후에 다시 시도해주세요.' },
+});
+
+app.use('/api/sync', syncLimiter);
+app.use('/api/data', dataLimiter);
+app.use('/api', globalLimiter);
 
 // Initialize shared services
 const eventBus = new EventBus();
