@@ -192,6 +192,30 @@ export interface StatisticalOrderInsight {
   shortageCount: number;
 }
 
+export type ABCClass = 'A' | 'B' | 'C';
+export type XYZClass = 'X' | 'Y' | 'Z';
+
+export interface ABCXYZItem {
+  productCode: string;
+  productName: string;
+  totalSpent: number;       // 총 구매금액
+  spentShare: number;       // 금액 비중 (%)
+  cumulativeShare: number;  // 누적 비중 (%)
+  abcClass: ABCClass;       // ABC 분류
+  cv: number;               // 변동계수 (CoV)
+  xyzClass: XYZClass;       // XYZ 분류
+  combined: string;         // "AX", "BY" 등
+}
+
+export interface ABCXYZInsight {
+  items: ABCXYZItem[];
+  matrix: Record<string, number>;  // "AX"→건수, "BY"→건수 등 9칸
+  summary: {
+    A: number; B: number; C: number;
+    X: number; Y: number; Z: number;
+  };
+}
+
 export interface DashboardInsights {
   channelRevenue: ChannelRevenueInsight | null;
   productProfit: ProductProfitInsight | null;
@@ -203,6 +227,7 @@ export interface DashboardInsights {
   recommendations: CostRecommendation[];
   costBreakdown: CostBreakdownInsight | null;
   statisticalOrder: StatisticalOrderInsight | null;
+  abcxyz: ABCXYZInsight | null;
 }
 
 // ==============================
@@ -1010,6 +1035,107 @@ export function generateRecommendations(
 }
 
 // ==============================
+// ABC-XYZ 재고 분류
+// ==============================
+
+export function computeABCXYZ(
+  purchases: PurchaseData[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+): ABCXYZInsight {
+  if (purchases.length === 0) {
+    return { items: [], matrix: {}, summary: { A: 0, B: 0, C: 0, X: 0, Y: 0, Z: 0 } };
+  }
+
+  // 품목별 월간 구매금액 집계
+  const productMap = new Map<string, {
+    name: string;
+    totalSpent: number;
+    monthlyAmounts: Map<string, number>;
+  }>();
+
+  purchases.forEach(p => {
+    if (!p.productCode) return;
+    const existing = productMap.get(p.productCode) || {
+      name: p.productName,
+      totalSpent: 0,
+      monthlyAmounts: new Map(),
+    };
+    existing.totalSpent += p.total;
+    const month = p.date.slice(0, 7);
+    existing.monthlyAmounts.set(month, (existing.monthlyAmounts.get(month) || 0) + p.total);
+    productMap.set(p.productCode, existing);
+  });
+
+  // 총 구매금액
+  const grandTotal = Array.from(productMap.values()).reduce((s, v) => s + v.totalSpent, 0);
+
+  // ABC 분류: 금액 내림차순 정렬 후 누적 비중
+  const sorted = Array.from(productMap.entries())
+    .map(([code, data]) => ({
+      productCode: code,
+      productName: data.name,
+      totalSpent: data.totalSpent,
+      spentShare: grandTotal > 0 ? (data.totalSpent / grandTotal) * 100 : 0,
+      monthlyAmounts: data.monthlyAmounts,
+    }))
+    .sort((a, b) => b.totalSpent - a.totalSpent);
+
+  let cumulative = 0;
+  const items: ABCXYZItem[] = sorted.map(item => {
+    cumulative += item.spentShare;
+    const cumulativeShare = Math.round(cumulative * 10) / 10;
+
+    // ABC 분류
+    let abcClass: ABCClass = 'C';
+    if (cumulativeShare <= config.abcClassAThreshold) abcClass = 'A';
+    else if (cumulativeShare <= config.abcClassBThreshold) abcClass = 'B';
+
+    // XYZ 분류: 변동계수 (CV = 표준편차 / 평균)
+    const amounts = Array.from(item.monthlyAmounts.values());
+    let cv = 0;
+    if (amounts.length > 1) {
+      const mean = amounts.reduce((s, v) => s + v, 0) / amounts.length;
+      if (mean > 0) {
+        const variance = amounts.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / amounts.length;
+        cv = Math.round((Math.sqrt(variance) / mean) * 100) / 100;
+      }
+    }
+
+    let xyzClass: XYZClass = 'Z';
+    if (cv <= config.xyzClassXThreshold) xyzClass = 'X';
+    else if (cv <= config.xyzClassYThreshold) xyzClass = 'Y';
+
+    return {
+      productCode: item.productCode,
+      productName: item.productName,
+      totalSpent: item.totalSpent,
+      spentShare: Math.round(item.spentShare * 10) / 10,
+      cumulativeShare,
+      abcClass,
+      cv,
+      xyzClass,
+      combined: `${abcClass}${xyzClass}`,
+    };
+  });
+
+  // 9칸 매트릭스 집계
+  const matrix: Record<string, number> = {};
+  const summary = { A: 0, B: 0, C: 0, X: 0, Y: 0, Z: 0 };
+  for (const abc of ['A', 'B', 'C'] as ABCClass[]) {
+    for (const xyz of ['X', 'Y', 'Z'] as XYZClass[]) {
+      matrix[`${abc}${xyz}`] = 0;
+    }
+  }
+  items.forEach(item => {
+    matrix[item.combined]++;
+    summary[item.abcClass]++;
+    summary[item.xyzClass]++;
+  });
+
+  return { items, matrix, summary };
+}
+
+// ==============================
 // 통합 인사이트 계산
 // ==============================
 
@@ -1039,6 +1165,8 @@ export function computeAllInsights(
     ? computeStatisticalOrder(inventoryData, purchases, config)
     : null;
 
+  const abcxyz = purchases.length > 0 ? computeABCXYZ(purchases, config) : null;
+
   const recommendations = generateRecommendations(
     materialPrices,
     wasteAnalysis,
@@ -1058,5 +1186,6 @@ export function computeAllInsights(
     recommendations,
     costBreakdown,
     statisticalOrder,
+    abcxyz,
   };
 }

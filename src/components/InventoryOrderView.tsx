@@ -7,7 +7,7 @@ import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatQty } from '../utils/format';
 import { InventorySafetyItem, StocktakeAnomalyItem } from '../types';
 import type { PurchaseData } from '../services/googleSheetService';
-import type { DashboardInsights, StatisticalOrderInsight } from '../services/insightService';
+import type { DashboardInsights, StatisticalOrderInsight, ABCXYZInsight } from '../services/insightService';
 import { computeStatisticalOrder } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 
@@ -185,6 +185,8 @@ export const InventoryOrderView: React.FC<Props> = ({
     return null;
   }, [inventoryData, purchases, serviceLevel, config, insights?.statisticalOrder]);
 
+  const abcxyz = insights?.abcxyz || null;
+
   const tabs = [
     { key: 'inventory', label: '재고 현황', icon: 'inventory_2' },
     { key: 'anomaly', label: '이상징후 분석', icon: 'warning' },
@@ -330,6 +332,86 @@ export const InventoryOrderView: React.FC<Props> = ({
                     </div>
                   ) : <p className="text-gray-400 text-center py-6">리스크 항목 없음</p>}
                 </div>
+
+                {/* ABC-XYZ 분류 매트릭스 */}
+                {abcxyz && abcxyz.items.length > 0 && (
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <span className="material-icons-outlined text-indigo-500">grid_view</span>
+                      ABC-XYZ 재고 분류
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-4">
+                      ABC: 구매금액 비중 (A={config.abcClassAThreshold}%↑ / B={config.abcClassBThreshold}%↑ / C=나머지)
+                      &nbsp;|&nbsp; XYZ: 변동계수 (X≤{config.xyzClassXThreshold} / Y≤{config.xyzClassYThreshold} / Z=나머지)
+                    </p>
+
+                    {/* 9칸 히트맵 */}
+                    <div className="grid grid-cols-4 gap-1 mb-6 max-w-md">
+                      <div className="text-xs text-center text-gray-400 py-2"></div>
+                      <div className="text-xs text-center font-bold text-gray-600 dark:text-gray-300 py-2">X (안정)</div>
+                      <div className="text-xs text-center font-bold text-gray-600 dark:text-gray-300 py-2">Y (변동)</div>
+                      <div className="text-xs text-center font-bold text-gray-600 dark:text-gray-300 py-2">Z (불규칙)</div>
+                      {(['A', 'B', 'C'] as const).map(abc => (
+                        <React.Fragment key={abc}>
+                          <div className="text-xs font-bold text-gray-600 dark:text-gray-300 py-3 flex items-center justify-center">
+                            {abc} ({abc === 'A' ? '고가' : abc === 'B' ? '중간' : '저가'})
+                          </div>
+                          {(['X', 'Y', 'Z'] as const).map(xyz => {
+                            const count = abcxyz.matrix[`${abc}${xyz}`] || 0;
+                            const intensity = count > 0 ? Math.min(count / Math.max(...Object.values(abcxyz.matrix)), 1) : 0;
+                            const bgColor = abc === 'A'
+                              ? `rgba(239, 68, 68, ${0.1 + intensity * 0.5})`   // 빨강 계열
+                              : abc === 'B'
+                                ? `rgba(245, 158, 11, ${0.1 + intensity * 0.5})`  // 주황 계열
+                                : `rgba(59, 130, 246, ${0.1 + intensity * 0.4})`; // 파랑 계열
+                            return (
+                              <div
+                                key={`${abc}${xyz}`}
+                                className="rounded-md py-3 text-center font-bold text-sm border border-gray-200 dark:border-gray-600"
+                                style={{ backgroundColor: bgColor }}
+                              >
+                                <span className="text-gray-900 dark:text-white">{count}</span>
+                                <span className="text-xs text-gray-500 ml-1">품목</span>
+                              </div>
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </div>
+
+                    {/* 상위 분류 품목 테이블 */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                            <th className="text-left py-2 px-3 text-gray-500">품목</th>
+                            <th className="text-center py-2 px-3 text-gray-500">분류</th>
+                            <th className="text-right py-2 px-3 text-gray-500">구매금액</th>
+                            <th className="text-right py-2 px-3 text-gray-500">비중</th>
+                            <th className="text-right py-2 px-3 text-gray-500">변동계수</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {abcxyz.items.slice(0, 20).map((item, i) => (
+                            <tr key={item.productCode} className="border-b border-gray-100 dark:border-gray-800">
+                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                  item.abcClass === 'A' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                  : item.abcClass === 'B' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                }`}>{item.combined}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right font-medium">{formatCurrency(item.totalSpent)}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{item.spentShare}%</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{item.cv.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           }
