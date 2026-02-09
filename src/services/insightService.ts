@@ -272,6 +272,31 @@ export interface BomVarianceInsight {
   unfavorableCount: number;  // 불리 (비용 초과) 품목
 }
 
+export interface ProductBEPItem {
+  productCode: string;
+  productName: string;
+  unitPrice: number;           // 판매 단가
+  unitVariableCost: number;    // 변동 단가 (재료비)
+  unitContribution: number;    // 단위 기여이익
+  contributionRate: number;    // 기여이익률 (%)
+  allocatedFixedCost: number;  // 매출비례 배분 고정비
+  bepUnits: number;            // 손익분기 수량
+  bepSales: number;            // 손익분기 매출
+  actualUnits: number;         // 실제 판매량
+  actualSales: number;         // 실제 매출
+  achievementRate: number;     // BEP 달성률 (%)
+  safetyMargin: number;        // 여유비율 (%)
+}
+
+export interface ProductBEPInsight {
+  items: ProductBEPItem[];
+  totalFixedCost: number;
+  overallBEPSales: number;
+  overallAchievementRate: number;
+  overallSafetyMargin: number;
+  avgContributionRate: number;
+}
+
 export interface DashboardInsights {
   channelRevenue: ChannelRevenueInsight | null;
   productProfit: ProductProfitInsight | null;
@@ -287,6 +312,7 @@ export interface DashboardInsights {
   freshness: FreshnessInsight | null;
   limitPrice: LimitPriceInsight | null;
   bomVariance: BomVarianceInsight | null;
+  productBEP: ProductBEPInsight | null;
 }
 
 // ==============================
@@ -1443,6 +1469,101 @@ export function computeBomVariance(
 }
 
 // ==============================
+// P4-2 BEP(손익분기점) 자동 계산
+// ==============================
+
+export function computeProductBEP(
+  productProfit: ProductProfitInsight,
+  channelRevenue: ChannelRevenueInsight | null,
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+): ProductBEPInsight {
+  // 고정비 합산: 채널 고정비 + 월 고정경비
+  const channelFixedTotal = channelRevenue
+    ? channelRevenue.channels.reduce((s, ch) => s + ch.channelFixedCost, 0)
+    : 0;
+  const totalFixedCost = channelFixedTotal + (config.monthlyFixedOverhead || 0);
+  const totalRevenue = productProfit.totalRevenue || 1;
+
+  // 전체 변동비 = 직접재료비 + 채널변동비
+  const totalVariableCost = productProfit.totalCost
+    + (channelRevenue ? channelRevenue.channels.reduce((s, ch) => s + ch.channelVariableCost, 0) : 0);
+
+  // 전체 기여이익률
+  const avgContributionRate = totalRevenue > 0
+    ? Math.round(((totalRevenue - totalVariableCost) / totalRevenue) * 1000) / 10
+    : 0;
+
+  // 전체 BEP 매출
+  const overallBEPSales = avgContributionRate > 0
+    ? Math.round(totalFixedCost / (avgContributionRate / 100))
+    : 0;
+
+  const overallAchievementRate = overallBEPSales > 0
+    ? Math.round((productProfit.totalRevenue / overallBEPSales) * 1000) / 10
+    : 0;
+
+  const overallSafetyMargin = productProfit.totalRevenue > 0 && overallBEPSales > 0
+    ? Math.round(((productProfit.totalRevenue - overallBEPSales) / productProfit.totalRevenue) * 1000) / 10
+    : 0;
+
+  // 품목별 BEP
+  const items: ProductBEPItem[] = productProfit.items
+    .filter(item => item.quantity > 0 && item.revenue > 0)
+    .map(item => {
+      const unitPrice = Math.round(item.revenue / item.quantity);
+      const unitVariableCost = Math.round(item.cost / item.quantity);
+      const unitContribution = unitPrice - unitVariableCost;
+      const contributionRate = unitPrice > 0
+        ? Math.round((unitContribution / unitPrice) * 1000) / 10
+        : 0;
+
+      // 고정비 배분: 매출 비중에 따라
+      const revenueShare = item.revenue / totalRevenue;
+      const allocatedFixedCost = Math.round(totalFixedCost * revenueShare);
+
+      // BEP 수량 = 배분 고정비 / 단위 기여이익
+      const bepUnits = unitContribution > 0
+        ? Math.ceil(allocatedFixedCost / unitContribution)
+        : 0;
+      const bepSales = bepUnits * unitPrice;
+
+      const achievementRate = bepUnits > 0
+        ? Math.round((item.quantity / bepUnits) * 1000) / 10
+        : 0;
+
+      const safetyMargin = item.quantity > 0 && bepUnits > 0
+        ? Math.round(((item.quantity - bepUnits) / item.quantity) * 1000) / 10
+        : 0;
+
+      return {
+        productCode: item.productCode,
+        productName: item.productName,
+        unitPrice,
+        unitVariableCost,
+        unitContribution,
+        contributionRate,
+        allocatedFixedCost,
+        bepUnits,
+        bepSales,
+        actualUnits: item.quantity,
+        actualSales: item.revenue,
+        achievementRate,
+        safetyMargin,
+      };
+    })
+    .sort((a, b) => a.safetyMargin - b.safetyMargin); // 여유비율 낮은 순 (위험 우선)
+
+  return {
+    items,
+    totalFixedCost,
+    overallBEPSales,
+    overallAchievementRate,
+    overallSafetyMargin,
+    avgContributionRate,
+  };
+}
+
+// ==============================
 // 통합 인사이트 계산
 // ==============================
 
@@ -1484,6 +1605,10 @@ export function computeAllInsights(
     ? computeBomVariance(purchases, production)
     : null;
 
+  const productBEP = productProfit
+    ? computeProductBEP(productProfit, channelRevenue, config)
+    : null;
+
   const recommendations = generateRecommendations(
     materialPrices,
     wasteAnalysis,
@@ -1507,5 +1632,6 @@ export function computeAllInsights(
     freshness,
     limitPrice,
     bomVariance,
+    productBEP,
   };
 }

@@ -30,6 +30,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, i
   const channelRevenue = insights?.channelRevenue;
   const productProfit = insights?.productProfit;
   const revenueTrend = insights?.revenueTrend;
+  const productBEP = insights?.productBEP;
 
   // 시뮬레이션 슬라이더 상태
   const [simMaterial, setSimMaterial] = useState(0);   // 재료비 변동률 (%)
@@ -272,6 +273,88 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, i
                   </div>
                 ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
               </div>
+
+              {/* BEP 분석 섹션 */}
+              {productBEP && productBEP.items.length > 0 && (
+                <>
+                  {/* BEP KPI */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">전체 BEP 매출</p>
+                      <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(productBEP.overallBEPSales)}</p>
+                    </div>
+                    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">BEP 달성률</p>
+                      <p className={`text-2xl font-bold mt-1 ${productBEP.overallAchievementRate >= 100 ? 'text-green-600' : 'text-red-600'}`}>
+                        {productBEP.overallAchievementRate}%
+                      </p>
+                    </div>
+                    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">여유비율</p>
+                      <p className={`text-2xl font-bold mt-1 ${productBEP.overallSafetyMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {productBEP.overallSafetyMargin}%
+                      </p>
+                    </div>
+                    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">평균 기여이익률</p>
+                      <p className="text-2xl font-bold text-indigo-600 mt-1">{productBEP.avgContributionRate}%</p>
+                    </div>
+                  </div>
+
+                  {/* BEP 테이블 */}
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                      <span className="material-icons-outlined text-orange-500">balance</span>
+                      품목별 손익분기점 (BEP)
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-4">
+                      고정비 {formatCurrency(productBEP.totalFixedCost)}을 매출비중으로 배분 | 여유비율 낮은 순 정렬
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                            <th className="text-left py-2 px-3 text-gray-500">품목</th>
+                            <th className="text-right py-2 px-3 text-gray-500">판매단가</th>
+                            <th className="text-right py-2 px-3 text-gray-500">변동단가</th>
+                            <th className="text-right py-2 px-3 text-gray-500">기여이익률</th>
+                            <th className="text-right py-2 px-3 text-blue-600">BEP 수량</th>
+                            <th className="text-right py-2 px-3 text-gray-500">실제 수량</th>
+                            <th className="text-right py-2 px-3 text-gray-500">달성률</th>
+                            <th className="text-right py-2 px-3 text-gray-500">여유비율</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productBEP.items.slice(0, 20).map(item => (
+                            <tr key={item.productCode} className={`border-b border-gray-100 dark:border-gray-800 ${
+                              item.safetyMargin < 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''
+                            }`}>
+                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
+                              <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(item.unitPrice)}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.unitVariableCost)}</td>
+                              <td className={`py-2 px-3 text-right font-medium ${
+                                item.contributionRate >= 30 ? 'text-green-600' : item.contributionRate >= 10 ? 'text-orange-500' : 'text-red-600'
+                              }`}>{item.contributionRate}%</td>
+                              <td className="py-2 px-3 text-right text-blue-600 font-medium">{item.bepUnits.toLocaleString()}</td>
+                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{item.actualUnits.toLocaleString()}</td>
+                              <td className={`py-2 px-3 text-right font-medium ${
+                                item.achievementRate >= 100 ? 'text-green-600' : 'text-red-600'
+                              }`}>{item.achievementRate}%</td>
+                              <td className={`py-2 px-3 text-right font-bold ${
+                                item.safetyMargin >= 20 ? 'text-green-600'
+                                : item.safetyMargin >= 0 ? 'text-orange-500'
+                                : 'text-red-600'
+                              }`}>
+                                {item.safetyMargin > 0 ? '+' : ''}{item.safetyMargin}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           );
         }
