@@ -7,7 +7,7 @@ import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatQty } from '../utils/format';
 import { InventorySafetyItem, StocktakeAnomalyItem } from '../types';
 import type { PurchaseData } from '../services/googleSheetService';
-import type { DashboardInsights, StatisticalOrderInsight, ABCXYZInsight } from '../services/insightService';
+import type { DashboardInsights, StatisticalOrderInsight, ABCXYZInsight, FreshnessInsight, FreshnessGrade } from '../services/insightService';
 import { computeStatisticalOrder } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 
@@ -186,6 +186,7 @@ export const InventoryOrderView: React.FC<Props> = ({
   }, [inventoryData, purchases, serviceLevel, config, insights?.statisticalOrder]);
 
   const abcxyz = insights?.abcxyz || null;
+  const freshness = insights?.freshness || null;
 
   const tabs = [
     { key: 'inventory', label: '재고 현황', icon: 'inventory_2' },
@@ -407,6 +408,89 @@ export const InventoryOrderView: React.FC<Props> = ({
                               <td className="py-2 px-3 text-right text-gray-500">{item.cv.toFixed(2)}</td>
                             </tr>
                           ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* 신선도 점수 */}
+                {freshness && freshness.items.length > 0 && (
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <span className="material-icons-outlined text-green-500">eco</span>
+                      신선도 점수
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-4">
+                      최근성(40%) + 재고회전(30%) + 수요안정성(30%) 기반 0~100점 평가
+                    </p>
+
+                    {/* 등급 요약 */}
+                    <div className="grid grid-cols-5 gap-2 mb-6">
+                      {([
+                        { grade: 'safe' as FreshnessGrade, label: '안전', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', border: 'border-green-300' },
+                        { grade: 'good' as FreshnessGrade, label: '양호', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', border: 'border-blue-300' },
+                        { grade: 'caution' as FreshnessGrade, label: '주의', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', border: 'border-yellow-300' },
+                        { grade: 'warning' as FreshnessGrade, label: '경고', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400', border: 'border-orange-300' },
+                        { grade: 'danger' as FreshnessGrade, label: '위험', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', border: 'border-red-300' },
+                      ]).map(g => (
+                        <div key={g.grade} className={`rounded-lg p-3 text-center border ${g.border} ${g.color}`}>
+                          <p className="text-xs font-medium">{g.label}</p>
+                          <p className="text-xl font-bold mt-1">{freshness.gradeCount[g.grade]}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-center mb-4">
+                      <span className="text-sm text-gray-500">평균 신선도 점수: </span>
+                      <span className={`text-lg font-bold ${
+                        freshness.avgScore >= 60 ? 'text-green-600' : freshness.avgScore >= 40 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>{freshness.avgScore}점</span>
+                    </div>
+
+                    {/* 위험 품목 테이블 (점수 낮은 순) */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                            <th className="text-left py-2 px-3 text-gray-500">품목</th>
+                            <th className="text-center py-2 px-3 text-gray-500">등급</th>
+                            <th className="text-right py-2 px-3 text-gray-500">점수</th>
+                            <th className="text-right py-2 px-3 text-gray-500">마지막 입고</th>
+                            <th className="text-right py-2 px-3 text-gray-500">현재재고</th>
+                            <th className="text-right py-2 px-3 text-gray-500">잔여일수</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {freshness.items.slice(0, 20).map(item => {
+                            const gradeStyle: Record<FreshnessGrade, string> = {
+                              safe: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                              good: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                              caution: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+                              warning: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+                              danger: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                            };
+                            const gradeLabel: Record<FreshnessGrade, string> = {
+                              safe: '안전', good: '양호', caution: '주의', warning: '경고', danger: '위험',
+                            };
+                            return (
+                              <tr key={item.productCode} className="border-b border-gray-100 dark:border-gray-800">
+                                <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
+                                <td className="py-2 px-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${gradeStyle[item.grade]}`}>
+                                    {gradeLabel[item.grade]}
+                                  </span>
+                                </td>
+                                <td className={`py-2 px-3 text-right font-bold ${
+                                  item.score >= 60 ? 'text-green-600' : item.score >= 40 ? 'text-yellow-600' : 'text-red-600'
+                                }`}>{item.score}</td>
+                                <td className="py-2 px-3 text-right text-gray-500">{item.daysSinceLastPurchase}일 전</td>
+                                <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(item.currentStock)}</td>
+                                <td className={`py-2 px-3 text-right font-medium ${
+                                  item.estimatedDaysLeft <= 7 ? 'text-red-600' : item.estimatedDaysLeft <= 14 ? 'text-orange-600' : 'text-gray-600'
+                                }`}>{item.estimatedDaysLeft >= 999 ? '-' : `${item.estimatedDaysLeft}일`}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

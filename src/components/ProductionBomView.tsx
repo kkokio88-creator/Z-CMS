@@ -5,12 +5,13 @@ import {
 } from 'recharts';
 import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
-import type { ProductionData } from '../services/googleSheetService';
-import type { DashboardInsights } from '../services/insightService';
+import type { ProductionData, PurchaseData } from '../services/googleSheetService';
+import type { DashboardInsights, BomVarianceInsight } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 
 interface Props {
   production: ProductionData[];
+  purchases: PurchaseData[];
   insights: DashboardInsights | null;
   onItemClick: (item: any) => void;
 }
@@ -65,10 +66,11 @@ const FilterBar: React.FC<{
   </div>
 );
 
-export const ProductionBomView: React.FC<Props> = ({ production, insights, onItemClick }) => {
+export const ProductionBomView: React.FC<Props> = ({ production, purchases, insights, onItemClick }) => {
   const config = useBusinessConfig();
   const wasteAnalysis = insights?.wasteAnalysis;
   const prodEfficiency = insights?.productionEfficiency;
+  const bomVariance = insights?.bomVariance || null;
 
   const [prodFilter, setProdFilter] = useState('all');
   const [wasteFilter, setWasteFilter] = useState('all');
@@ -113,6 +115,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, insights, onIte
     { key: 'production', label: '생산 현황', icon: 'precision_manufacturing' },
     { key: 'waste', label: '폐기 분석', icon: 'delete_outline' },
     { key: 'efficiency', label: '생산성 분석', icon: 'speed' },
+    { key: 'bomVariance', label: 'BOM 오차', icon: 'compare_arrows' },
   ];
 
   return (
@@ -512,6 +515,108 @@ export const ProductionBomView: React.FC<Props> = ({ production, insights, onIte
             )}
           </div>
         );
+
+        // ========== BOM 오차 분석 ==========
+        if (activeTab === 'bomVariance') {
+          return (
+            <div className="space-y-6">
+              {/* KPI */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">총 차이 금액</p>
+                  <p className={`text-2xl font-bold mt-1 ${
+                    (bomVariance?.totalVariance || 0) > 0 ? 'text-red-600' : 'text-green-600'
+                  }`}>
+                    {(bomVariance?.totalVariance || 0) > 0 ? '+' : ''}{formatCurrency(bomVariance?.totalVariance || 0)}
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">가격 차이</p>
+                  <p className={`text-2xl font-bold mt-1 ${
+                    (bomVariance?.totalPriceVariance || 0) > 0 ? 'text-red-600' : 'text-green-600'
+                  }`}>
+                    {(bomVariance?.totalPriceVariance || 0) > 0 ? '+' : ''}{formatCurrency(bomVariance?.totalPriceVariance || 0)}
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">수량 차이</p>
+                  <p className={`text-2xl font-bold mt-1 ${
+                    (bomVariance?.totalQtyVariance || 0) > 0 ? 'text-red-600' : 'text-green-600'
+                  }`}>
+                    {(bomVariance?.totalQtyVariance || 0) > 0 ? '+' : ''}{formatCurrency(bomVariance?.totalQtyVariance || 0)}
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">유리/불리 품목</p>
+                  <p className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                    <span className="text-green-600">{bomVariance?.favorableCount || 0}</span>
+                    <span className="text-gray-400 mx-1">/</span>
+                    <span className="text-red-600">{bomVariance?.unfavorableCount || 0}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                  <span className="material-icons-outlined text-purple-500">compare_arrows</span>
+                  레시피 대비 투입 오차 분석
+                </h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  전반기 평균을 기준(Standard)으로 후반기 실제(Actual) 비교 | 양수=불리(초과), 음수=유리(절감)
+                </p>
+
+                {bomVariance && bomVariance.items.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 text-gray-500">품목</th>
+                          <th className="text-right py-2 px-3 text-gray-500">기준단가</th>
+                          <th className="text-right py-2 px-3 text-gray-500">실제단가</th>
+                          <th className="text-right py-2 px-3 text-gray-500">기준수량</th>
+                          <th className="text-right py-2 px-3 text-gray-500">실제수량</th>
+                          <th className="text-right py-2 px-3 text-gray-500">가격차이</th>
+                          <th className="text-right py-2 px-3 text-gray-500">수량차이</th>
+                          <th className="text-right py-2 px-3 text-gray-500">총 차이</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bomVariance.items.slice(0, 20).map(item => (
+                          <tr key={item.productCode} className={`border-b border-gray-100 dark:border-gray-800 ${
+                            item.totalVariance > 0 ? 'bg-red-50/30 dark:bg-red-900/5' : ''
+                          }`}>
+                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
+                            <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.standardPrice)}</td>
+                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.actualPrice)}</td>
+                            <td className="py-2 px-3 text-right text-gray-500">{formatQty(item.standardQty)}</td>
+                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatQty(item.actualQty)}</td>
+                            <td className={`py-2 px-3 text-right font-medium ${
+                              item.priceVariance > 0 ? 'text-red-600' : item.priceVariance < 0 ? 'text-green-600' : 'text-gray-500'
+                            }`}>
+                              {item.priceVariance > 0 ? '+' : ''}{formatCurrency(item.priceVariance)}
+                            </td>
+                            <td className={`py-2 px-3 text-right font-medium ${
+                              item.qtyVariance > 0 ? 'text-red-600' : item.qtyVariance < 0 ? 'text-green-600' : 'text-gray-500'
+                            }`}>
+                              {item.qtyVariance > 0 ? '+' : ''}{formatCurrency(item.qtyVariance)}
+                            </td>
+                            <td className={`py-2 px-3 text-right font-bold ${
+                              item.totalVariance > 0 ? 'text-red-600' : item.totalVariance < 0 ? 'text-green-600' : 'text-gray-500'
+                            }`}>
+                              {item.totalVariance > 0 ? '+' : ''}{formatCurrency(item.totalVariance)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <p className="text-gray-400 text-center py-10">구매/생산 데이터가 충분하지 않습니다.</p>}
+              </div>
+            </div>
+          );
+        }
+
+        return null;
       }}
     </SubTabLayout>
   );

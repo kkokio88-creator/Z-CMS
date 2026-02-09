@@ -633,6 +633,7 @@ const App = () => {
           <ErrorBoundary fallbackTitle="생산/BOM 로드 중 오류" key="production">
             <ProductionBomView
               production={gsProduction}
+              purchases={gsPurchases}
               insights={insights}
               onItemClick={handleItemClick}
             />

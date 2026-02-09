@@ -216,6 +216,62 @@ export interface ABCXYZInsight {
   };
 }
 
+export type FreshnessGrade = 'safe' | 'good' | 'caution' | 'warning' | 'danger';
+
+export interface FreshnessItem {
+  productCode: string;
+  productName: string;
+  score: number;           // 0~100
+  grade: FreshnessGrade;
+  daysSinceLastPurchase: number;
+  avgDailyDemand: number;
+  currentStock: number;
+  estimatedDaysLeft: number; // 현재재고 / 일평균수요
+}
+
+export interface FreshnessInsight {
+  items: FreshnessItem[];
+  gradeCount: Record<FreshnessGrade, number>;
+  avgScore: number;
+}
+
+export interface LimitPriceItem {
+  productCode: string;
+  productName: string;
+  avgUnitPrice: number;      // 평균 단가
+  limitPrice: number;        // 한계단가 (평균 + 1σ)
+  currentPrice: number;      // 최근 단가
+  exceedRate: number;        // 초과율 (%)
+  isExceeding: boolean;      // 한계 초과 여부
+}
+
+export interface LimitPriceInsight {
+  items: LimitPriceItem[];
+  exceedCount: number;       // 초과 품목 수
+  totalItems: number;
+}
+
+export interface BomVarianceItem {
+  productCode: string;
+  productName: string;
+  standardPrice: number;     // 기준단가 (전체 평균)
+  actualPrice: number;       // 실제단가 (최근 기간)
+  standardQty: number;       // 기준수량 (생산 비례 기대치)
+  actualQty: number;         // 실제수량 (최근 기간)
+  priceVariance: number;     // 가격차이 금액
+  qtyVariance: number;       // 수량차이 금액
+  totalVariance: number;     // 총 차이 금액
+}
+
+export interface BomVarianceInsight {
+  items: BomVarianceItem[];
+  totalPriceVariance: number;
+  totalQtyVariance: number;
+  totalVariance: number;
+  favorableCount: number;    // 유리 (비용 절감) 품목
+  unfavorableCount: number;  // 불리 (비용 초과) 품목
+}
+
 export interface DashboardInsights {
   channelRevenue: ChannelRevenueInsight | null;
   productProfit: ProductProfitInsight | null;
@@ -228,6 +284,9 @@ export interface DashboardInsights {
   costBreakdown: CostBreakdownInsight | null;
   statisticalOrder: StatisticalOrderInsight | null;
   abcxyz: ABCXYZInsight | null;
+  freshness: FreshnessInsight | null;
+  limitPrice: LimitPriceInsight | null;
+  bomVariance: BomVarianceInsight | null;
 }
 
 // ==============================
@@ -1136,6 +1195,254 @@ export function computeABCXYZ(
 }
 
 // ==============================
+// P3-3 신선도 점수 시스템
+// ==============================
+
+const FRESHNESS_GRADES: { min: number; grade: FreshnessGrade }[] = [
+  { min: 80, grade: 'safe' },
+  { min: 60, grade: 'good' },
+  { min: 40, grade: 'caution' },
+  { min: 20, grade: 'warning' },
+  { min: 0, grade: 'danger' },
+];
+
+function getFreshnessGrade(score: number): FreshnessGrade {
+  for (const g of FRESHNESS_GRADES) {
+    if (score >= g.min) return g.grade;
+  }
+  return 'danger';
+}
+
+export function computeFreshness(
+  purchases: PurchaseData[],
+  inventoryData: InventorySafetyItem[]
+): FreshnessInsight {
+  if (purchases.length === 0 || inventoryData.length === 0) {
+    return { items: [], gradeCount: { safe: 0, good: 0, caution: 0, warning: 0, danger: 0 }, avgScore: 0 };
+  }
+
+  const today = new Date();
+  // 품목별 구매 이력 집계
+  const purchaseMap = new Map<string, { dates: Date[]; totalQty: number; name: string }>();
+  purchases.forEach(p => {
+    if (!p.productCode) return;
+    const existing = purchaseMap.get(p.productCode) || { dates: [], totalQty: 0, name: p.productName };
+    existing.dates.push(new Date(p.date));
+    existing.totalQty += p.quantity;
+    purchaseMap.set(p.productCode, existing);
+  });
+
+  // 조회 기간 (일)
+  const allDates = purchases.map(p => new Date(p.date).getTime());
+  const periodDays = Math.max(1, Math.round((Math.max(...allDates) - Math.min(...allDates)) / (1000 * 60 * 60 * 24)));
+
+  // 재고 맵
+  const stockMap = new Map<string, InventorySafetyItem>();
+  inventoryData.forEach(inv => {
+    const key = inv.skuCode || inv.skuName;
+    stockMap.set(key, inv);
+  });
+
+  const gradeCount: Record<FreshnessGrade, number> = { safe: 0, good: 0, caution: 0, warning: 0, danger: 0 };
+  let totalScore = 0;
+
+  const items: FreshnessItem[] = Array.from(purchaseMap.entries()).map(([code, data]) => {
+    // 마지막 구매일
+    const lastDate = new Date(Math.max(...data.dates.map(d => d.getTime())));
+    const daysSinceLastPurchase = Math.round((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // 일평균 수요
+    const avgDailyDemand = data.totalQty / periodDays;
+
+    // 현재 재고 (재고 데이터 매칭)
+    const inv = stockMap.get(code);
+    const currentStock = inv?.currentStock || 0;
+
+    // 예상 잔여일
+    const estimatedDaysLeft = avgDailyDemand > 0 ? Math.round(currentStock / avgDailyDemand) : 999;
+
+    // 점수 계산 (0~100)
+    // 최근성 점수 (40%): 마지막 입고 후 경과일 → 0일=100, 30일이상=0
+    const recencyScore = Math.max(0, 100 - Math.round(daysSinceLastPurchase * 100 / 30));
+    // 회전 점수 (30%): 잔여일수 → 7일이하=100, 60일이상=0
+    const coverageScore = estimatedDaysLeft >= 999 ? 0 : Math.max(0, 100 - Math.round(estimatedDaysLeft * 100 / 60));
+    // 수요 안정성 (30%): 구매 횟수 → 10회이상=100
+    const demandScore = Math.min(100, Math.round(data.dates.length * 10));
+
+    const score = Math.round(recencyScore * 0.4 + coverageScore * 0.3 + demandScore * 0.3);
+    const grade = getFreshnessGrade(score);
+    gradeCount[grade]++;
+    totalScore += score;
+
+    return {
+      productCode: code,
+      productName: data.name,
+      score, grade,
+      daysSinceLastPurchase,
+      avgDailyDemand: Math.round(avgDailyDemand * 10) / 10,
+      currentStock,
+      estimatedDaysLeft,
+    };
+  }).sort((a, b) => a.score - b.score); // 낮은 점수 우선
+
+  return {
+    items,
+    gradeCount,
+    avgScore: items.length > 0 ? Math.round(totalScore / items.length) : 0,
+  };
+}
+
+// ==============================
+// P3-5 한계단가 + 초과 경고
+// ==============================
+
+export function computeLimitPrice(purchases: PurchaseData[]): LimitPriceInsight {
+  if (purchases.length === 0) {
+    return { items: [], exceedCount: 0, totalItems: 0 };
+  }
+
+  // 품목별 단가 이력
+  const priceMap = new Map<string, { name: string; prices: number[]; lastPrice: number }>();
+  purchases.forEach(p => {
+    if (!p.productCode || p.quantity === 0) return;
+    const unitPrice = p.total / p.quantity;
+    const existing = priceMap.get(p.productCode) || { name: p.productName, prices: [], lastPrice: 0 };
+    existing.prices.push(unitPrice);
+    existing.lastPrice = unitPrice; // 마지막 단가 (시간순 정렬 가정)
+    priceMap.set(p.productCode, existing);
+  });
+
+  const items: LimitPriceItem[] = Array.from(priceMap.entries())
+    .filter(([_, data]) => data.prices.length >= 2)
+    .map(([code, data]) => {
+      const n = data.prices.length;
+      const mean = data.prices.reduce((s, v) => s + v, 0) / n;
+      const variance = data.prices.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / n;
+      const stdDev = Math.sqrt(variance);
+
+      // 한계단가 = 평균 + 1σ
+      const limitPrice = Math.round(mean + stdDev);
+      const currentPrice = Math.round(data.lastPrice);
+      const exceedRate = limitPrice > 0 ? Math.round(((currentPrice - limitPrice) / limitPrice) * 1000) / 10 : 0;
+
+      return {
+        productCode: code,
+        productName: data.name,
+        avgUnitPrice: Math.round(mean),
+        limitPrice,
+        currentPrice,
+        exceedRate,
+        isExceeding: currentPrice > limitPrice,
+      };
+    })
+    .sort((a, b) => b.exceedRate - a.exceedRate);
+
+  return {
+    items,
+    exceedCount: items.filter(i => i.isExceeding).length,
+    totalItems: items.length,
+  };
+}
+
+// ==============================
+// P3-4 레시피 대비 투입 오차 분석
+// ==============================
+
+export function computeBomVariance(
+  purchases: PurchaseData[],
+  production: ProductionData[]
+): BomVarianceInsight {
+  if (purchases.length === 0 || production.length === 0) {
+    return { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
+  }
+
+  // 총 생산량
+  const totalProduction = production.reduce((s, p) => s + p.prodQtyTotal, 0);
+  if (totalProduction === 0) {
+    return { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
+  }
+
+  // 기간 분할: 전반기(기준) vs 후반기(실제)
+  const sortedPurchases = [...purchases].sort((a, b) => a.date.localeCompare(b.date));
+  const midIdx = Math.floor(sortedPurchases.length / 2);
+  const basePeriod = sortedPurchases.slice(0, midIdx);
+  const recentPeriod = sortedPurchases.slice(midIdx);
+
+  const sortedProd = [...production].sort((a, b) => a.date.localeCompare(b.date));
+  const prodMidIdx = Math.floor(sortedProd.length / 2);
+  const baseProd = sortedProd.slice(0, prodMidIdx);
+  const recentProd = sortedProd.slice(prodMidIdx);
+
+  const baseProdTotal = baseProd.reduce((s, p) => s + p.prodQtyTotal, 0) || 1;
+  const recentProdTotal = recentProd.reduce((s, p) => s + p.prodQtyTotal, 0) || 1;
+
+  // 품목별 기준 기간 집계
+  type PeriodAgg = { qty: number; total: number; name: string };
+  const aggregate = (data: PurchaseData[]) => {
+    const map = new Map<string, PeriodAgg>();
+    data.forEach(p => {
+      if (!p.productCode || p.quantity === 0) return;
+      const existing = map.get(p.productCode) || { qty: 0, total: 0, name: p.productName };
+      existing.qty += p.quantity;
+      existing.total += p.total;
+      map.set(p.productCode, existing);
+    });
+    return map;
+  };
+
+  const baseAgg = aggregate(basePeriod);
+  const recentAgg = aggregate(recentPeriod);
+
+  // 양쪽 모두 데이터가 있는 품목만 비교
+  const allCodes = new Set([...baseAgg.keys(), ...recentAgg.keys()]);
+  let totalPriceVar = 0;
+  let totalQtyVar = 0;
+
+  const items: BomVarianceItem[] = [];
+  allCodes.forEach(code => {
+    const base = baseAgg.get(code);
+    const recent = recentAgg.get(code);
+    if (!base || !recent || base.qty === 0 || recent.qty === 0) return;
+
+    const standardPrice = Math.round(base.total / base.qty);
+    const actualPrice = Math.round(recent.total / recent.qty);
+
+    // 기준 수량 = (기준 기간 투입량 / 기준 기간 생산량) × 최근 기간 생산량
+    const standardRatio = base.qty / baseProdTotal;
+    const standardQty = Math.round(standardRatio * recentProdTotal);
+    const actualQty = recent.qty;
+
+    // 가격차이 = (실제단가 - 기준단가) × 실제수량
+    const priceVariance = (actualPrice - standardPrice) * actualQty;
+    // 수량차이 = (실제수량 - 기준수량) × 기준단가
+    const qtyVariance = (actualQty - standardQty) * standardPrice;
+    const totalVariance = priceVariance + qtyVariance;
+
+    totalPriceVar += priceVariance;
+    totalQtyVar += qtyVariance;
+
+    items.push({
+      productCode: code,
+      productName: base.name || recent.name,
+      standardPrice, actualPrice,
+      standardQty, actualQty,
+      priceVariance, qtyVariance, totalVariance,
+    });
+  });
+
+  items.sort((a, b) => Math.abs(b.totalVariance) - Math.abs(a.totalVariance));
+
+  return {
+    items,
+    totalPriceVariance: totalPriceVar,
+    totalQtyVariance: totalQtyVar,
+    totalVariance: totalPriceVar + totalQtyVar,
+    favorableCount: items.filter(i => i.totalVariance < 0).length,
+    unfavorableCount: items.filter(i => i.totalVariance > 0).length,
+  };
+}
+
+// ==============================
 // 통합 인사이트 계산
 // ==============================
 
@@ -1167,6 +1474,16 @@ export function computeAllInsights(
 
   const abcxyz = purchases.length > 0 ? computeABCXYZ(purchases, config) : null;
 
+  const freshness = (purchases.length > 0 && inventoryData && inventoryData.length > 0)
+    ? computeFreshness(purchases, inventoryData)
+    : null;
+
+  const limitPrice = purchases.length > 0 ? computeLimitPrice(purchases) : null;
+
+  const bomVariance = (purchases.length > 0 && production.length > 0)
+    ? computeBomVariance(purchases, production)
+    : null;
+
   const recommendations = generateRecommendations(
     materialPrices,
     wasteAnalysis,
@@ -1187,5 +1504,8 @@ export function computeAllInsights(
     costBreakdown,
     statisticalOrder,
     abcxyz,
+    freshness,
+    limitPrice,
+    bomVariance,
   };
 }

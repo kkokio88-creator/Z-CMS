@@ -90,6 +90,7 @@ export const CostManagementView: React.FC<Props> = ({
   const materialPrices = insights?.materialPrices;
   const utilityCosts = insights?.utilityCosts;
   const recommendations = insights?.recommendations || [];
+  const limitPrice = insights?.limitPrice || null;
 
   const [rawFilter, setRawFilter] = useState('all');
   const [subFilter, setSubFilter] = useState('all');
@@ -361,6 +362,66 @@ export const CostManagementView: React.FC<Props> = ({
                   </div>
                 ) : <p className="text-gray-400 text-center py-6">해당 조건의 품목이 없습니다.</p>}
               </div>
+
+              {/* 한계단가 초과 경고 */}
+              {limitPrice && limitPrice.items.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span className="material-icons-outlined text-red-500">price_change</span>
+                    한계단가 분석
+                    {limitPrice.exceedCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                        {limitPrice.exceedCount}건 초과
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    한계단가 = 평균단가 + 1 표준편차 | 초과 품목은 가격 이상 징후
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 text-gray-500">품목</th>
+                          <th className="text-right py-2 px-3 text-gray-500">평균단가</th>
+                          <th className="text-right py-2 px-3 text-gray-500">한계단가</th>
+                          <th className="text-right py-2 px-3 text-gray-500">현재단가</th>
+                          <th className="text-right py-2 px-3 text-gray-500">초과율</th>
+                          <th className="text-center py-2 px-3 text-gray-500">상태</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {limitPrice.items.slice(0, 15).map(item => (
+                          <tr key={item.productCode} className={`border-b border-gray-100 dark:border-gray-800 ${
+                            item.isExceeding ? 'bg-red-50/50 dark:bg-red-900/10' : ''
+                          }`}>
+                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
+                            <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.avgUnitPrice)}</td>
+                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(item.limitPrice)}</td>
+                            <td className={`py-2 px-3 text-right font-medium ${item.isExceeding ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'}`}>
+                              {formatCurrency(item.currentPrice)}
+                            </td>
+                            <td className={`py-2 px-3 text-right font-medium ${
+                              item.exceedRate > 0 ? 'text-red-600' : item.exceedRate < -5 ? 'text-green-600' : 'text-gray-500'
+                            }`}>
+                              {item.exceedRate > 0 ? '+' : ''}{item.exceedRate.toFixed(1)}%
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                item.isExceeding
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                  : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                              }`}>
+                                {item.isExceeding ? '초과' : '정상'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* 인사이트 */}
               <InsightCards items={materialRecs} />
