@@ -16,13 +16,14 @@ interface Props {
   purchases: PurchaseData[];
   insights: DashboardInsights | null;
   onItemClick: (item: any) => void;
+  onTabChange?: (tab: string) => void;
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 const CHANNEL_COLORS = ['#3B82F6', '#10B981', '#F59E0B'];
 const BUDGET_COLORS = { rawMaterial: '#3B82F6', subMaterial: '#10B981', labor: '#F59E0B', overhead: '#EF4444' };
 
-export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, purchases, insights, onItemClick }) => {
+export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, purchases, insights, onItemClick, onTabChange }) => {
   const config = useBusinessConfig();
   const channelRevenue = insights?.channelRevenue;
   const productProfit = insights?.productProfit;
@@ -101,7 +102,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
   ];
 
   return (
-    <SubTabLayout title="수익 분석" tabs={tabs}>
+    <SubTabLayout title="수익 분석" tabs={tabs} onTabChange={onTabChange}>
       {(activeTab) => {
         if (activeTab === 'channel') {
           const hasProfit = channelRevenue?.channels?.some(ch => ch.profit1 !== ch.revenue) ?? false;
@@ -146,15 +147,15 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                 ))}
               </div>
 
-              {/* A1: 3단계 이익 비교 테이블 — 행=단계, 열=채널 */}
-              {hasProfit && channelRevenue && totals && (
+              {/* A1: 5단계 수익 분석 테이블 — 권장판매가 → 할인/수수료 → 정산매출 → 이익 */}
+              {channelRevenue && totals && (
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">3단계 이익 분석 (단계별 채널 비교)</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널별 수익 구조 분석</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">구분</th>
+                        <tr className="border-b-2 border-gray-300 dark:border-gray-600">
+                          <th className="text-left py-2 px-3 text-gray-500 w-48">구분</th>
                           {channels.map((ch, i) => (
                             <th key={ch.name} className="text-right py-2 px-3" style={{ color: CHANNEL_COLORS[i] }}>{ch.name}</th>
                           ))}
@@ -162,19 +163,39 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                         </tr>
                       </thead>
                       <tbody>
-                        {/* 1단계 */}
+                        {/* 매출 산출 구간 */}
+                        <tr className="bg-amber-50/50 dark:bg-amber-900/10 border-b border-gray-200 dark:border-gray-700">
+                          <td colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-amber-700 dark:text-amber-400">매출 산출</td>
+                        </tr>
+                        <tr className="border-b border-gray-100 dark:border-gray-800">
+                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400">권장판매가 매출</td>
+                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right">{formatCurrency(ch.recommendedRevenue)}</td>)}
+                          <td className="py-2 px-3 text-right font-bold">{formatCurrency(channelRevenue.totalRecommendedRevenue)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100 dark:border-gray-800">
+                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 할인금액</td>
+                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-red-400">{ch.discountAmount > 0 ? `-${formatCurrency(ch.discountAmount)}` : '-'}</td>)}
+                          <td className="py-2 px-3 text-right text-red-400">{channelRevenue.totalDiscountAmount > 0 ? `-${formatCurrency(channelRevenue.totalDiscountAmount)}` : '-'}</td>
+                        </tr>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 플랫폼 수수료</td>
+                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-red-400">{ch.commissionAmount > 0 ? `-${formatCurrency(ch.commissionAmount)}` : '-'}</td>)}
+                          <td className="py-2 px-3 text-right text-red-400">{channelRevenue.totalCommissionAmount > 0 ? `-${formatCurrency(channelRevenue.totalCommissionAmount)}` : '-'}</td>
+                        </tr>
+                        <tr className="border-b border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30">
+                          <td className="py-2 px-3 font-bold text-gray-900 dark:text-white">정산매출</td>
+                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right font-bold">{formatCurrency(ch.settlementRevenue)}</td>)}
+                          <td className="py-2 px-3 text-right font-bold">{formatCurrency(totals.revenue)}</td>
+                        </tr>
+
+                        {/* 1단계: 제품이익 */}
                         <tr className="bg-green-50/50 dark:bg-green-900/10 border-b border-gray-200 dark:border-gray-700">
                           <td colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-green-700 dark:text-green-400">1단계: 제품이익</td>
                         </tr>
                         <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400">매출</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right">{formatCurrency(ch.revenue)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold">{formatCurrency(totals.revenue)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400">재료비</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.directCost)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(totals.directCost)}</td>
+                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 재료비 <span className="text-xs text-gray-400">(권장판매가/1.1×50%)</span></td>
+                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.materialCost)}</td>)}
+                          <td className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channelRevenue.totalMaterialCost)}</td>
                         </tr>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           <td className="py-2 px-3 font-medium text-green-700 dark:text-green-400">제품이익</td>
@@ -182,19 +203,19 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                           <td className={`py-2 px-3 text-right font-bold ${totals.profit1 >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(totals.profit1)}</td>
                         </tr>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <td className="py-2 px-3 text-gray-500 text-xs">마진율</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-xs text-gray-500">{ch.marginRate1.toFixed(1)}%</td>)}
-                          <td className="py-2 px-3 text-right text-xs text-gray-500">{totals.revenue > 0 ? (totals.profit1 / totals.revenue * 100).toFixed(1) : '0.0'}%</td>
+                          <td className="py-1 px-3 text-gray-400 text-xs">마진율</td>
+                          {channels.map(ch => <td key={ch.name} className="py-1 px-3 text-right text-xs text-gray-400">{ch.marginRate1.toFixed(1)}%</td>)}
+                          <td className="py-1 px-3 text-right text-xs text-gray-400">{totals.revenue > 0 ? (totals.profit1 / totals.revenue * 100).toFixed(1) : '0.0'}%</td>
                         </tr>
 
-                        {/* 2단계 */}
+                        {/* 2단계: 채널이익 */}
                         <tr className="bg-blue-50/50 dark:bg-blue-900/10 border-b border-gray-200 dark:border-gray-700">
                           <td colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-blue-700 dark:text-blue-400">2단계: 채널이익</td>
                         </tr>
                         <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400">채널변동비</td>
+                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 채널 변동비</td>
                           {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.channelVariableCost)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold text-gray-500">-</td>
+                          <td className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channels.reduce((s, c) => s + c.channelVariableCost, 0))}</td>
                         </tr>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           <td className="py-2 px-3 font-medium text-blue-700 dark:text-blue-400">채널이익</td>
@@ -202,14 +223,14 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                           <td className={`py-2 px-3 text-right font-bold ${totals.profit2 >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatCurrency(totals.profit2)}</td>
                         </tr>
 
-                        {/* 3단계 */}
+                        {/* 3단계: 사업부이익 */}
                         <tr className="bg-emerald-50/50 dark:bg-emerald-900/10 border-b border-gray-200 dark:border-gray-700">
                           <td colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-emerald-700 dark:text-emerald-400">3단계: 사업부이익</td>
                         </tr>
                         <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400">채널고정비</td>
+                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 채널 고정비</td>
                           {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.channelFixedCost)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold text-gray-500">-</td>
+                          <td className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channels.reduce((s, c) => s + c.channelFixedCost, 0))}</td>
                         </tr>
                         <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
                           <td className="py-2 px-3 font-bold text-emerald-700 dark:text-emerald-400">사업부이익</td>
@@ -217,11 +238,11 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                           <td className={`py-2 px-3 text-right font-bold ${totals.profit3 >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(totals.profit3)}</td>
                         </tr>
                         <tr>
-                          <td className="py-2 px-3 text-gray-500 text-xs">마진율</td>
+                          <td className="py-1 px-3 text-gray-400 text-xs">마진율</td>
                           {channels.map(ch => (
-                            <td key={ch.name} className={`py-2 px-3 text-right text-xs font-medium ${ch.marginRate3 >= config.profitMarginGood ? 'text-green-600' : ch.marginRate3 >= 0 ? 'text-orange-500' : 'text-red-600'}`}>{ch.marginRate3.toFixed(1)}%</td>
+                            <td key={ch.name} className={`py-1 px-3 text-right text-xs font-medium ${ch.marginRate3 >= config.profitMarginGood ? 'text-green-600' : ch.marginRate3 >= 0 ? 'text-orange-500' : 'text-red-600'}`}>{ch.marginRate3.toFixed(1)}%</td>
                           ))}
-                          <td className="py-2 px-3 text-right text-xs font-bold">{totals.revenue > 0 ? (totals.profit3 / totals.revenue * 100).toFixed(1) : '0.0'}%</td>
+                          <td className="py-1 px-3 text-right text-xs font-bold">{totals.revenue > 0 ? (totals.profit3 / totals.revenue * 100).toFixed(1) : '0.0'}%</td>
                         </tr>
                       </tbody>
                     </table>

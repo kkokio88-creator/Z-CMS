@@ -232,7 +232,7 @@ class AgentService {
    */
   async getActiveDebates(): Promise<DebateRecord[]> {
     try {
-      const response = await fetch(`${API_BASE}/debates/active`);
+      const response = await fetch(`${API_BASE}/debates?includeActive=true`);
       const data = await response.json();
       return data.data || [];
     } catch (error) {
@@ -246,7 +246,7 @@ class AgentService {
    */
   async getDebateHistory(limit = 10): Promise<DebateRecord[]> {
     try {
-      const response = await fetch(`${API_BASE}/debates/history?limit=${limit}`);
+      const response = await fetch(`${API_BASE}/debates?includeActive=false&limit=${limit}`);
       const data = await response.json();
       return data.data || [];
     } catch (error) {
@@ -259,7 +259,7 @@ class AgentService {
    * Start all team debates
    */
   async startAllTeamDebates(priority: 'low' | 'medium' | 'high' | 'critical' = 'medium'): Promise<void> {
-    await fetch(`${API_BASE}/debates/start-all`, {
+    await fetch(`${API_BASE}/debates/all-teams`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ priority }),
@@ -274,13 +274,13 @@ class AgentService {
     topic: string,
     priority: 'low' | 'medium' | 'high' | 'critical' = 'medium'
   ): Promise<string> {
-    const response = await fetch(`${API_BASE}/debates/start`, {
+    const response = await fetch(`${API_BASE}/debates`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ team, topic, priority }),
     });
     const data = await response.json();
-    return data.debateId;
+    return data.data?.debateId || data.debateId;
   }
 }
 

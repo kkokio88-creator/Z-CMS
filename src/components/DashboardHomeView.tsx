@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { KPICardProps, DashboardSummary } from '../types';
-import { LineChart, Line, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
 import type { SyncStatusInfo } from '../services/supabaseClient';
 import { formatCurrency } from '../utils/format';
+import type { ProfitCenterScoreInsight } from '../services/insightService';
 
 interface DataAvailability {
   sales: boolean;
@@ -61,6 +62,7 @@ interface DashboardHomeViewProps {
   onNavigate?: (view: string) => void;
   dataSource?: 'backend' | 'direct' | false;
   syncStatus?: SyncStatusInfo | null;
+  profitCenterScore?: ProfitCenterScoreInsight | null;
 }
 
 const KPICard: React.FC<
@@ -138,6 +140,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   onNavigate,
   dataSource,
   syncStatus,
+  profitCenterScore,
 }) => {
   const [sheetsConfig, setSheetsConfig] = useState<DataSourcesConfig | null>(null);
   const [testingSource, setTestingSource] = useState<string | null>(null);
@@ -395,6 +398,103 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           color="#EF4444"
         />
       </div>
+
+      {/* 독립채산제 성과 */}
+      {profitCenterScore && (
+        <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <span className="material-icons-outlined text-purple-500">emoji_events</span>
+              독립채산제 성과
+            </h3>
+            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+              <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-medium">
+                {profitCenterScore.activeBracket.label} 구간
+              </span>
+              <span>월매출 {formatCurrency(profitCenterScore.monthlyRevenue)} (추정)</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* 종합 점수 */}
+            <div className="flex flex-col items-center justify-center">
+              <div className={`text-6xl font-black ${
+                profitCenterScore.overallScore >= 110 ? 'text-green-500' :
+                profitCenterScore.overallScore >= 100 ? 'text-blue-500' :
+                profitCenterScore.overallScore >= 90 ? 'text-orange-500' : 'text-red-500'
+              }`}>
+                {profitCenterScore.overallScore}
+              </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">종합 점수</div>
+              <div className={`mt-2 px-3 py-1 rounded-full text-xs font-bold ${
+                profitCenterScore.overallScore >= 110 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                profitCenterScore.overallScore >= 100 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                profitCenterScore.overallScore >= 90 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+              }`}>
+                {profitCenterScore.overallScore >= 110 ? '우수' :
+                 profitCenterScore.overallScore >= 100 ? '달성' :
+                 profitCenterScore.overallScore >= 90 ? '주의' : '미달'}
+              </div>
+            </div>
+
+            {/* 지표별 점수 바 차트 */}
+            <div className="lg:col-span-2">
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={profitCenterScore.scores.map(s => ({
+                      name: s.metric,
+                      score: s.score,
+                      target: 100,
+                    }))}
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" domain={[0, 150]} tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
+                    <Tooltip
+                      formatter={(value: number, name: string) => [
+                        `${value}점`,
+                        name === 'score' ? '달성률' : '목표',
+                      ]}
+                    />
+                    <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={20}>
+                      {profitCenterScore.scores.map((s, i) => (
+                        <Cell
+                          key={i}
+                          fill={
+                            s.status === 'excellent' ? '#10B981' :
+                            s.status === 'good' ? '#3B82F6' :
+                            s.status === 'warning' ? '#F59E0B' : '#EF4444'
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* 지표 상세 */}
+          <div className="mt-4 grid grid-cols-5 gap-2">
+            {profitCenterScore.scores.map(s => (
+              <div key={s.metric} className={`text-center p-2 rounded-lg border ${
+                s.status === 'excellent' ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/10' :
+                s.status === 'good' ? 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/10' :
+                s.status === 'warning' ? 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/10' :
+                'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/10'
+              }`}>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400">{s.metric}</div>
+                <div className="text-lg font-bold mt-0.5">{s.actual}</div>
+                <div className="text-[10px] text-gray-400">목표 {s.target}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent Alerts & Shortcuts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

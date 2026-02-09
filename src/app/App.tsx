@@ -11,6 +11,9 @@ import { InventoryOrderView } from '../components/InventoryOrderView.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { AgentProvider } from '../agents/AgentContext.tsx';
 import { AIInsightSidebar } from '../components/AIInsightSidebar.tsx';
+import { AIAssistButton } from '../components/AIAssistButton.tsx';
+import { AIAssistOverlay } from '../components/AIAssistOverlay.tsx';
+import { countDangerInsights } from '../utils/pageInsightGenerator';
 import { SettingsProvider } from '../contexts/SettingsContext.tsx';
 import { DataProvider, DataContextType } from '../contexts/DataContext.tsx';
 import { UIProvider, UIContextType, ViewType as UIViewType } from '../contexts/UIContext.tsx';
@@ -125,6 +128,10 @@ const App = () => {
   // AI Sidebar State
   const [isAISidebarOpen, setIsAISidebarOpen] = useState(true);
 
+  // AI Overlay State
+  const [isAIOverlayOpen, setIsAIOverlayOpen] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<string | null>(null);
+
   // 기본값: 라이트 모드 고정 (시스템 다크모드 자동 감지 비활성화)
 
   useEffect(() => {
@@ -139,6 +146,11 @@ const App = () => {
   useEffect(() => {
     handleEcountSync();
   }, []);
+
+  const handleSetActiveView = (view: ViewType) => {
+    setActiveView(view);
+    setActiveSubTab(null);
+  };
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -479,7 +491,7 @@ const App = () => {
   const handleNotificationClick = (notification: Notification) => {
     setIsNotificationOpen(false);
     if (notification.targetView) {
-      setActiveView(notification.targetView as ViewType);
+      handleSetActiveView(notification.targetView as ViewType);
     }
   };
 
@@ -577,7 +589,7 @@ const App = () => {
               다시 시도
             </button>
             <button
-              onClick={() => setActiveView('settings')}
+              onClick={() => handleSetActiveView('settings')}
               className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
             >
               설정으로 이동
@@ -601,10 +613,11 @@ const App = () => {
               syncMessage={syncMessage}
               dataAvailability={dataAvailability}
               inventoryCount={inventoryData.length}
-              onNavigateToSettings={() => setActiveView('settings')}
-              onNavigate={view => setActiveView(view as ViewType)}
+              onNavigateToSettings={() => handleSetActiveView('settings')}
+              onNavigate={view => handleSetActiveView(view as ViewType)}
               dataSource={dataSource}
               syncStatus={syncStatus}
+              profitCenterScore={insights?.profitCenterScore}
             />
           </ErrorBoundary>
         );
@@ -617,6 +630,7 @@ const App = () => {
               purchases={gsPurchases}
               insights={insights}
               onItemClick={handleItemClick}
+              onTabChange={setActiveSubTab}
             />
           </ErrorBoundary>
         );
@@ -629,6 +643,7 @@ const App = () => {
               production={gsProduction}
               insights={insights}
               onItemClick={handleItemClick}
+              onTabChange={setActiveSubTab}
             />
           </ErrorBoundary>
         );
@@ -640,6 +655,7 @@ const App = () => {
               purchases={gsPurchases}
               insights={insights}
               onItemClick={handleItemClick}
+              onTabChange={setActiveSubTab}
             />
           </ErrorBoundary>
         );
@@ -652,6 +668,7 @@ const App = () => {
               insights={insights}
               stocktakeAnomalies={stocktakeAnomalies}
               onItemClick={handleItemClick}
+              onTabChange={setActiveSubTab}
             />
           </ErrorBoundary>
         );
@@ -674,10 +691,11 @@ const App = () => {
               syncMessage={syncMessage}
               dataAvailability={dataAvailability}
               inventoryCount={inventoryData.length}
-              onNavigateToSettings={() => setActiveView('settings')}
-              onNavigate={view => setActiveView(view as ViewType)}
+              onNavigateToSettings={() => handleSetActiveView('settings')}
+              onNavigate={view => handleSetActiveView(view as ViewType)}
               dataSource={dataSource}
               syncStatus={syncStatus}
+              profitCenterScore={insights?.profitCenterScore}
             />
           </ErrorBoundary>
         );
@@ -942,12 +960,14 @@ const App = () => {
 
   const uiContextValue = useMemo<UIContextType>(() => ({
     activeView,
-    setActiveView,
+    setActiveView: handleSetActiveView,
+    activeSubTab,
+    setActiveSubTab,
     dateRange,
     setDateRange,
     isDarkMode,
     toggleDarkMode,
-  }), [activeView, dateRange, isDarkMode]);
+  }), [activeView, activeSubTab, dateRange, isDarkMode]);
 
   return (
     <SettingsProvider>
@@ -957,7 +977,7 @@ const App = () => {
       <div className="flex h-screen bg-background-light dark:bg-background-dark overflow-hidden font-sans">
         <Sidebar
           activeView={activeView}
-          onNavigate={setActiveView}
+          onNavigate={handleSetActiveView}
           dataAvailability={dataAvailability}
         />
 
@@ -979,11 +999,13 @@ const App = () => {
             onNotificationClick={handleNotificationClick}
           />
 
-          <div className="px-6 pt-4 pb-2">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white transition-colors">
-              {getPageTitle()}
-            </h2>
-          </div>
+          {activeView === 'home' && (
+            <div className="px-6 pt-4 pb-2">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white transition-colors">
+                {getPageTitle()}
+              </h2>
+            </div>
+          )}
 
           <div className="flex-1 overflow-auto p-6 scroll-smooth">{renderActiveView()}</div>
         </main>
@@ -996,6 +1018,16 @@ const App = () => {
             setSelectedItem(insight);
             setIsModalOpen(true);
           }}
+        />
+
+        {/* AI Assist Overlay */}
+        <AIAssistButton
+          onClick={() => setIsAIOverlayOpen(true)}
+          dangerCount={countDangerInsights(activeView, activeSubTab, insights)}
+        />
+        <AIAssistOverlay
+          isOpen={isAIOverlayOpen}
+          onClose={() => setIsAIOverlayOpen(false)}
         />
 
         <Modal

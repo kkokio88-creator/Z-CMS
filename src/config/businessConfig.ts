@@ -3,6 +3,19 @@
  * 모든 하드코딩된 비즈니스 파라미터를 한 곳에서 관리합니다.
  */
 
+/** 독립채산제 매출구간별 목표 */
+export interface ProfitCenterGoal {
+  revenueBracket: number;  // 월매출 기준 (원)
+  label: string;           // 표시 라벨
+  targets: {
+    productionToLabor: number;    // 생산매출/노무비 목표배수
+    revenueToMaterial: number;    // 매출/재료비 목표배수
+    revenueToExpense: number;     // 매출/경비 목표배수
+    profitMarginTarget: number;   // 영업이익률 목표 (%)
+    wasteRateTarget: number;      // 폐기율 목표 (%)
+  };
+}
+
 export interface BusinessConfig {
   // === 수익/마진 ===
   /** 기본 이익률 (0~1, 예: 0.15 = 15%) */
@@ -119,6 +132,10 @@ export interface BusinessConfig {
   stockDaysWarning: number;
   /** 저회전 판단 기준 (회전율) */
   lowTurnoverThreshold: number;
+
+  // === 독립채산제 ===
+  /** 매출구간별 독립채산제 목표 */
+  profitCenterGoals: ProfitCenterGoal[];
 }
 
 /** 기본 비즈니스 설정값 */
@@ -194,6 +211,43 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
   stockDaysUrgent: 3,
   stockDaysWarning: 7,
   lowTurnoverThreshold: 1.0,
+
+  // 독립채산제
+  profitCenterGoals: [
+    {
+      revenueBracket: 800000000,
+      label: '8억',
+      targets: {
+        productionToLabor: 2.0,
+        revenueToMaterial: 2.5,
+        revenueToExpense: 5.0,
+        profitMarginTarget: 15,
+        wasteRateTarget: 3,
+      },
+    },
+    {
+      revenueBracket: 900000000,
+      label: '9억',
+      targets: {
+        productionToLabor: 2.2,
+        revenueToMaterial: 2.7,
+        revenueToExpense: 6.0,
+        profitMarginTarget: 18,
+        wasteRateTarget: 2.5,
+      },
+    },
+    {
+      revenueBracket: 1000000000,
+      label: '10억',
+      targets: {
+        productionToLabor: 2.5,
+        revenueToMaterial: 3.0,
+        revenueToExpense: 7.0,
+        profitMarginTarget: 20,
+        wasteRateTarget: 2,
+      },
+    },
+  ],
 };
 
 const SETTINGS_STORAGE_KEY = 'ZCMS_BUSINESS_CONFIG';

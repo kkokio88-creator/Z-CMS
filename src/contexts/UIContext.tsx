@@ -16,6 +16,8 @@ export type ViewType =
 export interface UIContextType {
   activeView: ViewType;
   setActiveView: (view: ViewType) => void;
+  activeSubTab: string | null;
+  setActiveSubTab: (tab: string | null) => void;
   dateRange: string;
   setDateRange: (range: string) => void;
   isDarkMode: boolean;

@@ -27,6 +27,15 @@ export interface ChannelCostSummary {
   totalVariableRatePct: number;   // 변동비 합계 %
   totalVariablePerOrder: number;  // 건당 변동비 합계 원
   totalFixedMonthly: number;      // 월 고정비 합계 원
+  discountRate: number;           // 할인율 (%) — 권장판매가 대비
+  commissionRate: number;         // 플랫폼 수수료율 (%) — 권장판매가 대비
+}
+
+/** 채널별 할인/수수료 설정 */
+export interface ChannelPricingSetting {
+  channelName: string;
+  discountRate: number;     // 할인율 %
+  commissionRate: number;   // 플랫폼 수수료율 %
 }
 
 const COST_TYPE_LABELS: Record<CostType, string> = {
@@ -52,7 +61,31 @@ const DEFAULT_ITEMS: ChannelCostItem[] = [
 ];
 
 const STORAGE_KEY = 'ZCMS_CHANNEL_COSTS_V2';
+const PRICING_STORAGE_KEY = 'ZCMS_CHANNEL_PRICING';
 let nextId = 100;
+
+const DEFAULT_PRICING: ChannelPricingSetting[] = [
+  { channelName: '자사몰', discountRate: 0, commissionRate: 0 },
+  { channelName: '쿠팡', discountRate: 5, commissionRate: 10.8 },
+  { channelName: '컬리', discountRate: 3, commissionRate: 20 },
+];
+
+function loadChannelPricing(): ChannelPricingSetting[] {
+  try {
+    const saved = localStorage.getItem(PRICING_STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return DEFAULT_PRICING.map(p => ({ ...p }));
+}
+
+function saveChannelPricing(settings: ChannelPricingSetting[]) {
+  localStorage.setItem(PRICING_STORAGE_KEY, JSON.stringify(settings));
+}
+
+/** 외부에서 채널별 할인/수수료 설정을 조회 */
+export function getChannelPricingSettings(): ChannelPricingSetting[] {
+  return loadChannelPricing();
+}
 
 function generateId(): string {
   return String(++nextId);
@@ -81,6 +114,7 @@ function saveChannelCosts(items: ChannelCostItem[]) {
 /** insightService 등 외부에서 호출 — 채널별 비용 요약 반환 */
 export function getChannelCostSummaries(): ChannelCostSummary[] {
   const items = loadChannelCosts();
+  const pricingSettings = loadChannelPricing();
   const channelMap = new Map<string, ChannelCostItem[]>();
   items.forEach(item => {
     const arr = channelMap.get(item.channelName) || [];
@@ -100,6 +134,8 @@ export function getChannelCostSummaries(): ChannelCostSummary[] {
       .filter(i => !i.isVariable || i.costType === 'monthly_fixed')
       .map(i => ({ name: i.costName, amount: i.amount }));
 
+    const pricing = pricingSettings.find(p => p.channelName === channelName);
+
     summaries.push({
       channelName,
       variableRateItems,
@@ -108,6 +144,8 @@ export function getChannelCostSummaries(): ChannelCostSummary[] {
       totalVariableRatePct: variableRateItems.reduce((s, i) => s + i.rate, 0),
       totalVariablePerOrder: variablePerOrderItems.reduce((s, i) => s + i.amount, 0),
       totalFixedMonthly: fixedMonthlyItems.reduce((s, i) => s + i.amount, 0),
+      discountRate: pricing?.discountRate ?? 0,
+      commissionRate: pricing?.commissionRate ?? 0,
     });
   });
 
@@ -116,12 +154,27 @@ export function getChannelCostSummaries(): ChannelCostSummary[] {
 
 export const ChannelCostAdmin: React.FC = () => {
   const [items, setItems] = useState<ChannelCostItem[]>(() => loadChannelCosts());
+  const [pricing, setPricing] = useState<ChannelPricingSetting[]>(() => loadChannelPricing());
   const [newChannelName, setNewChannelName] = useState('');
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     saveChannelCosts(items);
   }, [items]);
+
+  useEffect(() => {
+    saveChannelPricing(pricing);
+  }, [pricing]);
+
+  const handlePricingUpdate = (channelName: string, field: 'discountRate' | 'commissionRate', value: number) => {
+    setPricing(prev => {
+      const exists = prev.find(p => p.channelName === channelName);
+      if (exists) {
+        return prev.map(p => p.channelName === channelName ? { ...p, [field]: value } : p);
+      }
+      return [...prev, { channelName, discountRate: 0, commissionRate: 0, [field]: value }];
+    });
+  };
 
   // 채널 목록 (순서 유지)
   const channelNames = [...new Set(items.map(i => i.channelName))];
@@ -231,6 +284,41 @@ export const ChannelCostAdmin: React.FC = () => {
                 {/* 비용 항목 상세 */}
                 {isExpanded && (
                   <div className="p-3">
+                    {/* 할인/수수료 설정 */}
+                    <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <div className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-2">
+                        <span className="material-icons-outlined text-xs align-middle mr-1">percent</span>
+                        할인/수수료 설정 (권장판매가 대비)
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <span className="text-xs">할인율</span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={pricing.find(p => p.channelName === channelName)?.discountRate ?? 0}
+                            onChange={e => handlePricingUpdate(channelName, 'discountRate', Number(e.target.value))}
+                            className="w-20 text-right rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <span className="text-xs">플랫폼 수수료율</span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={pricing.find(p => p.channelName === channelName)?.commissionRate ?? 0}
+                            onChange={e => handlePricingUpdate(channelName, 'commissionRate', Number(e.target.value))}
+                            className="w-20 text-right rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </label>
+                      </div>
+                    </div>
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">

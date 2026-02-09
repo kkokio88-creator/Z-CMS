@@ -12,7 +12,7 @@ import type {
 } from './googleSheetService';
 import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
-import { BusinessConfig, DEFAULT_BUSINESS_CONFIG } from '../config/businessConfig';
+import { BusinessConfig, DEFAULT_BUSINESS_CONFIG, ProfitCenterGoal } from '../config/businessConfig';
 import type { ChannelCostSummary } from '../components/ChannelCostAdmin';
 import { getLaborMonthlySummaries, getMonthlyLaborCost, getTotalLaborCost } from '../components/LaborRecordAdmin';
 
@@ -22,23 +22,32 @@ import { getLaborMonthlySummaries, getMonthlyLaborCost, getTotalLaborCost } from
 
 export interface ChannelProfitDetail {
   name: string;
-  revenue: number;
+  revenue: number;             // 정산매출 (= 기존 매출 데이터)
   share: number;
-  directCost: number;        // 직접재료비 (매출비례 배분)
-  profit1: number;            // 1단계: 제품이익 = 매출 - 직접재료비
+  recommendedRevenue: number;  // 권장판매가 매출
+  discountAmount: number;      // 할인금액
+  commissionAmount: number;    // 플랫폼 수수료
+  settlementRevenue: number;   // 정산매출 (= revenue)
+  materialCost: number;        // 재료비 (권장판매가/1.1 × 50%)
+  directCost: number;          // 직접재료비 (매출비례 배분) — 기존 호환
+  profit1: number;             // 1단계: 제품이익 = 정산매출 - 재료비
   channelVariableCost: number; // 채널 변동비 합계
-  profit2: number;            // 2단계: 채널이익 = 1단계 - 채널변동비
-  channelFixedCost: number;   // 채널 고정비 (일할계산)
-  profit3: number;            // 3단계: 사업부이익 = 2단계 - 채널고정비
-  marginRate1: number;        // 1단계 마진율
-  marginRate2: number;        // 2단계 마진율
-  marginRate3: number;        // 3단계 마진율
+  profit2: number;             // 2단계: 채널이익 = 1단계 - 채널변동비
+  channelFixedCost: number;    // 채널 고정비 (일할계산)
+  profit3: number;             // 3단계: 사업부이익 = 2단계 - 채널고정비
+  marginRate1: number;         // 1단계 마진율 (정산매출 기준)
+  marginRate2: number;         // 2단계 마진율
+  marginRate3: number;         // 3단계 마진율
 }
 
 export interface ChannelRevenueInsight {
   channels: ChannelProfitDetail[];
   dailyTrend: { date: string; jasa: number; coupang: number; kurly: number; total: number }[];
   totalRevenue: number;
+  totalRecommendedRevenue: number;
+  totalDiscountAmount: number;
+  totalCommissionAmount: number;
+  totalMaterialCost: number;
   totalDirectCost: number;
   totalProfit1: number;
   totalProfit2: number;
@@ -381,6 +390,21 @@ export interface InventoryCostInsight {
   costComposition: { name: string; value: number }[];
 }
 
+export interface ProfitCenterScoreMetric {
+  metric: string;
+  target: number;
+  actual: number;
+  score: number;
+  status: 'excellent' | 'good' | 'warning' | 'danger';
+}
+
+export interface ProfitCenterScoreInsight {
+  activeBracket: ProfitCenterGoal;
+  monthlyRevenue: number;
+  scores: ProfitCenterScoreMetric[];
+  overallScore: number;
+}
+
 export interface DashboardInsights {
   channelRevenue: ChannelRevenueInsight | null;
   productProfit: ProductProfitInsight | null;
@@ -400,6 +424,7 @@ export interface DashboardInsights {
   yieldTracking: YieldTrackingInsight | null;
   cashFlow: CashFlowInsight | null;
   inventoryCost: InventoryCostInsight | null;
+  profitCenterScore: ProfitCenterScoreInsight | null;
 }
 
 export interface YieldDailyItem {
@@ -455,8 +480,6 @@ export function computeChannelRevenue(
   });
 
   const totalRevenue = totalJasa + totalCoupang + totalKurly;
-  // 직접재료비: 모든 구매비용 합계
-  const totalDirectCost = purchases.reduce((sum, p) => sum + p.total, 0);
   // 조회 기간 일수 (고정비 일할계산용)
   const periodDays = dailySales.length || 1;
 
@@ -471,23 +494,39 @@ export function computeChannelRevenue(
   ];
 
   let sumProfit1 = 0, sumProfit2 = 0, sumProfit3 = 0;
+  let sumRecommended = 0, sumDiscount = 0, sumCommission = 0, sumMaterial = 0, sumDirectCost = 0;
 
   const channels: ChannelProfitDetail[] = channelData.map(ch => {
     const share = totalRevenue > 0 ? (ch.revenue / totalRevenue) * 100 : 0;
+    const cc = costMap.get(ch.name);
 
-    // 1단계: 직접재료비를 매출비례로 배분
-    const directCost = totalRevenue > 0
-      ? Math.round(totalDirectCost * (ch.revenue / totalRevenue))
-      : 0;
-    const profit1 = ch.revenue - directCost;
+    // === 5단계 수익 구조 ===
+    // 현재 데이터(jasaPrice 등) = 정산매출
+    const settlementRevenue = ch.revenue;
+    const discountRate = (cc?.discountRate ?? 0) / 100;
+    const commissionRate = (cc?.commissionRate ?? 0) / 100;
+
+    // 권장판매가 매출 = 정산매출 / (1 - 할인율 - 수수료율)
+    const denominator = 1 - discountRate - commissionRate;
+    const recommendedRevenue = denominator > 0
+      ? Math.round(settlementRevenue / denominator)
+      : settlementRevenue;
+    const discountAmount = Math.round(recommendedRevenue * discountRate);
+    const commissionAmount = Math.round(recommendedRevenue * commissionRate);
+
+    // 재료비 = (권장판매가 / 1.1) × 50%  (부가세 제외 후 50%)
+    const materialCost = Math.round((recommendedRevenue / 1.1) * 0.5);
+
+    // 기존 호환용 directCost (매출비례 배분 방식은 유지하되 materialCost를 우선 사용)
+    const directCost = materialCost;
+
+    // 1단계: 제품이익 = 정산매출 - 재료비
+    const profit1 = settlementRevenue - materialCost;
 
     // 2단계: 채널 변동비 계산
-    const cc = costMap.get(ch.name);
     let channelVariableCost = 0;
     if (cc) {
-      // 매출대비% 변동비
       channelVariableCost += Math.round(ch.revenue * cc.totalVariableRatePct / 100);
-      // 건당 변동비: 추정 주문 건수 = 매출 / 평균주문단가
       if (cc.totalVariablePerOrder > 0 && config.averageOrderValue > 0) {
         const estimatedOrders = Math.round(ch.revenue / config.averageOrderValue);
         channelVariableCost += estimatedOrders * cc.totalVariablePerOrder;
@@ -502,16 +541,23 @@ export function computeChannelRevenue(
     }
     const profit3 = profit2 - channelFixedCost;
 
-    const marginRate1 = ch.revenue > 0 ? Math.round((profit1 / ch.revenue) * 1000) / 10 : 0;
-    const marginRate2 = ch.revenue > 0 ? Math.round((profit2 / ch.revenue) * 1000) / 10 : 0;
-    const marginRate3 = ch.revenue > 0 ? Math.round((profit3 / ch.revenue) * 1000) / 10 : 0;
+    // 마진율 (정산매출 기준)
+    const marginRate1 = settlementRevenue > 0 ? Math.round((profit1 / settlementRevenue) * 1000) / 10 : 0;
+    const marginRate2 = settlementRevenue > 0 ? Math.round((profit2 / settlementRevenue) * 1000) / 10 : 0;
+    const marginRate3 = settlementRevenue > 0 ? Math.round((profit3 / settlementRevenue) * 1000) / 10 : 0;
 
+    sumRecommended += recommendedRevenue;
+    sumDiscount += discountAmount;
+    sumCommission += commissionAmount;
+    sumMaterial += materialCost;
+    sumDirectCost += directCost;
     sumProfit1 += profit1;
     sumProfit2 += profit2;
     sumProfit3 += profit3;
 
     return {
       name: ch.name, revenue: ch.revenue, share,
+      recommendedRevenue, discountAmount, commissionAmount, settlementRevenue, materialCost,
       directCost, profit1, channelVariableCost, profit2, channelFixedCost, profit3,
       marginRate1, marginRate2, marginRate3,
     };
@@ -519,7 +565,12 @@ export function computeChannelRevenue(
 
   return {
     channels, dailyTrend, totalRevenue,
-    totalDirectCost, totalProfit1: sumProfit1, totalProfit2: sumProfit2, totalProfit3: sumProfit3,
+    totalRecommendedRevenue: sumRecommended,
+    totalDiscountAmount: sumDiscount,
+    totalCommissionAmount: sumCommission,
+    totalMaterialCost: sumMaterial,
+    totalDirectCost: sumDirectCost,
+    totalProfit1: sumProfit1, totalProfit2: sumProfit2, totalProfit3: sumProfit3,
   };
 }
 
@@ -2245,6 +2296,10 @@ export function computeAllInsights(
     config
   );
 
+  const profitCenterScore = computeProfitCenterScore(
+    channelRevenue, costBreakdown, wasteAnalysis, production, config
+  );
+
   return {
     channelRevenue,
     productProfit,
@@ -2264,5 +2319,98 @@ export function computeAllInsights(
     yieldTracking,
     cashFlow,
     inventoryCost,
+    profitCenterScore,
   };
+}
+
+/**
+ * 독립채산제 점수 계산
+ * 현재 월매출에 해당하는 구간을 찾아 5개 지표를 목표 대비 점수화
+ */
+export function computeProfitCenterScore(
+  channelRevenue: ChannelRevenueInsight | null,
+  costBreakdown: CostBreakdownInsight | null,
+  wasteAnalysis: WasteAnalysisInsight | null,
+  production: ProductionData[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+): ProfitCenterScoreInsight | null {
+  if (!channelRevenue || !costBreakdown) return null;
+
+  const goals = config.profitCenterGoals;
+  if (!goals || goals.length === 0) return null;
+
+  // 월매출 추정: 조회 기간 매출을 30일 기준으로 환산
+  const periodDays = channelRevenue.dailyTrend.length || 1;
+  const monthlyRevenue = Math.round(channelRevenue.totalRevenue * 30 / periodDays);
+
+  // 가장 가까운 하위 구간 선택
+  const sorted = [...goals].sort((a, b) => a.revenueBracket - b.revenueBracket);
+  let activeBracket = sorted[0];
+  for (const goal of sorted) {
+    if (monthlyRevenue >= goal.revenueBracket) {
+      activeBracket = goal;
+    } else {
+      break;
+    }
+  }
+
+  const targets = activeBracket.targets;
+  const comp = costBreakdown.composition;
+  const rawMaterial = comp.find(c => c.name === '원재료')?.value || 0;
+  const subMaterial = comp.find(c => c.name === '부재료')?.value || 0;
+  const laborCost = comp.find(c => c.name === '노무비')?.value || 0;
+  const overheadCost = comp.find(c => c.name === '경비')?.value || 0;
+  const totalMaterial = rawMaterial + subMaterial;
+  const totalExpense = overheadCost;
+  const totalProduction = production.reduce((s, p) => s + (p.productionQty || 0), 0);
+
+  // 생산매출 추정 (생산 수량 기반)
+  const productionValue = channelRevenue.totalRevenue; // 근사값으로 매출 사용
+
+  function getStatus(score: number): 'excellent' | 'good' | 'warning' | 'danger' {
+    if (score >= 110) return 'excellent';
+    if (score >= 100) return 'good';
+    if (score >= 90) return 'warning';
+    return 'danger';
+  }
+
+  // 1. 생산매출/노무비
+  const actualProdToLabor = laborCost > 0 ? productionValue / laborCost : 0;
+  const scoreProdToLabor = targets.productionToLabor > 0
+    ? Math.round(actualProdToLabor / targets.productionToLabor * 100) : 0;
+
+  // 2. 매출/재료비
+  const actualRevToMaterial = totalMaterial > 0 ? channelRevenue.totalRevenue / totalMaterial : 0;
+  const scoreRevToMaterial = targets.revenueToMaterial > 0
+    ? Math.round(actualRevToMaterial / targets.revenueToMaterial * 100) : 0;
+
+  // 3. 매출/경비
+  const actualRevToExpense = totalExpense > 0 ? channelRevenue.totalRevenue / totalExpense : 0;
+  const scoreRevToExpense = targets.revenueToExpense > 0
+    ? Math.round(actualRevToExpense / targets.revenueToExpense * 100) : 0;
+
+  // 4. 영업이익률
+  const totalCost = totalMaterial + laborCost + overheadCost;
+  const operatingProfit = channelRevenue.totalRevenue - totalCost;
+  const actualProfitMargin = channelRevenue.totalRevenue > 0
+    ? (operatingProfit / channelRevenue.totalRevenue) * 100 : 0;
+  const scoreProfitMargin = targets.profitMarginTarget > 0
+    ? Math.round(actualProfitMargin / targets.profitMarginTarget * 100) : 0;
+
+  // 5. 폐기율 (역방향: 낮을수록 좋음)
+  const actualWasteRate = wasteAnalysis?.avgWasteRate ?? 0;
+  const scoreWaste = actualWasteRate > 0 && targets.wasteRateTarget > 0
+    ? Math.round(targets.wasteRateTarget / actualWasteRate * 100) : 100;
+
+  const scores: ProfitCenterScoreMetric[] = [
+    { metric: '생산매출/노무비', target: targets.productionToLabor, actual: Math.round(actualProdToLabor * 100) / 100, score: scoreProdToLabor, status: getStatus(scoreProdToLabor) },
+    { metric: '매출/재료비', target: targets.revenueToMaterial, actual: Math.round(actualRevToMaterial * 100) / 100, score: scoreRevToMaterial, status: getStatus(scoreRevToMaterial) },
+    { metric: '매출/경비', target: targets.revenueToExpense, actual: Math.round(actualRevToExpense * 100) / 100, score: scoreRevToExpense, status: getStatus(scoreRevToExpense) },
+    { metric: '영업이익률', target: targets.profitMarginTarget, actual: Math.round(actualProfitMargin * 10) / 10, score: scoreProfitMargin, status: getStatus(scoreProfitMargin) },
+    { metric: '폐기율', target: targets.wasteRateTarget, actual: Math.round(actualWasteRate * 10) / 10, score: scoreWaste, status: getStatus(scoreWaste) },
+  ];
+
+  const overallScore = Math.round(scores.reduce((s, m) => s + m.score, 0) / scores.length);
+
+  return { activeBracket, monthlyRevenue, scores, overallScore };
 }

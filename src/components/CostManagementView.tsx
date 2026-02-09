@@ -18,6 +18,7 @@ interface Props {
   production: ProductionData[];
   insights: DashboardInsights | null;
   onItemClick: (item: any) => void;
+  onTabChange?: (tab: string) => void;
 }
 
 const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
@@ -90,6 +91,7 @@ export const CostManagementView: React.FC<Props> = ({
   production,
   insights,
   onItemClick,
+  onTabChange,
 }) => {
   const config = useBusinessConfig();
   const costBreakdown = insights?.costBreakdown;
@@ -277,7 +279,7 @@ export const CostManagementView: React.FC<Props> = ({
   ];
 
   return (
-    <SubTabLayout title="원가 관리" tabs={tabs}>
+    <SubTabLayout title="원가 관리" tabs={tabs} onTabChange={onTabChange}>
       {(activeTab) => {
         // ========== 원가 총괄 ==========
         if (activeTab === 'overview') {

@@ -20,6 +20,7 @@ interface Props {
   insights: DashboardInsights | null;
   stocktakeAnomalies: StocktakeAnomalyItem[];
   onItemClick: (item: any) => void;
+  onTabChange?: (tab: string) => void;
 }
 
 const STATUS_COLORS = {
@@ -165,6 +166,7 @@ export const InventoryOrderView: React.FC<Props> = ({
   insights,
   stocktakeAnomalies,
   onItemClick,
+  onTabChange,
 }) => {
   const config = useBusinessConfig();
   const materialPrices = insights?.materialPrices;
@@ -289,7 +291,7 @@ export const InventoryOrderView: React.FC<Props> = ({
 
   return (
     <>
-      <SubTabLayout title="재고/발주 관리" tabs={tabs}>
+      <SubTabLayout title="재고/발주 관리" tabs={tabs} onTabChange={onTabChange}>
         {(activeTab) => {
           // ========== 재고 현황 ==========
           if (activeTab === 'inventory') {

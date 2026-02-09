@@ -8,6 +8,7 @@ import {
 import { useSettings } from '../contexts/SettingsContext';
 import { ChannelCostAdmin } from './ChannelCostAdmin';
 import { LaborRecordAdmin } from './LaborRecordAdmin';
+import type { ProfitCenterGoal } from '../config/businessConfig';
 
 // 데이터 소스 연결 타입 정의
 type DataSourceType = 'googleSheets' | 'ecount' | 'none';
@@ -1388,6 +1389,116 @@ export const SettingsView: React.FC = () => {
 
       {/* 채널 비용 관리 */}
       <ChannelCostAdmin />
+
+      {/* 독립채산제 목표 설정 */}
+      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
+          <h3 className="font-bold text-purple-900 dark:text-purple-200 flex items-center">
+            <span className="material-icons-outlined mr-2">emoji_events</span>
+            독립채산제 목표 설정
+          </h3>
+          <p className="text-xs text-purple-700 dark:text-purple-400 mt-1">
+            매출 구간별 경영 목표를 설정합니다. 대시보드에서 달성률을 점수화하여 표시합니다.
+          </p>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                  <th className="text-left py-2 px-2">매출 구간</th>
+                  <th className="text-center py-2 px-2">생산/노무비<br/><span className="text-[10px] font-normal">(배수)</span></th>
+                  <th className="text-center py-2 px-2">매출/재료비<br/><span className="text-[10px] font-normal">(배수)</span></th>
+                  <th className="text-center py-2 px-2">매출/경비<br/><span className="text-[10px] font-normal">(배수)</span></th>
+                  <th className="text-center py-2 px-2">영업이익률<br/><span className="text-[10px] font-normal">(%)</span></th>
+                  <th className="text-center py-2 px-2">폐기율<br/><span className="text-[10px] font-normal">(%)</span></th>
+                  <th className="text-center py-2 px-2 w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(config.profitCenterGoals || []).map((goal: ProfitCenterGoal, idx: number) => (
+                  <tr key={idx} className="border-b border-gray-50 dark:border-gray-800">
+                    <td className="py-1.5 px-2">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          step="1"
+                          min="1"
+                          value={Math.round(goal.revenueBracket / 100000000)}
+                          onChange={e => {
+                            const newGoals = [...config.profitCenterGoals];
+                            newGoals[idx] = { ...goal, revenueBracket: Number(e.target.value) * 100000000, label: `${e.target.value}억` };
+                            updateConfig({ profitCenterGoals: newGoals });
+                          }}
+                          className="w-16 text-right rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
+                        />
+                        <span className="text-xs text-gray-400">억</span>
+                      </div>
+                    </td>
+                    {(['productionToLabor', 'revenueToMaterial', 'revenueToExpense'] as const).map(key => (
+                      <td key={key} className="py-1.5 px-2 text-center">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={goal.targets[key]}
+                          onChange={e => {
+                            const newGoals = [...config.profitCenterGoals];
+                            newGoals[idx] = { ...goal, targets: { ...goal.targets, [key]: Number(e.target.value) } };
+                            updateConfig({ profitCenterGoals: newGoals });
+                          }}
+                          className="w-16 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
+                        />
+                      </td>
+                    ))}
+                    {(['profitMarginTarget', 'wasteRateTarget'] as const).map(key => (
+                      <td key={key} className="py-1.5 px-2 text-center">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          value={goal.targets[key]}
+                          onChange={e => {
+                            const newGoals = [...config.profitCenterGoals];
+                            newGoals[idx] = { ...goal, targets: { ...goal.targets, [key]: Number(e.target.value) } };
+                            updateConfig({ profitCenterGoals: newGoals });
+                          }}
+                          className="w-16 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
+                        />
+                      </td>
+                    ))}
+                    <td className="py-1.5 px-2 text-center">
+                      <button
+                        onClick={() => {
+                          const newGoals = config.profitCenterGoals.filter((_: ProfitCenterGoal, i: number) => i !== idx);
+                          updateConfig({ profitCenterGoals: newGoals });
+                        }}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        <span className="material-icons-outlined text-sm">close</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button
+            onClick={() => {
+              const newGoal: ProfitCenterGoal = {
+                revenueBracket: 1100000000,
+                label: '11억',
+                targets: { productionToLabor: 2.5, revenueToMaterial: 3.0, revenueToExpense: 7.0, profitMarginTarget: 20, wasteRateTarget: 2 },
+              };
+              updateConfig({ profitCenterGoals: [...(config.profitCenterGoals || []), newGoal] });
+            }}
+            className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 flex items-center"
+          >
+            <span className="material-icons-outlined text-sm mr-1">add</span>
+            매출 구간 추가
+          </button>
+        </div>
+      </div>
 
       {/* 설정 내보내기/가져오기 */}
       <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">

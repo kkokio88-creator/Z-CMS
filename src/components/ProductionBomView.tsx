@@ -15,6 +15,7 @@ interface Props {
   purchases: PurchaseData[];
   insights: DashboardInsights | null;
   onItemClick: (item: any) => void;
+  onTabChange?: (tab: string) => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -67,7 +68,7 @@ const FilterBar: React.FC<{
   </div>
 );
 
-export const ProductionBomView: React.FC<Props> = ({ production, purchases, insights, onItemClick }) => {
+export const ProductionBomView: React.FC<Props> = ({ production, purchases, insights, onItemClick, onTabChange }) => {
   const config = useBusinessConfig();
   const wasteAnalysis = insights?.wasteAnalysis;
   const prodEfficiency = insights?.productionEfficiency;
@@ -125,7 +126,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
   ];
 
   return (
-    <SubTabLayout title="생산/BOM 관리" tabs={tabs}>
+    <SubTabLayout title="생산/BOM 관리" tabs={tabs} onTabChange={onTabChange}>
       {(activeTab) => {
         // ========== 생산 현황 ==========
         if (activeTab === 'production') {
