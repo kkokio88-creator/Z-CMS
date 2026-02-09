@@ -50,8 +50,13 @@ const PORT = process.env.PORT || 4001;
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow localhost on any port for development
-      if (!origin || /^http:\/\/localhost:\d+$/.test(origin) || origin === process.env.FRONTEND_URL) {
+      // Allow: no origin (server-to-server), localhost, Vercel previews, FRONTEND_URL
+      if (
+        !origin ||
+        /^http:\/\/localhost:\d+$/.test(origin) ||
+        /\.vercel\.app$/.test(origin) ||
+        origin === process.env.FRONTEND_URL
+      ) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
