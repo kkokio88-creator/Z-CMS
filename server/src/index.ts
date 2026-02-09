@@ -16,6 +16,7 @@ import { createGovernanceRoutes } from './routes/governance.routes.js';
 import supabaseRoutes from './routes/supabase.routes.js';
 import { supabaseAdapter } from './adapters/SupabaseAdapter.js';
 import { syncService } from './services/SyncService.js';
+import { cacheMiddleware, cache, createCacheRoutes } from './middleware/cache.js';
 import { EventBus } from './services/EventBus.js';
 import { StateManager } from './services/StateManager.js';
 import { LearningRegistry } from './services/LearningRegistry.js';
@@ -220,8 +221,20 @@ app.use('/api/cost-analysis', costAnalysisRoutes);
 app.use('/api/ordering', orderingRoutes);
 app.use('/api/sheets', sheetsRoutes);
 
+// 데이터 GET 엔드포인트에 캐시 미들웨어 적용
+app.use('/api/data', cacheMiddleware);
+app.use('/api/cache', createCacheRoutes());
+
 // Supabase 데이터/동기화 라우트
 app.use('/api', supabaseRoutes);
+
+// 동기화 완료 시 데이터 캐시 무효화
+app.use('/api/sync', (_req, _res, next) => {
+  if (_req.method === 'POST') {
+    cache.invalidatePattern('/api/data');
+  }
+  next();
+});
 
 // 새 라우트: 토론 및 거버넌스
 app.use('/api/debates', createDebateRoutes(debateManager, wipManager, chiefOrchestrator));
