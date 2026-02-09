@@ -4,6 +4,8 @@ import {
   LineChart, Line, PieChart, Pie,
 } from 'recharts';
 import { SubTabLayout } from './SubTabLayout';
+import { Pagination } from './Pagination';
+import { usePagination } from '../hooks/usePagination';
 import { formatCurrency, formatAxisKRW, formatQty } from '../utils/format';
 import { InventorySafetyItem, StocktakeAnomalyItem } from '../types';
 import type { PurchaseData } from '../services/googleSheetService';
@@ -193,6 +195,10 @@ export const InventoryOrderView: React.FC<Props> = ({
   const [anomalySort, setAnomalySort] = useState<'score' | 'diff'>('score');
   const [supplierFilter, setSupplierFilter] = useState<string>('all');
   const [expandedAbc, setExpandedAbc] = useState<string | null>('A');
+  const [invPage, setInvPage] = useState(1);
+  const [statPage, setStatPage] = useState(1);
+  const INV_PAGE_SIZE = 20;
+  const STAT_PAGE_SIZE = 20;
 
   // D1: inventoryData 기반 이상징후 자동 생성
   const autoAnomalies: StocktakeAnomalyItem[] = useMemo(() => {
@@ -446,7 +452,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredInventory.slice(0, 25).map((item, i) => (
+                          {filteredInventory.slice((invPage - 1) * INV_PAGE_SIZE, invPage * INV_PAGE_SIZE).map((item, i) => (
                             <tr key={item.id || i} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onItemClick(item)}>
                               <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.skuName}</td>
                               <td className="py-2 px-3 text-center">
@@ -473,6 +479,18 @@ export const InventoryOrderView: React.FC<Props> = ({
                           ))}
                         </tbody>
                       </table>
+                      {filteredInventory.length > INV_PAGE_SIZE && (
+                        <Pagination
+                          currentPage={invPage}
+                          totalPages={Math.ceil(filteredInventory.length / INV_PAGE_SIZE)}
+                          totalItems={filteredInventory.length}
+                          startIndex={(invPage - 1) * INV_PAGE_SIZE}
+                          endIndex={Math.min(invPage * INV_PAGE_SIZE, filteredInventory.length)}
+                          onPrev={() => setInvPage(p => Math.max(1, p - 1))}
+                          onNext={() => setInvPage(p => Math.min(Math.ceil(filteredInventory.length / INV_PAGE_SIZE), p + 1))}
+                          onGoToPage={setInvPage}
+                        />
+                      )}
                     </div>
                   ) : <p className="text-gray-400 text-center py-6">해당 상태의 품목이 없습니다</p>}
                 </div>
@@ -955,7 +973,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                           </tr>
                         </thead>
                         <tbody>
-                          {items.slice(0, 30).map((item, i) => {
+                          {items.slice((statPage - 1) * STAT_PAGE_SIZE, statPage * STAT_PAGE_SIZE).map((item, i) => {
                             const supplier = getSupplierForProduct(item.productCode);
                             const startDate = new Date(orderDate);
                             const deliveryDate = addBusinessDays(startDate, supplier.leadTime);
@@ -1022,6 +1040,18 @@ export const InventoryOrderView: React.FC<Props> = ({
                           })}
                         </tbody>
                       </table>
+                      {items.length > STAT_PAGE_SIZE && (
+                        <Pagination
+                          currentPage={statPage}
+                          totalPages={Math.ceil(items.length / STAT_PAGE_SIZE)}
+                          totalItems={items.length}
+                          startIndex={(statPage - 1) * STAT_PAGE_SIZE}
+                          endIndex={Math.min(statPage * STAT_PAGE_SIZE, items.length)}
+                          onPrev={() => setStatPage(p => Math.max(1, p - 1))}
+                          onNext={() => setStatPage(p => Math.min(Math.ceil(items.length / STAT_PAGE_SIZE), p + 1))}
+                          onGoToPage={setStatPage}
+                        />
+                      )}
                     </div>
                   ) : (
                     <div className="text-center py-10">

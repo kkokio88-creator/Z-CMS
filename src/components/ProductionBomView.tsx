@@ -4,6 +4,7 @@ import {
   Cell, Legend, LineChart, Line, PieChart, Pie, ComposedChart,
 } from 'recharts';
 import { SubTabLayout } from './SubTabLayout';
+import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
 import type { ProductionData, PurchaseData } from '../services/googleSheetService';
 import type { DashboardInsights, BomVarianceInsight, YieldTrackingInsight } from '../services/insightService';
@@ -76,6 +77,9 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
   const [prodFilter, setProdFilter] = useState('all');
   const [wasteFilter, setWasteFilter] = useState('all');
   const [effFilter, setEffFilter] = useState('all');
+  const [prodPage, setProdPage] = useState(1);
+  const [effPage, setEffPage] = useState(1);
+  const PROD_PAGE_SIZE = 20;
 
   const categoryFilters = [
     { key: 'all', label: '전체', color: CATEGORY_COLORS.all },
@@ -238,7 +242,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredDailyList.slice(0, 30).map(d => {
+                          {filteredDailyList.slice((prodPage - 1) * PROD_PAGE_SIZE, prodPage * PROD_PAGE_SIZE).map(d => {
                             const catQty = d[prodFilter as keyof typeof d] as number;
                             const ratio = d.total > 0 ? Math.round((catQty / d.total) * 1000) / 10 : 0;
                             return (
@@ -252,6 +256,18 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                           })}
                         </tbody>
                       </table>
+                      {filteredDailyList.length > PROD_PAGE_SIZE && (
+                        <Pagination
+                          currentPage={prodPage}
+                          totalPages={Math.ceil(filteredDailyList.length / PROD_PAGE_SIZE)}
+                          totalItems={filteredDailyList.length}
+                          startIndex={(prodPage - 1) * PROD_PAGE_SIZE}
+                          endIndex={Math.min(prodPage * PROD_PAGE_SIZE, filteredDailyList.length)}
+                          onPrev={() => setProdPage(p => Math.max(1, p - 1))}
+                          onNext={() => setProdPage(p => Math.min(Math.ceil(filteredDailyList.length / PROD_PAGE_SIZE), p + 1))}
+                          onGoToPage={setProdPage}
+                        />
+                      )}
                     </div>
                   ) : <p className="text-gray-400 text-center py-6">해당 카테고리 생산 데이터 없음</p>}
                 </div>
@@ -565,7 +581,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredEffList.slice(0, 30).map(d => {
+                        {filteredEffList.slice((effPage - 1) * PROD_PAGE_SIZE, effPage * PROD_PAGE_SIZE).map(d => {
                           const catQty = d[effFilter as keyof typeof d] as number;
                           const ratio = d.total > 0 ? Math.round((catQty / d.total) * 1000) / 10 : 0;
                           return (
@@ -579,6 +595,18 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                         })}
                       </tbody>
                     </table>
+                    {filteredEffList.length > PROD_PAGE_SIZE && (
+                      <Pagination
+                        currentPage={effPage}
+                        totalPages={Math.ceil(filteredEffList.length / PROD_PAGE_SIZE)}
+                        totalItems={filteredEffList.length}
+                        startIndex={(effPage - 1) * PROD_PAGE_SIZE}
+                        endIndex={Math.min(effPage * PROD_PAGE_SIZE, filteredEffList.length)}
+                        onPrev={() => setEffPage(p => Math.max(1, p - 1))}
+                        onNext={() => setEffPage(p => Math.min(Math.ceil(filteredEffList.length / PROD_PAGE_SIZE), p + 1))}
+                        onGoToPage={setEffPage}
+                      />
+                    )}
                   </div>
                 ) : <p className="text-gray-400 text-center py-6">해당 카테고리 데이터 없음</p>}
               </div>

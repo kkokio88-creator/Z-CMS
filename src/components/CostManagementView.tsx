@@ -4,6 +4,7 @@ import {
   PieChart, Pie, Legend, LineChart, Line, AreaChart, Area, ComposedChart,
 } from 'recharts';
 import { SubTabLayout } from './SubTabLayout';
+import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { PurchaseData, UtilityData, ProductionData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation } from '../services/insightService';
@@ -101,6 +102,8 @@ export const CostManagementView: React.FC<Props> = ({
   const [subFilter, setSubFilter] = useState('all');
   const [overheadFilter, setOverheadFilter] = useState('all');
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
+  const [rawPage, setRawPage] = useState(1);
+  const RAW_PAGE_SIZE = 20;
 
   // 생산매출 계산 (원가율의 분모)
   const productionRevenue = useMemo(() => {
@@ -548,7 +551,7 @@ export const CostManagementView: React.FC<Props> = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredRawItems.slice(0, 20).map(item => (
+                        {filteredRawItems.slice((rawPage - 1) * RAW_PAGE_SIZE, rawPage * RAW_PAGE_SIZE).map(item => (
                           <tr
                             key={item.productCode}
                             className={`border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${selectedMaterial === item.productCode ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
@@ -565,6 +568,18 @@ export const CostManagementView: React.FC<Props> = ({
                         ))}
                       </tbody>
                     </table>
+                    {filteredRawItems.length > RAW_PAGE_SIZE && (
+                      <Pagination
+                        currentPage={rawPage}
+                        totalPages={Math.ceil(filteredRawItems.length / RAW_PAGE_SIZE)}
+                        totalItems={filteredRawItems.length}
+                        startIndex={(rawPage - 1) * RAW_PAGE_SIZE}
+                        endIndex={Math.min(rawPage * RAW_PAGE_SIZE, filteredRawItems.length)}
+                        onPrev={() => setRawPage(p => Math.max(1, p - 1))}
+                        onNext={() => setRawPage(p => Math.min(Math.ceil(filteredRawItems.length / RAW_PAGE_SIZE), p + 1))}
+                        onGoToPage={setRawPage}
+                      />
+                    )}
                   </div>
                 ) : <p className="text-gray-400 text-center py-6">해당 조건의 품목이 없습니다.</p>}
               </div>
