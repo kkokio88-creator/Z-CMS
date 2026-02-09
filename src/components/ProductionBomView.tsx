@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell, Legend, LineChart, Line, PieChart, Pie,
+  Cell, Legend, LineChart, Line, PieChart, Pie, ComposedChart,
 } from 'recharts';
 import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
@@ -322,26 +322,86 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 </div>
               </div>
 
-              {/* 주간 폐기율 추이 (간소화) */}
+              {/* C3: 주간 생산량(LineChart) + 폐기율(우축 Line) */}
               <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 폐기율 추이</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 생산량 & 폐기율 추이</h3>
                 {weeklyWaste.length > 0 ? (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={weeklyWaste} margin={{ top: 10, right: 40, left: 0, bottom: 0 }}>
+                      <ComposedChart data={weeklyWaste} margin={{ top: 10, right: 40, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="weekLabel" tick={{ fontSize: 10 }} />
                         <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
                         <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                        <Tooltip formatter={(v: number, name: string) => name === '평균폐기율' ? `${v}%` : v.toLocaleString()} />
+                        <Tooltip formatter={(v: number, name: string) => name === '폐기율' ? `${v}%` : v.toLocaleString()} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar yAxisId="left" dataKey="totalProduction" name="생산량" fill="#3B82F6" fillOpacity={0.5} radius={[2, 2, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="avgWasteRate" name="평균폐기율" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
-                      </BarChart>
+                        <Line yAxisId="left" type="monotone" dataKey="totalProduction" name="생산량" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line yAxisId="right" type="monotone" dataKey="avgWasteRate" name="폐기율" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 ) : <p className="text-gray-400 text-center py-10">생산 데이터 없음</p>}
               </div>
+
+              {/* 폐기율 분포 + 요일별 분석 */}
+              {daily.length > 0 && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* 폐기율 분포 */}
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">폐기율 분포</h3>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={[
+                          { range: '0~1%', count: daily.filter(d => d.wasteFinishedPct < 1).length, color: '#10B981' },
+                          { range: '1~2%', count: daily.filter(d => d.wasteFinishedPct >= 1 && d.wasteFinishedPct < 2).length, color: '#3B82F6' },
+                          { range: '2~3%', count: daily.filter(d => d.wasteFinishedPct >= 2 && d.wasteFinishedPct < 3).length, color: '#F59E0B' },
+                          { range: '3~5%', count: daily.filter(d => d.wasteFinishedPct >= 3 && d.wasteFinishedPct < 5).length, color: '#EF4444' },
+                          { range: '5%+', count: daily.filter(d => d.wasteFinishedPct >= 5).length, color: '#7C3AED' },
+                        ]}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="range" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number) => `${v}일`} />
+                          <Bar dataKey="count" name="일수" radius={[4, 4, 0, 0]}>
+                            {[
+                              { color: '#10B981' }, { color: '#3B82F6' }, { color: '#F59E0B' }, { color: '#EF4444' }, { color: '#7C3AED' },
+                            ].map((e, i) => <Cell key={i} fill={e.color} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* 요일별 평균 폐기율 */}
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">요일별 평균 폐기율</h3>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={(() => {
+                          const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+                          const dayData = dayNames.map((name, idx) => {
+                            const dayItems = daily.filter(d => new Date(d.date).getDay() === idx);
+                            const avg = dayItems.length > 0
+                              ? Math.round(dayItems.reduce((s, d) => s + d.wasteFinishedPct, 0) / dayItems.length * 10) / 10
+                              : 0;
+                            return { 요일: name, 평균폐기율: avg, days: dayItems.length };
+                          });
+                          return dayData;
+                        })()}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="요일" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                          <Tooltip formatter={(v: number) => `${v}%`} />
+                          <Bar dataKey="평균폐기율" radius={[4, 4, 0, 0]}>
+                            {[0,1,2,3,4,5,6].map((_, i) => <Cell key={i} fill={i === 0 || i === 6 ? '#EF4444' : '#3B82F6'} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <p className="text-xs text-gray-400 text-center mt-2">주말(빨강) / 평일(파랑) 폐기율 패턴 분석</p>
+                  </div>
+                </div>
+              )}
 
               {/* 폐기율 초과일 테이블 */}
               {highDays.length > 0 && (
@@ -355,20 +415,27 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           <th className="text-left py-2 px-3 text-gray-500">날짜</th>
+                          <th className="text-left py-2 px-3 text-gray-500">요일</th>
                           <th className="text-right py-2 px-3 text-gray-500">폐기율</th>
+                          <th className="text-right py-2 px-3 text-gray-500">생산량</th>
                           <th className="text-right py-2 px-3 text-gray-500">폐기 수량</th>
                           <th className="text-right py-2 px-3 text-gray-500">추정 비용</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {highDays.map(d => (
-                          <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 bg-red-50/50 dark:bg-red-900/10">
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
-                            <td className="py-2 px-3 text-right font-medium text-red-600">{formatPercent(d.rate)}</td>
-                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.qty)}</td>
-                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.cost || d.qty * config.wasteUnitCost)}</td>
-                          </tr>
-                        ))}
+                        {highDays.map(d => {
+                          const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][new Date(d.date).getDay()];
+                          return (
+                            <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 bg-red-50/50 dark:bg-red-900/10">
+                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
+                              <td className="py-2 px-3 text-gray-500 text-xs">{dayOfWeek}</td>
+                              <td className="py-2 px-3 text-right font-medium text-red-600">{formatPercent(d.rate)}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{formatQty(d.productionQty || 0)}</td>
+                              <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.qty)}</td>
+                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.cost || d.qty * config.wasteUnitCost)}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -379,6 +446,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
         }
 
         // ========== 생산성 분석 ==========
+        if (activeTab === 'efficiency') {
         const catStats = prodEfficiency?.categoryStats || [];
         const maxDay = prodEfficiency?.maxDay;
 
@@ -517,6 +585,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
             )}
           </div>
         );
+        }
 
         // ========== BOM 오차 분석 ==========
         if (activeTab === 'bomVariance') {
@@ -557,6 +626,76 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   </p>
                 </div>
               </div>
+
+              {/* C2: 상위/하위 5 수평 BarChart + 분포도 */}
+              {bomVariance && bomVariance.items.length > 0 && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">상위/하위 5 품목 (차이 금액)</h3>
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={(() => {
+                            const sorted = [...bomVariance.items].sort((a, b) => b.totalVariance - a.totalVariance);
+                            const top5 = sorted.slice(0, 5);
+                            const bot5 = sorted.slice(-5).reverse();
+                            return [...top5, ...bot5].map(item => ({
+                              name: item.productName.length > 8 ? item.productName.slice(0, 8) + '..' : item.productName,
+                              차이금액: item.totalVariance,
+                            }));
+                          })()}
+                          layout="vertical"
+                          margin={{ left: 10, right: 20 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                          <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
+                          <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                          <Bar dataKey="차이금액" radius={[0, 4, 4, 0]}>
+                            {(() => {
+                              const sorted = [...bomVariance.items].sort((a, b) => b.totalVariance - a.totalVariance);
+                              const combined = [...sorted.slice(0, 5), ...sorted.slice(-5).reverse()];
+                              return combined.map((item, i) => (
+                                <Cell key={i} fill={item.totalVariance > 0 ? '#EF4444' : '#10B981'} />
+                              ));
+                            })()}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">BOM 오차 분포</h3>
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={(() => {
+                          const items = bomVariance.items;
+                          return [
+                            { range: '~-50만', count: items.filter(i => i.totalVariance < -500000).length, color: '#10B981' },
+                            { range: '-50~-10', count: items.filter(i => i.totalVariance >= -500000 && i.totalVariance < -100000).length, color: '#34D399' },
+                            { range: '-10~0', count: items.filter(i => i.totalVariance >= -100000 && i.totalVariance < 0).length, color: '#6EE7B7' },
+                            { range: '0~10', count: items.filter(i => i.totalVariance >= 0 && i.totalVariance < 100000).length, color: '#FCA5A5' },
+                            { range: '10~50', count: items.filter(i => i.totalVariance >= 100000 && i.totalVariance < 500000).length, color: '#F87171' },
+                            { range: '50만~', count: items.filter(i => i.totalVariance >= 500000).length, color: '#EF4444' },
+                          ];
+                        })()}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="range" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number) => `${v}개 품목`} />
+                          <Bar dataKey="count" name="품목 수" radius={[4, 4, 0, 0]}>
+                            {[
+                              { color: '#10B981' }, { color: '#34D399' }, { color: '#6EE7B7' },
+                              { color: '#FCA5A5' }, { color: '#F87171' }, { color: '#EF4444' },
+                            ].map((e, i) => <Cell key={i} fill={e.color} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <p className="text-xs text-gray-400 text-center mt-2">음수=유리(녹색) / 양수=불리(빨강) 단위: 만원</p>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
@@ -682,24 +821,29 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 </div>
               )}
 
-              {/* 주간 생산/폐기 Bar 차트 */}
+              {/* C4: 주간 생산량 vs 폐기량 — LineChart + 폐기율 우축 */}
               {yieldTracking && yieldTracking.weekly.length > 0 && (
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-blue-500">bar_chart</span>
-                    주간 생산량 vs 폐기량
+                    <span className="material-icons-outlined text-blue-500">show_chart</span>
+                    주간 생산량 vs 폐기량 & 폐기율
                   </h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={yieldTracking.weekly} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <ComposedChart data={yieldTracking.weekly.map(w => ({
+                        ...w,
+                        폐기율: w.totalQty > 0 ? Math.round((w.totalWaste / w.totalQty) * 1000) / 10 : 0,
+                      }))} margin={{ top: 10, right: 40, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="weekLabel" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 10 }} tickFormatter={formatQty} />
-                        <Tooltip formatter={(v: number, name: string) => formatQty(v)} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={formatQty} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                        <Tooltip formatter={(v: number, name: string) => name === '폐기율' ? `${v}%` : formatQty(v)} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="totalQty" name="생산량" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="totalWaste" name="폐기량" fill="#EF4444" radius={[4, 4, 0, 0]} />
-                      </BarChart>
+                        <Line yAxisId="left" type="monotone" dataKey="totalQty" name="생산량" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="totalWaste" name="폐기량" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line yAxisId="right" type="monotone" dataKey="폐기율" name="폐기율" stroke="#F59E0B" strokeWidth={2} strokeDasharray="4 2" dot={{ r: 2 }} />
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
