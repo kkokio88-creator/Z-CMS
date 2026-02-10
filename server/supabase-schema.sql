@@ -158,3 +158,75 @@ CREATE TABLE IF NOT EXISTS labor_monthly_records (
   UNIQUE(month, shift_name)
 );
 CREATE INDEX IF NOT EXISTS idx_labor_month ON labor_monthly_records(month);
+
+-- 11. 노무비 일별 (구글시트 노무비 시트 → 일별 부서별)
+CREATE TABLE IF NOT EXISTS labor_daily (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  date date NOT NULL,
+  department varchar(50) NOT NULL,
+  week varchar(20),
+  headcount integer DEFAULT 0,
+  weekday_regular_hours numeric DEFAULT 0,
+  weekday_overtime_hours numeric DEFAULT 0,
+  weekday_night_hours numeric DEFAULT 0,
+  weekday_total_hours numeric DEFAULT 0,
+  holiday_regular_hours numeric DEFAULT 0,
+  holiday_overtime_hours numeric DEFAULT 0,
+  holiday_night_hours numeric DEFAULT 0,
+  holiday_total_hours numeric DEFAULT 0,
+  weekday_regular_pay numeric DEFAULT 0,
+  weekday_overtime_pay numeric DEFAULT 0,
+  weekday_night_pay numeric DEFAULT 0,
+  holiday_regular_pay numeric DEFAULT 0,
+  holiday_overtime_pay numeric DEFAULT 0,
+  holiday_night_pay numeric DEFAULT 0,
+  total_pay numeric DEFAULT 0,
+  synced_at timestamptz DEFAULT now(),
+  UNIQUE(date, department)
+);
+CREATE INDEX IF NOT EXISTS idx_labor_daily_date ON labor_daily(date);
+
+-- 12. BOM (SAN_BOM + ZIP_BOM 통합)
+CREATE TABLE IF NOT EXISTS bom (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  source varchar(10) NOT NULL,           -- 'SAN' 또는 'ZIP'
+  product_code varchar(100) NOT NULL,
+  product_name varchar(200),
+  bom_version varchar(50),
+  is_existing_bom boolean DEFAULT false,
+  production_qty numeric DEFAULT 0,
+  material_code varchar(100) NOT NULL,
+  material_name varchar(200),
+  material_bom_version varchar(50),
+  consumption_qty numeric DEFAULT 0,
+  location varchar(200),
+  remark text,
+  additional_qty numeric DEFAULT 0,
+  synced_at timestamptz DEFAULT now(),
+  UNIQUE(source, product_code, material_code)
+);
+CREATE INDEX IF NOT EXISTS idx_bom_product ON bom(product_code);
+CREATE INDEX IF NOT EXISTS idx_bom_material ON bom(material_code);
+
+-- 13. 자재 마스터 (1.자재정보 시트)
+CREATE TABLE IF NOT EXISTS material_master (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  no integer,
+  category varchar(50),
+  issue_type varchar(50),
+  material_code varchar(100) NOT NULL UNIQUE,
+  material_name varchar(200),
+  preprocess_yield numeric DEFAULT 0,
+  spec varchar(200),
+  unit varchar(20),
+  unit_price numeric DEFAULT 0,
+  safety_stock numeric DEFAULT 0,
+  excess_stock numeric DEFAULT 0,
+  lead_time_days integer DEFAULT 0,
+  recent_output_qty numeric DEFAULT 0,
+  daily_avg numeric DEFAULT 0,
+  note text,
+  in_use boolean DEFAULT true,
+  synced_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_material_master_code ON material_master(material_code);

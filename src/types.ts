@@ -4,17 +4,6 @@ export interface WasteTrendData {
   actual: number;
 }
 
-export interface TopWasteItem {
-  id: string;
-  name: string;
-  subText?: string;
-  amount: number;
-  variancePercent: number;
-  percentageOfTotal?: number;
-  isAnomaly: boolean;
-  colorClass: string;
-}
-
 export interface BomDiffItem {
   id: string;
   skuCode: string;
@@ -30,14 +19,6 @@ export interface BomDiffItem {
   reasoning?: string; // AI Analysis text
   // New field for UI state
   status?: 'pending' | 'resolved' | 'updated';
-}
-
-export interface AnomalyInsight {
-  id: string;
-  title: string;
-  description: string;
-  highlight: string;
-  level: 'info' | 'warning' | 'critical';
 }
 
 // --- Profit Dashboard ---
@@ -79,13 +60,6 @@ export interface InventorySafetyItem {
   category: string;
 }
 
-// NEW: Turnover Trend
-export interface TurnoverTrendData {
-  month: string;
-  rate: number;
-  target: number;
-}
-
 // --- Stocktake Anomaly Dashboard ---
 export interface StocktakeAnomalyItem {
   id: string;
@@ -100,27 +74,7 @@ export interface StocktakeAnomalyItem {
   actionStatus?: 'none' | 'adjusted' | 'recount_requested';
 }
 
-// --- Drill-down Data Types ---
-export interface CostStructure {
-  name: string;
-  value: number;
-  color: string;
-}
-
-export interface InventoryHistory {
-  date: string;
-  stock: number;
-  safety: number;
-}
-
-export interface StocktakeHistory {
-  date: string;
-  system: number;
-  counted: number;
-  diff: number;
-}
-
-// --- Notification Type (Enhanced) ---
+// --- Notification Type ---
 export interface Notification {
   id: string;
   type: 'alert' | 'info' | 'success';
@@ -128,46 +82,11 @@ export interface Notification {
   message: string;
   time: string;
   read: boolean;
-  // Smart Navigation targets
-  targetView?:
-    | 'home'
-    | 'profit'
-    | 'waste'
-    | 'inventory'
-    | 'stocktake'
-    | 'monthly'
-    | 'settings'
-    | 'order';
+  targetView?: 'home' | 'profit' | 'cost' | 'production' | 'inventory' | 'settings';
   targetItemId?: string;
 }
 
-// --- Channel Mix Data ---
-export interface ChannelMix {
-  name: string;
-  value: number; // Sales volume or percentage
-  margin: number; // Margin rate for this channel
-}
-
-// NEW: Waste Reason Data
-export interface WasteReasonData {
-  name: string;
-  value: number;
-  color: string;
-}
-
-// --- NEW: BOM History Log ---
-export interface BomHistoryItem {
-  id: string;
-  date: string;
-  skuName: string;
-  actionType: 'Update' | 'Fix' | 'Ignore';
-  description: string;
-  actor: 'AI Agent' | 'Manager';
-  oldValue?: string;
-  newValue?: string;
-}
-
-// --- NEW: Dashboard Summary Data ---
+// --- Dashboard Summary Data ---
 export interface DashboardSummary {
   totalRevenue: number;
   revenueChange: number;

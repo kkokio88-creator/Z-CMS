@@ -9,6 +9,8 @@ import type {
   ProductionData,
   PurchaseData,
   UtilityData,
+  BomItemData,
+  MaterialMasterItem,
 } from './googleSheetService';
 import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
@@ -405,6 +407,42 @@ export interface ProfitCenterScoreInsight {
   overallScore: number;
 }
 
+// BOM 소진량 이상 감지 타입
+export type BomAnomalyType = 'overuse' | 'underuse' | 'price_deviation';
+export type BomAnomalySeverity = 'low' | 'medium' | 'high';
+
+export interface BomConsumptionAnomalyItem {
+  materialCode: string;
+  materialName: string;
+  productNames: string[];
+  expectedConsumption: number;
+  actualConsumption: number;
+  deviationPct: number;
+  bomUnitPrice: number;
+  actualAvgPrice: number;
+  priceDeviationPct: number;
+  anomalyType: BomAnomalyType;
+  severity: BomAnomalySeverity;
+  costImpact: number;
+  totalSpend: number;
+  transactionCount: number;
+}
+
+export interface BomConsumptionAnomalyInsight {
+  items: BomConsumptionAnomalyItem[];
+  summary: {
+    totalAnomalies: number;
+    overuseCount: number;
+    underuseCount: number;
+    priceAnomalyCount: number;
+    totalCostImpact: number;
+    highSeverityCount: number;
+  };
+  topOveruse: BomConsumptionAnomalyItem[];
+  topUnderuse: BomConsumptionAnomalyItem[];
+  topPriceDeviation: BomConsumptionAnomalyItem[];
+}
+
 export interface DashboardInsights {
   channelRevenue: ChannelRevenueInsight | null;
   productProfit: ProductProfitInsight | null;
@@ -425,6 +463,7 @@ export interface DashboardInsights {
   cashFlow: CashFlowInsight | null;
   inventoryCost: InventoryCostInsight | null;
   profitCenterScore: ProfitCenterScoreInsight | null;
+  bomConsumptionAnomaly: BomConsumptionAnomalyInsight | null;
 }
 
 export interface YieldDailyItem {
@@ -2231,6 +2270,153 @@ function computeInventoryCost(
 }
 
 // ==============================
+// BOM 기준 자재 소진량 이상 감지
+// ==============================
+
+function computeBomConsumptionAnomaly(
+  salesDetail: SalesDetailData[],
+  purchases: PurchaseData[],
+  bomData: BomItemData[],
+  materialMaster: MaterialMasterItem[],
+  config: BusinessConfig
+): BomConsumptionAnomalyInsight | null {
+  if (bomData.length === 0 || purchases.length === 0) return null;
+
+  // 1. salesDetail → 제품별 생산량 (판매량을 생산량 대리변수로 사용)
+  const productQtyMap = new Map<string, number>();
+  for (const sd of salesDetail) {
+    const code = sd.productCode?.trim();
+    if (!code) continue;
+    productQtyMap.set(code, (productQtyMap.get(code) || 0) + (sd.quantity || 0));
+  }
+
+  // 2. materialMaster → 자재별 기준 단가
+  const masterPriceMap = new Map<string, number>();
+  for (const mm of materialMaster) {
+    const code = mm.materialCode?.trim();
+    if (code && mm.unitPrice > 0) masterPriceMap.set(code, mm.unitPrice);
+  }
+
+  // 3. purchases → 자재코드별 구매량/금액 집계
+  const purchaseAgg = new Map<string, { totalQty: number; totalAmount: number; count: number; name: string }>();
+  for (const p of purchases) {
+    const code = p.productCode?.trim();
+    if (!code) continue;
+    const agg = purchaseAgg.get(code) || { totalQty: 0, totalAmount: 0, count: 0, name: p.productName || code };
+    agg.totalQty += p.quantity || 0;
+    agg.totalAmount += p.amount || 0;
+    agg.count += 1;
+    purchaseAgg.set(code, agg);
+  }
+
+  // 4. bomData → 자재코드별 기대 소모량 합산 + 사용 제품명 수집
+  const expectedMap = new Map<string, { expected: number; productNames: Set<string>; materialName: string }>();
+  for (const bom of bomData) {
+    const matCode = bom.materialCode?.trim();
+    const prodCode = bom.productCode?.trim();
+    if (!matCode || !prodCode) continue;
+
+    const actualProdQty = productQtyMap.get(prodCode) || 0;
+    if (actualProdQty === 0) continue;
+
+    const bomProdQty = bom.productionQty || 1;
+    const expected = (actualProdQty / bomProdQty) * ((bom.consumptionQty || 0) + (bom.additionalQty || 0));
+
+    const entry = expectedMap.get(matCode) || { expected: 0, productNames: new Set<string>(), materialName: bom.materialName || matCode };
+    entry.expected += expected;
+    entry.productNames.add(bom.productName || prodCode);
+    expectedMap.set(matCode, entry);
+  }
+
+  // 5. 비교 및 이상 감지
+  const items: BomConsumptionAnomalyItem[] = [];
+  const overuseThresh = config.bomOveruseThreshold;
+  const underuseThresh = config.bomUnderuseThreshold;
+  const priceThresh = config.bomPriceDeviationThreshold;
+  const minSpend = config.bomMinimumSpend;
+  const medSev = config.bomMediumSeverity;
+  const highSev = config.bomHighSeverity;
+
+  for (const [matCode, exp] of expectedMap) {
+    const pAgg = purchaseAgg.get(matCode);
+    if (!pAgg) continue;
+
+    const totalSpend = pAgg.totalAmount;
+    if (totalSpend < minSpend) continue;
+
+    const actualQty = pAgg.totalQty;
+    const expectedQty = exp.expected;
+    if (expectedQty === 0) continue;
+
+    const deviationPct = ((actualQty - expectedQty) / expectedQty) * 100;
+    const bomUnitPrice = masterPriceMap.get(matCode) || 0;
+    const actualAvgPrice = pAgg.totalQty > 0 ? pAgg.totalAmount / pAgg.totalQty : 0;
+    const priceDeviationPct = bomUnitPrice > 0 ? ((actualAvgPrice - bomUnitPrice) / bomUnitPrice) * 100 : 0;
+
+    // 이상 유형 판별
+    let anomalyType: BomAnomalyType | null = null;
+    if (deviationPct > overuseThresh) {
+      anomalyType = 'overuse';
+    } else if (deviationPct < underuseThresh) {
+      anomalyType = 'underuse';
+    } else if (Math.abs(priceDeviationPct) > priceThresh) {
+      anomalyType = 'price_deviation';
+    }
+
+    if (!anomalyType) continue;
+
+    // 심각도
+    const absDeviation = Math.abs(anomalyType === 'price_deviation' ? priceDeviationPct : deviationPct);
+    const severity: BomAnomalySeverity = absDeviation >= highSev ? 'high' : absDeviation >= medSev ? 'medium' : 'low';
+
+    // 비용 영향
+    const costImpact = anomalyType === 'price_deviation'
+      ? (actualAvgPrice - bomUnitPrice) * actualQty
+      : (actualQty - expectedQty) * (bomUnitPrice || actualAvgPrice);
+
+    items.push({
+      materialCode: matCode,
+      materialName: exp.materialName,
+      productNames: [...exp.productNames],
+      expectedConsumption: Math.round(expectedQty * 100) / 100,
+      actualConsumption: Math.round(actualQty * 100) / 100,
+      deviationPct: Math.round(deviationPct * 10) / 10,
+      bomUnitPrice,
+      actualAvgPrice: Math.round(actualAvgPrice),
+      priceDeviationPct: Math.round(priceDeviationPct * 10) / 10,
+      anomalyType,
+      severity,
+      costImpact: Math.round(costImpact),
+      totalSpend: Math.round(totalSpend),
+      transactionCount: pAgg.count,
+    });
+  }
+
+  // 정렬: 심각도 > 비용 영향 순
+  const severityOrder = { high: 0, medium: 1, low: 2 };
+  items.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity] || Math.abs(b.costImpact) - Math.abs(a.costImpact));
+
+  const overuseItems = items.filter(i => i.anomalyType === 'overuse');
+  const underuseItems = items.filter(i => i.anomalyType === 'underuse');
+  const priceItems = items.filter(i => i.anomalyType === 'price_deviation');
+
+  return {
+    items,
+    summary: {
+      totalAnomalies: items.length,
+      overuseCount: overuseItems.length,
+      underuseCount: underuseItems.length,
+      priceAnomalyCount: priceItems.length,
+      totalCostImpact: items.reduce((s, i) => s + i.costImpact, 0),
+      highSeverityCount: items.filter(i => i.severity === 'high').length,
+    },
+    topOveruse: overuseItems.slice(0, 5),
+    topUnderuse: underuseItems.slice(0, 5),
+    topPriceDeviation: priceItems.slice(0, 5),
+  };
+}
+
+// ==============================
 // 통합 인사이트 계산
 // ==============================
 
@@ -2242,7 +2428,9 @@ export function computeAllInsights(
   utilities: UtilityData[],
   inventoryData?: InventorySafetyItem[],
   channelCosts: ChannelCostSummary[] = [],
-  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
+  bomData: BomItemData[] = [],
+  materialMaster: MaterialMasterItem[] = []
 ): DashboardInsights {
   const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales, purchases, channelCosts, config) : null;
   const productProfit = salesDetail.length > 0 ? computeProductProfit(salesDetail, purchases) : null;
@@ -2300,6 +2488,10 @@ export function computeAllInsights(
     channelRevenue, costBreakdown, wasteAnalysis, production, config
   );
 
+  const bomConsumptionAnomaly = (bomData.length > 0 && purchases.length > 0)
+    ? computeBomConsumptionAnomaly(salesDetail, purchases, bomData, materialMaster, config)
+    : null;
+
   return {
     channelRevenue,
     productProfit,
@@ -2320,6 +2512,7 @@ export function computeAllInsights(
     cashFlow,
     inventoryCost,
     profitCenterScore,
+    bomConsumptionAnomaly,
   };
 }
 

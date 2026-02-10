@@ -7,7 +7,7 @@ import { SubTabLayout } from './SubTabLayout';
 import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
 import type { ProductionData, PurchaseData } from '../services/googleSheetService';
-import type { DashboardInsights, BomVarianceInsight, YieldTrackingInsight } from '../services/insightService';
+import type { DashboardInsights, BomVarianceInsight, YieldTrackingInsight, BomConsumptionAnomalyInsight, BomConsumptionAnomalyItem } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 
 interface Props {
@@ -117,10 +117,13 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
   // 일별 원본 데이터 (필터된 리스트용)
   const dailyData = prodEfficiency?.daily || [];
 
+  const bomAnomaly = insights?.bomConsumptionAnomaly || null;
+
   const tabs = [
     { key: 'production', label: '생산 현황', icon: 'precision_manufacturing' },
     { key: 'waste', label: '폐기 분석', icon: 'delete_outline' },
     { key: 'efficiency', label: '생산성 분석', icon: 'speed' },
+    { key: 'bomAnomaly', label: 'BOM 이상 감지', icon: 'warning' },
     { key: 'bomVariance', label: 'BOM 오차', icon: 'compare_arrows' },
     { key: 'yield', label: '수율 추적', icon: 'science' },
   ];
@@ -614,6 +617,177 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
             )}
           </div>
         );
+        }
+
+        // ========== BOM 이상 감지 ==========
+        if (activeTab === 'bomAnomaly') {
+          const ANOMALY_COLORS = { overuse: '#EF4444', underuse: '#3B82F6', price_deviation: '#F59E0B' };
+          const ANOMALY_LABELS: Record<string, string> = { overuse: '초과사용', underuse: '미달사용', price_deviation: '단가이상' };
+          const SEVERITY_COLORS: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#6B7280' };
+          const SEVERITY_LABELS: Record<string, string> = { high: '높음', medium: '중간', low: '낮음' };
+
+          if (!bomAnomaly || bomAnomaly.items.length === 0) {
+            return (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
+                <span className="material-icons-outlined text-5xl mb-3">check_circle</span>
+                <p className="text-lg font-medium">BOM 기준 자재 소진량이 정상 범위입니다</p>
+                <p className="text-sm mt-1">BOM 데이터와 구매 데이터가 연결되면 이상 항목이 여기에 표시됩니다</p>
+              </div>
+            );
+          }
+
+          const { summary } = bomAnomaly;
+          const typeData = [
+            { name: '초과사용', value: summary.overuseCount, color: ANOMALY_COLORS.overuse },
+            { name: '미달사용', value: summary.underuseCount, color: ANOMALY_COLORS.underuse },
+            { name: '단가이상', value: summary.priceAnomalyCount, color: ANOMALY_COLORS.price_deviation },
+          ].filter(d => d.value > 0);
+
+          const severityData = [
+            { name: '높음', value: bomAnomaly.items.filter(i => i.severity === 'high').length, color: SEVERITY_COLORS.high },
+            { name: '중간', value: bomAnomaly.items.filter(i => i.severity === 'medium').length, color: SEVERITY_COLORS.medium },
+            { name: '낮음', value: bomAnomaly.items.filter(i => i.severity === 'low').length, color: SEVERITY_COLORS.low },
+          ].filter(d => d.value > 0);
+
+          const renderTopCard = (title: string, items: BomConsumptionAnomalyItem[], color: string) => (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <h4 className="text-sm font-semibold mb-3" style={{ color }}>{title}</h4>
+              {items.length === 0 ? (
+                <p className="text-xs text-gray-400">해당 없음</p>
+              ) : (
+                <div className="space-y-2">
+                  {items.map((item, idx) => (
+                    <div key={item.materialCode} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium text-gray-500 dark:text-gray-400">{idx + 1}</span>
+                        <span className="truncate dark:text-gray-200">{item.materialName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`font-bold ${item.deviationPct > 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                          {item.anomalyType === 'price_deviation'
+                            ? `${item.priceDeviationPct > 0 ? '+' : ''}${item.priceDeviationPct}%`
+                            : `${item.deviationPct > 0 ? '+' : ''}${item.deviationPct}%`}
+                        </span>
+                        <span className="text-gray-400">{formatCurrency(Math.abs(item.costImpact))}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+
+          return (
+            <div className="space-y-6">
+              {/* KPI */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: '이상 항목', value: summary.totalAnomalies, unit: '건', icon: 'warning', color: 'text-red-500' },
+                  { label: '초과사용', value: summary.overuseCount, unit: '건', icon: 'trending_up', color: 'text-red-400' },
+                  { label: '미달사용', value: summary.underuseCount, unit: '건', icon: 'trending_down', color: 'text-blue-400' },
+                  { label: '비용 영향', value: formatCurrency(Math.abs(summary.totalCostImpact)), unit: '', icon: 'payments', color: 'text-amber-500' },
+                ].map(kpi => (
+                  <div key={kpi.label} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`material-icons-outlined text-lg ${kpi.color}`}>{kpi.icon}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{kpi.label}</span>
+                    </div>
+                    <p className="text-xl font-bold dark:text-white">{kpi.value}{kpi.unit}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* 차트 2열 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 이상 유형별 Pie */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-semibold mb-3 dark:text-white">이상 유형별 분포</h4>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        {typeData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => [`${v}건`, '']} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                {/* 심각도별 Bar */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-semibold mb-3 dark:text-white">심각도별 분포</h4>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={severityData} layout="vertical" margin={{ left: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" allowDecimals={false} />
+                      <YAxis dataKey="name" type="category" width={40} />
+                      <Tooltip formatter={(v: number) => [`${v}건`, '']} />
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                        {severityData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Top 5 카드 3열 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {renderTopCard('Top 5 초과사용', bomAnomaly.topOveruse, ANOMALY_COLORS.overuse)}
+                {renderTopCard('Top 5 미달사용', bomAnomaly.topUnderuse, ANOMALY_COLORS.underuse)}
+                {renderTopCard('Top 5 단가이상', bomAnomaly.topPriceDeviation, ANOMALY_COLORS.price_deviation)}
+              </div>
+
+              {/* 전체 테이블 */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-semibold dark:text-white">전체 이상 항목 ({bomAnomaly.items.length}건)</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">자재명</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">사용 제품</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">기대 소모</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">실제 소모</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">차이(%)</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-500 dark:text-gray-400">유형</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-500 dark:text-gray-400">심각도</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">비용 영향</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                      {bomAnomaly.items.map((item) => (
+                        <tr key={item.materialCode} className="hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer" onClick={() => onItemClick(item)}>
+                          <td className="px-3 py-2 dark:text-gray-200">
+                            <div className="font-medium">{item.materialName}</div>
+                            <div className="text-gray-400 text-[10px]">{item.materialCode}</div>
+                          </td>
+                          <td className="px-3 py-2 text-gray-500 dark:text-gray-400 max-w-[150px] truncate">{item.productNames.slice(0, 3).join(', ')}{item.productNames.length > 3 ? ` 외 ${item.productNames.length - 3}` : ''}</td>
+                          <td className="px-3 py-2 text-right dark:text-gray-300">{formatQty(item.expectedConsumption)}</td>
+                          <td className="px-3 py-2 text-right dark:text-gray-300">{formatQty(item.actualConsumption)}</td>
+                          <td className="px-3 py-2 text-right font-bold" style={{ color: item.deviationPct > 0 ? '#EF4444' : '#3B82F6' }}>
+                            {item.anomalyType === 'price_deviation'
+                              ? `${item.priceDeviationPct > 0 ? '+' : ''}${item.priceDeviationPct}%`
+                              : `${item.deviationPct > 0 ? '+' : ''}${item.deviationPct}%`}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-white" style={{ backgroundColor: ANOMALY_COLORS[item.anomalyType] }}>
+                              {ANOMALY_LABELS[item.anomalyType]}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-white" style={{ backgroundColor: SEVERITY_COLORS[item.severity] }}>
+                              {SEVERITY_LABELS[item.severity]}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium dark:text-gray-200">{formatCurrency(Math.abs(item.costImpact))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
         }
 
         // ========== BOM 오차 분석 ==========

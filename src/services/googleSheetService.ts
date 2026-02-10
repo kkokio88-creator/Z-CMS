@@ -10,6 +10,9 @@ import {
   directFetchProduction,
   directFetchPurchases,
   directFetchUtilities,
+  directFetchLabor,
+  directFetchBom,
+  directFetchMaterialMaster,
 } from './supabaseClient';
 import { loadBusinessConfig } from '../config/businessConfig';
 
@@ -221,12 +224,75 @@ export interface BomSummary {
   productCount: number;
 }
 
+// 노무비 일별 데이터 타입
+export interface LaborDailyData {
+  date: string;
+  department: string;
+  week: string;
+  headcount: number;
+  weekdayRegularHours: number;
+  weekdayOvertimeHours: number;
+  weekdayNightHours: number;
+  weekdayTotalHours: number;
+  holidayRegularHours: number;
+  holidayOvertimeHours: number;
+  holidayNightHours: number;
+  holidayTotalHours: number;
+  weekdayRegularPay: number;
+  weekdayOvertimePay: number;
+  weekdayNightPay: number;
+  holidayRegularPay: number;
+  holidayOvertimePay: number;
+  holidayNightPay: number;
+  totalPay: number;
+}
+
+// BOM 아이템 데이터 타입 (Supabase 경유)
+export interface BomItemData {
+  source: string;
+  productCode: string;
+  productName: string;
+  bomVersion: string;
+  isExistingBom: boolean;
+  productionQty: number;
+  materialCode: string;
+  materialName: string;
+  materialBomVersion: string;
+  consumptionQty: number;
+  location: string;
+  remark: string;
+  additionalQty: number;
+}
+
+// 자재 마스터 아이템 타입
+export interface MaterialMasterItem {
+  no: number;
+  category: string;
+  issueType: string;
+  materialCode: string;
+  materialName: string;
+  preprocessYield: number;
+  spec: string;
+  unit: string;
+  unitPrice: number;
+  safetyStock: number;
+  excessStock: number;
+  leadTimeDays: number;
+  recentOutputQty: number;
+  dailyAvg: number;
+  note: string;
+  inUse: boolean;
+}
+
 export interface GoogleSheetSyncResult {
   dailySales: DailySalesData[];
   salesDetail: SalesDetailData[];
   production: ProductionData[];
   purchases: PurchaseData[];
   utilities: UtilityData[];
+  labor: LaborDailyData[];
+  bom: BomItemData[];
+  materialMaster: MaterialMasterItem[];
   profitTrend: ChannelProfitItem[];
   topProfit: ProfitRankItem[];
   bottomProfit: ProfitRankItem[];
@@ -242,6 +308,7 @@ export interface GoogleSheetSyncResult {
     utilities: number;
     labor: number;
     bom: number;
+    materialMaster: number;
   };
 }
 
@@ -305,12 +372,15 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
 
   // 개별 fetch 함수 호출 (각각 3-Tier 폴백 내장: 백엔드→Supabase직접→Google Sheets)
   try {
-    const [dailySales, salesDetail, production, purchases, utilities] = await Promise.all([
+    const [dailySales, salesDetail, production, purchases, utilities, labor, bom, materialMaster] = await Promise.all([
       fetchDailySales(),
       fetchSalesDetail(),
       fetchProduction(),
       fetchPurchases(),
       fetchUtilities(),
+      fetchLabor(),
+      fetchBomData(),
+      fetchMaterialMaster(),
     ]);
 
     // 데이터가 하나라도 있으면 성공
@@ -327,6 +397,9 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
         production,
         purchases,
         utilities,
+        labor,
+        bom,
+        materialMaster,
         profitTrend,
         topProfit,
         bottomProfit,
@@ -340,8 +413,9 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
           production: production.length,
           purchases: purchases.length,
           utilities: utilities.length,
-          labor: 0,
-          bom: 0,
+          labor: labor.length,
+          bom: bom.length,
+          materialMaster: materialMaster.length,
         },
       };
     }
@@ -373,6 +447,9 @@ const syncGoogleSheetDataLegacy = async (): Promise<GoogleSheetSyncResult> => {
       production: result.transformedData?.rawData?.production || [],
       purchases: result.transformedData?.rawData?.purchases || [],
       utilities: result.transformedData?.rawData?.utilities || [],
+      labor: [],
+      bom: [],
+      materialMaster: [],
       profitTrend: result.transformedData?.profitTrend || [],
       topProfit: result.transformedData?.topProfit || [],
       bottomProfit: result.transformedData?.bottomProfit || [],
@@ -388,6 +465,7 @@ const syncGoogleSheetDataLegacy = async (): Promise<GoogleSheetSyncResult> => {
         utilities: result.data?.utilitiesCount || 0,
         labor: result.data?.laborCount || 0,
         bom: result.data?.bomCount || 0,
+        materialMaster: result.data?.materialMasterCount || 0,
       },
     };
   } catch (error: any) {
@@ -616,6 +694,125 @@ export const fetchUtilities = async (): Promise<UtilityData[]> => {
     const response = await fetch(`${BACKEND_URL}/data/utilities`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
     if (result.success && result.data?.length > 0) return result.data.map(mapUtilityFromDb);
+  } catch { /* 백엔드 실패 */ }
+  return [];
+};
+
+// DB→camelCase 변환 맵퍼 (labor, bom, materialMaster)
+
+function mapLaborFromDb(row: any): LaborDailyData {
+  return {
+    date: row.date ?? '',
+    department: row.department ?? '',
+    week: row.week ?? '',
+    headcount: row.headcount ?? 0,
+    weekdayRegularHours: row.weekday_regular_hours ?? 0,
+    weekdayOvertimeHours: row.weekday_overtime_hours ?? 0,
+    weekdayNightHours: row.weekday_night_hours ?? 0,
+    weekdayTotalHours: row.weekday_total_hours ?? 0,
+    holidayRegularHours: row.holiday_regular_hours ?? 0,
+    holidayOvertimeHours: row.holiday_overtime_hours ?? 0,
+    holidayNightHours: row.holiday_night_hours ?? 0,
+    holidayTotalHours: row.holiday_total_hours ?? 0,
+    weekdayRegularPay: row.weekday_regular_pay ?? 0,
+    weekdayOvertimePay: row.weekday_overtime_pay ?? 0,
+    weekdayNightPay: row.weekday_night_pay ?? 0,
+    holidayRegularPay: row.holiday_regular_pay ?? 0,
+    holidayOvertimePay: row.holiday_overtime_pay ?? 0,
+    holidayNightPay: row.holiday_night_pay ?? 0,
+    totalPay: row.total_pay ?? 0,
+  };
+}
+
+function mapBomFromDb(row: any): BomItemData {
+  return {
+    source: row.source ?? '',
+    productCode: row.product_code ?? '',
+    productName: row.product_name ?? '',
+    bomVersion: row.bom_version ?? '',
+    isExistingBom: row.is_existing_bom ?? false,
+    productionQty: row.production_qty ?? 0,
+    materialCode: row.material_code ?? '',
+    materialName: row.material_name ?? '',
+    materialBomVersion: row.material_bom_version ?? '',
+    consumptionQty: row.consumption_qty ?? 0,
+    location: row.location ?? '',
+    remark: row.remark ?? '',
+    additionalQty: row.additional_qty ?? 0,
+  };
+}
+
+function mapMaterialMasterFromDb(row: any): MaterialMasterItem {
+  return {
+    no: row.no ?? 0,
+    category: row.category ?? '',
+    issueType: row.issue_type ?? '',
+    materialCode: row.material_code ?? '',
+    materialName: row.material_name ?? '',
+    preprocessYield: row.preprocess_yield ?? 0,
+    spec: row.spec ?? '',
+    unit: row.unit ?? '',
+    unitPrice: row.unit_price ?? 0,
+    safetyStock: row.safety_stock ?? 0,
+    excessStock: row.excess_stock ?? 0,
+    leadTimeDays: row.lead_time_days ?? 0,
+    recentOutputQty: row.recent_output_qty ?? 0,
+    dailyAvg: row.daily_avg ?? 0,
+    note: row.note ?? '',
+    inUse: row.in_use ?? true,
+  };
+}
+
+/**
+ * 노무비 데이터 가져오기 (3-Tier)
+ */
+export const fetchLabor = async (): Promise<LaborDailyData[]> => {
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchLabor();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
+  try {
+    const response = await fetch(`${BACKEND_URL}/data/labor`, { signal: AbortSignal.timeout(5000) });
+    const result = await response.json();
+    if (result.success && result.data?.length > 0) return result.data.map(mapLaborFromDb);
+  } catch { /* 백엔드 실패 */ }
+  return [];
+};
+
+/**
+ * BOM 데이터 가져오기 (3-Tier: Supabase → 백엔드 API)
+ */
+export const fetchBomData = async (): Promise<BomItemData[]> => {
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchBom();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
+  try {
+    const response = await fetch(`${BACKEND_URL}/data/bom`, { signal: AbortSignal.timeout(5000) });
+    const result = await response.json();
+    if (result.success && result.data?.length > 0) return result.data.map(mapBomFromDb);
+  } catch { /* 백엔드 실패 */ }
+  return [];
+};
+
+/**
+ * 자재 마스터 데이터 가져오기 (3-Tier)
+ */
+export const fetchMaterialMaster = async (): Promise<MaterialMasterItem[]> => {
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchMaterialMaster();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
+  try {
+    const response = await fetch(`${BACKEND_URL}/data/material-master`, { signal: AbortSignal.timeout(5000) });
+    const result = await response.json();
+    if (result.success && result.data?.length > 0) return result.data.map(mapMaterialMasterFromDb);
   } catch { /* 백엔드 실패 */ }
   return [];
 };

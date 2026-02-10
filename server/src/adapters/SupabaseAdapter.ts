@@ -120,6 +120,69 @@ export interface SyncLogRow {
   tables_updated?: string;         // 실제 업데이트된 테이블 목록
 }
 
+export interface LaborDailyRow {
+  id?: string;
+  date: string;
+  department: string;
+  week?: string;
+  headcount: number;
+  weekday_regular_hours: number;
+  weekday_overtime_hours: number;
+  weekday_night_hours: number;
+  weekday_total_hours: number;
+  holiday_regular_hours: number;
+  holiday_overtime_hours: number;
+  holiday_night_hours: number;
+  holiday_total_hours: number;
+  weekday_regular_pay: number;
+  weekday_overtime_pay: number;
+  weekday_night_pay: number;
+  holiday_regular_pay: number;
+  holiday_overtime_pay: number;
+  holiday_night_pay: number;
+  total_pay: number;
+  synced_at?: string;
+}
+
+export interface BomRow {
+  id?: string;
+  source: string;
+  product_code: string;
+  product_name: string;
+  bom_version: string;
+  is_existing_bom: boolean;
+  production_qty: number;
+  material_code: string;
+  material_name: string;
+  material_bom_version: string;
+  consumption_qty: number;
+  location: string;
+  remark: string;
+  additional_qty: number;
+  synced_at?: string;
+}
+
+export interface MaterialMasterRow {
+  id?: string;
+  no: number;
+  category: string;
+  issue_type: string;
+  material_code: string;
+  material_name: string;
+  preprocess_yield: number;
+  spec: string;
+  unit: string;
+  unit_price: number;
+  safety_stock: number;
+  excess_stock: number;
+  lead_time_days: number;
+  recent_output_qty: number;
+  daily_avg: number;
+  note: string;
+  in_use: boolean;
+  synced_at?: string;
+}
+
 // ==============================
 // Supabase Adapter
 // ==============================
@@ -436,6 +499,105 @@ export class SupabaseAdapter {
     } catch {
       return null;
     }
+  }
+
+  // ==============================
+  // Labor Daily
+  // ==============================
+
+  async upsertLaborDaily(rows: LaborDailyRow[]): Promise<number> {
+    if (rows.length === 0) return 0;
+    const client = this.getClient();
+
+    const { error } = await client
+      .from('labor_daily')
+      .upsert(
+        rows.map(r => ({ ...r, synced_at: new Date().toISOString() })),
+        { onConflict: 'date,department' }
+      );
+
+    if (error) throw new Error(`labor_daily upsert failed: ${error.message}`);
+    return rows.length;
+  }
+
+  async getLaborDaily(dateFrom?: string, dateTo?: string): Promise<LaborDailyRow[]> {
+    const client = this.getClient();
+    let query = client.from('labor_daily').select('*').order('date', { ascending: false });
+
+    if (dateFrom) query = query.gte('date', dateFrom);
+    if (dateTo) query = query.lte('date', dateTo);
+
+    const { data, error } = await query;
+    if (error) throw new Error(`labor_daily query failed: ${error.message}`);
+    return data || [];
+  }
+
+  // ==============================
+  // BOM
+  // ==============================
+
+  async upsertBom(rows: BomRow[]): Promise<number> {
+    if (rows.length === 0) return 0;
+    const client = this.getClient();
+
+    // BOM 데이터가 많을 수 있으므로 배치 처리
+    const batchSize = 500;
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize).map(r => ({
+        ...r,
+        synced_at: new Date().toISOString(),
+      }));
+
+      const { error } = await client
+        .from('bom')
+        .upsert(batch, { onConflict: 'source,product_code,material_code' });
+
+      if (error) throw new Error(`bom upsert failed: ${error.message}`);
+    }
+
+    return rows.length;
+  }
+
+  async getBom(source?: string): Promise<BomRow[]> {
+    const client = this.getClient();
+    let query = client.from('bom').select('*').order('product_code', { ascending: true });
+
+    if (source) query = query.eq('source', source);
+
+    const { data, error } = await query;
+    if (error) throw new Error(`bom query failed: ${error.message}`);
+    return data || [];
+  }
+
+  // ==============================
+  // Material Master
+  // ==============================
+
+  async upsertMaterialMaster(rows: MaterialMasterRow[]): Promise<number> {
+    if (rows.length === 0) return 0;
+    const client = this.getClient();
+
+    const { error } = await client
+      .from('material_master')
+      .upsert(
+        rows.map(r => ({ ...r, synced_at: new Date().toISOString() })),
+        { onConflict: 'material_code' }
+      );
+
+    if (error) throw new Error(`material_master upsert failed: ${error.message}`);
+    return rows.length;
+  }
+
+  async getMaterialMaster(): Promise<MaterialMasterRow[]> {
+    const client = this.getClient();
+
+    const { data, error } = await client
+      .from('material_master')
+      .select('*')
+      .order('no', { ascending: true });
+
+    if (error) throw new Error(`material_master query failed: ${error.message}`);
+    return data || [];
   }
 
   // ==============================

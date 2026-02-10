@@ -204,6 +204,50 @@ router.get('/data/utilities', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/data/labor
+ * 노무비 일별 데이터
+ */
+router.get('/data/labor', async (req: Request, res: Response) => {
+  try {
+    const { from, to } = req.query;
+    const data = await supabaseAdapter.getLaborDaily(
+      from as string | undefined,
+      to as string | undefined
+    );
+    res.json({ success: true, data, count: data.length });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/data/bom
+ * BOM 데이터 (SAN + ZIP)
+ */
+router.get('/data/bom', async (req: Request, res: Response) => {
+  try {
+    const { source } = req.query;
+    const data = await supabaseAdapter.getBom(source as string | undefined);
+    res.json({ success: true, data, count: data.length });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/data/material-master
+ * 자재 마스터 데이터
+ */
+router.get('/data/material-master', async (_req: Request, res: Response) => {
+  try {
+    const data = await supabaseAdapter.getMaterialMaster();
+    res.json({ success: true, data, count: data.length });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/data/health
  * Supabase 연결 상태 확인
  */

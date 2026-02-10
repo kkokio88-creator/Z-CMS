@@ -10,6 +10,9 @@ import type {
   ProductionData,
   PurchaseData,
   UtilityData,
+  LaborDailyData,
+  BomItemData,
+  MaterialMasterItem,
 } from './googleSheetService';
 
 let supabaseClient: SupabaseClient | null = null;
@@ -171,6 +174,93 @@ export async function directFetchUtilities(): Promise<UtilityData[]> {
   const { data, error } = await client.from('utilities').select('*').order('date', { ascending: true });
   if (error || !data) return [];
   return data.map(mapUtilityFromDb);
+}
+
+function mapLaborFromDb(row: Record<string, any>): LaborDailyData {
+  return {
+    date: row.date ?? '',
+    department: row.department ?? '',
+    week: row.week ?? '',
+    headcount: row.headcount ?? 0,
+    weekdayRegularHours: row.weekday_regular_hours ?? 0,
+    weekdayOvertimeHours: row.weekday_overtime_hours ?? 0,
+    weekdayNightHours: row.weekday_night_hours ?? 0,
+    weekdayTotalHours: row.weekday_total_hours ?? 0,
+    holidayRegularHours: row.holiday_regular_hours ?? 0,
+    holidayOvertimeHours: row.holiday_overtime_hours ?? 0,
+    holidayNightHours: row.holiday_night_hours ?? 0,
+    holidayTotalHours: row.holiday_total_hours ?? 0,
+    weekdayRegularPay: row.weekday_regular_pay ?? 0,
+    weekdayOvertimePay: row.weekday_overtime_pay ?? 0,
+    weekdayNightPay: row.weekday_night_pay ?? 0,
+    holidayRegularPay: row.holiday_regular_pay ?? 0,
+    holidayOvertimePay: row.holiday_overtime_pay ?? 0,
+    holidayNightPay: row.holiday_night_pay ?? 0,
+    totalPay: row.total_pay ?? 0,
+  };
+}
+
+function mapBomFromDb(row: Record<string, any>): BomItemData {
+  return {
+    source: row.source ?? '',
+    productCode: row.product_code ?? '',
+    productName: row.product_name ?? '',
+    bomVersion: row.bom_version ?? '',
+    isExistingBom: row.is_existing_bom ?? false,
+    productionQty: row.production_qty ?? 0,
+    materialCode: row.material_code ?? '',
+    materialName: row.material_name ?? '',
+    materialBomVersion: row.material_bom_version ?? '',
+    consumptionQty: row.consumption_qty ?? 0,
+    location: row.location ?? '',
+    remark: row.remark ?? '',
+    additionalQty: row.additional_qty ?? 0,
+  };
+}
+
+function mapMaterialMasterFromDb(row: Record<string, any>): MaterialMasterItem {
+  return {
+    no: row.no ?? 0,
+    category: row.category ?? '',
+    issueType: row.issue_type ?? '',
+    materialCode: row.material_code ?? '',
+    materialName: row.material_name ?? '',
+    preprocessYield: row.preprocess_yield ?? 0,
+    spec: row.spec ?? '',
+    unit: row.unit ?? '',
+    unitPrice: row.unit_price ?? 0,
+    safetyStock: row.safety_stock ?? 0,
+    excessStock: row.excess_stock ?? 0,
+    leadTimeDays: row.lead_time_days ?? 0,
+    recentOutputQty: row.recent_output_qty ?? 0,
+    dailyAvg: row.daily_avg ?? 0,
+    note: row.note ?? '',
+    inUse: row.in_use ?? true,
+  };
+}
+
+export async function directFetchLabor(): Promise<LaborDailyData[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('labor_daily').select('*').order('date', { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapLaborFromDb);
+}
+
+export async function directFetchBom(): Promise<BomItemData[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('bom').select('*').order('product_code', { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapBomFromDb);
+}
+
+export async function directFetchMaterialMaster(): Promise<MaterialMasterItem[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('material_master').select('*').order('no', { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapMaterialMasterFromDb);
 }
 
 export interface SyncStatusInfo {

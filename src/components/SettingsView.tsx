@@ -9,6 +9,15 @@ import { useSettings } from '../contexts/SettingsContext';
 import { ChannelCostAdmin } from './ChannelCostAdmin';
 import { LaborRecordAdmin } from './LaborRecordAdmin';
 import type { ProfitCenterGoal } from '../config/businessConfig';
+import {
+  loadDataSourceConfig,
+  saveDataSourceConfig,
+  resetDataSourceConfig,
+  getSpreadsheetUrl,
+  type DataSourceConfig as NormalizedDSConfig,
+  type DataSourceSheet,
+} from '../config/dataSourceConfig';
+import { generateDataSourceMd, saveMdToStorage } from '../utils/generateDataSourceMd';
 
 // 데이터 소스 연결 타입 정의
 type DataSourceType = 'googleSheets' | 'ecount' | 'none';
@@ -37,7 +46,7 @@ interface DataSourcesConfig {
   purchaseHistory: DataSourceConfig; // 구매현황
 }
 
-const GOOGLE_SHEETS_SERVICE_ACCOUNT = 'z-cms-bot@z-cms-486204.iam.gserviceaccount.com';
+const GOOGLE_SHEETS_SERVICE_ACCOUNT = 'z-cms-3077@gen-lang-client-0670850409.iam.gserviceaccount.com';
 const DATASOURCE_CONFIG_KEY = 'ZCMS_DATASOURCE_CONFIG';
 
 const defaultDataSourceConfig: DataSourceConfig = {
@@ -81,6 +90,11 @@ export const SettingsView: React.FC = () => {
   const [dataSourcesConfig, setDataSourcesConfig] =
     useState<DataSourcesConfig>(defaultDataSourcesConfig);
   const [testingSource, setTestingSource] = useState<keyof DataSourcesConfig | null>(null);
+
+  // 정규화 데이터 소스 관리
+  const [normalizedDSConfig, setNormalizedDSConfig] = useState<NormalizedDSConfig>(loadDataSourceConfig);
+  const [dsEditingSheet, setDsEditingSheet] = useState<string | null>(null);
+  const [dsMdPreview, setDsMdPreview] = useState(false);
 
   useEffect(() => {
     // Load existing config on mount
@@ -484,141 +498,312 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Data Source Connection Management */}
+      {/* 정규화 데이터 소스 관리 */}
       <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-green-50 dark:bg-green-900/20">
           <h3 className="font-bold text-green-900 dark:text-green-200 flex items-center">
-            <span className="material-icons-outlined mr-2">link</span>
-            데이터 소스 연결 관리
+            <span className="material-icons-outlined mr-2">dataset</span>
+            구글시트 데이터 소스 관리
           </h3>
           <p className="text-xs text-green-700 dark:text-green-400 mt-1">
-            각 기능별로 Google Sheets 또는 ECOUNT API 중 데이터 소스를 선택하세요.
+            {normalizedDSConfig.sheets.length}개 시트 연동 | v{normalizedDSConfig.version} | 최종 업데이트: {normalizedDSConfig.lastUpdated}
           </p>
         </div>
 
-        {/* Google Sheets 서비스 계정 안내 */}
+        {/* 서비스 계정 안내 */}
         <div className="px-6 py-3 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-100 dark:border-yellow-800">
           <div className="flex items-start">
-            <span className="material-icons-outlined text-yellow-600 dark:text-yellow-400 mr-2 text-lg">
-              warning
-            </span>
+            <span className="material-icons-outlined text-yellow-600 dark:text-yellow-400 mr-2 text-lg">warning</span>
             <div>
-              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                Google Sheets 사용 시 필수 권한 설정
-              </p>
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">서비스 계정 권한</p>
               <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                아래 서비스 계정에 스프레드시트 <strong>&quot;편집자&quot;</strong> 권한을 공유해야
-                합니다:
+                아래 서비스 계정에 스프레드시트 <strong>"편집자"</strong> 권한을 공유하세요:
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <code className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded text-xs font-mono text-yellow-900 dark:text-yellow-100">
-                  {GOOGLE_SHEETS_SERVICE_ACCOUNT}
+                  {normalizedDSConfig.serviceAccount}
                 </code>
                 <button
-                  onClick={() => navigator.clipboard.writeText(GOOGLE_SHEETS_SERVICE_ACCOUNT)}
+                  onClick={() => navigator.clipboard.writeText(normalizedDSConfig.serviceAccount)}
                   className="p-1 hover:bg-yellow-200 dark:hover:bg-yellow-700 rounded transition-colors"
                   title="복사"
                 >
-                  <span className="material-icons-outlined text-sm text-yellow-700 dark:text-yellow-300">
-                    content_copy
-                  </span>
+                  <span className="material-icons-outlined text-sm text-yellow-700 dark:text-yellow-300">content_copy</span>
                 </button>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="p-6 space-y-4">
-          {/* 기본 데이터 섹션 */}
-          <div className="mb-2">
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
-              <span className="material-icons-outlined text-sm mr-1">folder</span>
-              기본 데이터
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderDataSourceCard(
-                'mealPlan',
-                '식단표',
-                '주간/월간 식단 계획 데이터',
-                'restaurant_menu'
-              )}
-              {renderDataSourceCard(
-                'salesHistory',
-                '판매실적',
-                '일별 메뉴/채널별 판매 데이터',
-                'point_of_sale'
-              )}
-            </div>
+        <div className="p-6 space-y-3">
+          {/* 시트 목록 테이블 */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                  <th className="pb-2 pr-2 w-6"></th>
+                  <th className="pb-2 pr-4">데이터</th>
+                  <th className="pb-2 pr-4">시트명</th>
+                  <th className="pb-2 pr-4 text-center">헤더행</th>
+                  <th className="pb-2 pr-4 text-center">시작행</th>
+                  <th className="pb-2 pr-4 text-center">컬럼수</th>
+                  <th className="pb-2 text-center">작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                {normalizedDSConfig.sheets.map((sheet) => (
+                  <React.Fragment key={sheet.id}>
+                    <tr className={`border-b dark:border-gray-700 ${!sheet.enabled ? 'opacity-50' : ''}`}>
+                      <td className="py-2.5 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={sheet.enabled}
+                          onChange={() => {
+                            const updated = { ...normalizedDSConfig };
+                            const idx = updated.sheets.findIndex(s => s.id === sheet.id);
+                            updated.sheets[idx] = { ...sheet, enabled: !sheet.enabled };
+                            setNormalizedDSConfig(updated);
+                            saveDataSourceConfig(updated);
+                            const md = generateDataSourceMd(updated);
+                            saveMdToStorage(md);
+                          }}
+                          className="rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                      </td>
+                      <td className="py-2.5 pr-4 font-medium text-gray-800 dark:text-gray-200">{sheet.name}</td>
+                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400 font-mono text-xs">{sheet.sheetName}</td>
+                      <td className="py-2.5 pr-4 text-center text-gray-500">{sheet.headerRow}</td>
+                      <td className="py-2.5 pr-4 text-center text-gray-500">{sheet.dataStartRow}</td>
+                      <td className="py-2.5 pr-4 text-center">
+                        <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded text-xs">
+                          {sheet.columns.length}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => setDsEditingSheet(dsEditingSheet === sheet.id ? null : sheet.id)}
+                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            title="편집"
+                          >
+                            <span className="material-icons-outlined text-sm text-gray-500 dark:text-gray-400">
+                              {dsEditingSheet === sheet.id ? 'expand_less' : 'edit'}
+                            </span>
+                          </button>
+                          <a
+                            href={getSpreadsheetUrl(sheet.spreadsheetId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            title="시트 열기"
+                          >
+                            <span className="material-icons-outlined text-sm text-green-600 dark:text-green-400">open_in_new</span>
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                    {/* 편집 확장 영역 */}
+                    {dsEditingSheet === sheet.id && (
+                      <tr>
+                        <td colSpan={7} className="bg-gray-50 dark:bg-gray-800/50 px-4 py-4">
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">시트명</label>
+                                <input
+                                  type="text"
+                                  value={sheet.sheetName}
+                                  onChange={(e) => {
+                                    const updated = { ...normalizedDSConfig };
+                                    const idx = updated.sheets.findIndex(s => s.id === sheet.id);
+                                    updated.sheets[idx] = { ...sheet, sheetName: e.target.value };
+                                    setNormalizedDSConfig(updated);
+                                  }}
+                                  className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">헤더행</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={sheet.headerRow}
+                                  onChange={(e) => {
+                                    const updated = { ...normalizedDSConfig };
+                                    const idx = updated.sheets.findIndex(s => s.id === sheet.id);
+                                    updated.sheets[idx] = { ...sheet, headerRow: Number(e.target.value) };
+                                    setNormalizedDSConfig(updated);
+                                  }}
+                                  className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">데이터시작행</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={sheet.dataStartRow}
+                                  onChange={(e) => {
+                                    const updated = { ...normalizedDSConfig };
+                                    const idx = updated.sheets.findIndex(s => s.id === sheet.id);
+                                    updated.sheets[idx] = { ...sheet, dataStartRow: Number(e.target.value) };
+                                    setNormalizedDSConfig(updated);
+                                  }}
+                                  className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">스프레드시트 ID</label>
+                                <input
+                                  type="text"
+                                  value={sheet.spreadsheetId}
+                                  onChange={(e) => {
+                                    const updated = { ...normalizedDSConfig };
+                                    const idx = updated.sheets.findIndex(s => s.id === sheet.id);
+                                    updated.sheets[idx] = { ...sheet, spreadsheetId: e.target.value };
+                                    setNormalizedDSConfig(updated);
+                                  }}
+                                  className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border font-mono text-xs"
+                                />
+                              </div>
+                            </div>
+                            {/* 컬럼 매핑 테이블 */}
+                            <div>
+                              <h5 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">컬럼 매핑 ({sheet.columns.length}개)</h5>
+                              <div className="max-h-48 overflow-auto rounded border dark:border-gray-700">
+                                <table className="w-full text-xs">
+                                  <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
+                                    <tr>
+                                      <th className="px-2 py-1 text-left">필드</th>
+                                      <th className="px-2 py-1 text-center w-16">컬럼</th>
+                                      <th className="px-2 py-1 text-left">라벨</th>
+                                      <th className="px-2 py-1 text-center w-20">타입</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sheet.columns.map((col, ci) => (
+                                      <tr key={ci} className="border-t dark:border-gray-700">
+                                        <td className="px-2 py-1 font-mono text-blue-600 dark:text-blue-400">{col.key}</td>
+                                        <td className="px-2 py-1 text-center">
+                                          <input
+                                            type="text"
+                                            value={col.column}
+                                            onChange={(e) => {
+                                              const updated = { ...normalizedDSConfig };
+                                              const si = updated.sheets.findIndex(s => s.id === sheet.id);
+                                              const cols = [...updated.sheets[si].columns];
+                                              cols[ci] = { ...cols[ci], column: e.target.value };
+                                              updated.sheets[si] = { ...updated.sheets[si], columns: cols };
+                                              setNormalizedDSConfig(updated);
+                                            }}
+                                            className="w-12 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 p-0.5 border"
+                                          />
+                                        </td>
+                                        <td className="px-2 py-1 text-gray-600 dark:text-gray-400">{col.label}</td>
+                                        <td className="px-2 py-1 text-center">
+                                          <span className={`px-1.5 py-0.5 rounded ${col.type === 'number' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : col.type === 'date' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                                            {col.type}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                            {sheet.notes && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 italic">{sheet.notes}</p>
+                            )}
+                            <div className="flex justify-end">
+                              <button
+                                onClick={() => {
+                                  saveDataSourceConfig(normalizedDSConfig);
+                                  const md = generateDataSourceMd(normalizedDSConfig);
+                                  saveMdToStorage(md);
+                                  setDsEditingSheet(null);
+                                }}
+                                className="px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors"
+                              >
+                                저장
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          {/* BOM 데이터 섹션 */}
-          <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
-              <span className="material-icons-outlined text-sm mr-1">account_tree</span>
-              BOM (자재명세서)
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderDataSourceCard(
-                'bomSan',
-                'BOM (SAN)',
-                'SAN 브랜드 메뉴 레시피',
-                'receipt_long'
-              )}
-              {renderDataSourceCard(
-                'bomZip',
-                'BOM (ZIP)',
-                'ZIP 브랜드 메뉴 레시피',
-                'receipt_long'
-              )}
-            </div>
-          </div>
-
-          {/* 재고/구매 데이터 섹션 */}
-          <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
-              <span className="material-icons-outlined text-sm mr-1">warehouse</span>
-              재고 및 구매
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderDataSourceCard(
-                'inventory',
-                '재고현황',
-                '현재 원자재 재고 수량',
-                'inventory_2'
-              )}
-              {renderDataSourceCard(
-                'purchaseHistory',
-                '구매현황',
-                '구매 이력 및 단가 정보',
-                'shopping_cart'
-              )}
-              {renderDataSourceCard(
-                'purchaseOrders',
-                '발주현황',
-                '진행 중인 발주 및 입고 예정',
-                'local_shipping'
-              )}
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-              <span>
-                <span className="material-icons-outlined text-sm align-middle mr-1">info</span>
-                설정은 브라우저에 자동 저장됩니다. 연결 테스트 후 데이터를 불러올 수 있습니다.
-              </span>
+          {/* 액션 버튼 */}
+          <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+            <div className="flex gap-2">
               <button
                 onClick={() => {
-                  setDataSourcesConfig(defaultDataSourcesConfig);
-                  localStorage.removeItem(DATASOURCE_CONFIG_KEY);
+                  saveDataSourceConfig(normalizedDSConfig);
+                  const md = generateDataSourceMd(normalizedDSConfig);
+                  saveMdToStorage(md);
+                  alert('설정이 저장되고 MD 문서가 업데이트되었습니다.');
                 }}
-                className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 flex items-center"
+                className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-300 rounded text-xs font-medium transition-colors flex items-center gap-1"
               >
-                <span className="material-icons-outlined text-sm mr-1">restart_alt</span>
-                초기화
+                <span className="material-icons-outlined text-sm">save</span>
+                전체 저장 + MD 업데이트
+              </button>
+              <button
+                onClick={() => {
+                  const md = generateDataSourceMd(normalizedDSConfig);
+                  setDsMdPreview(!dsMdPreview);
+                  saveMdToStorage(md);
+                }}
+                className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300 rounded text-xs font-medium transition-colors flex items-center gap-1"
+              >
+                <span className="material-icons-outlined text-sm">description</span>
+                {dsMdPreview ? 'MD 미리보기 닫기' : 'MD 미리보기'}
+              </button>
+              <button
+                onClick={() => {
+                  const md = generateDataSourceMd(normalizedDSConfig);
+                  const blob = new Blob([md], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `google-sheets-data-${new Date().toISOString().slice(0, 10)}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded text-xs font-medium transition-colors flex items-center gap-1"
+              >
+                <span className="material-icons-outlined text-sm">download</span>
+                MD 다운로드
               </button>
             </div>
+            <button
+              onClick={() => {
+                if (window.confirm('데이터 소스 설정을 기본값으로 초기화하시겠습니까?')) {
+                  const defaultConfig = resetDataSourceConfig();
+                  setNormalizedDSConfig(defaultConfig);
+                  const md = generateDataSourceMd(defaultConfig);
+                  saveMdToStorage(md);
+                }
+              }}
+              className="text-red-500 hover:text-red-600 dark:text-red-400 text-xs flex items-center"
+            >
+              <span className="material-icons-outlined text-sm mr-1">restart_alt</span>
+              초기화
+            </button>
           </div>
+
+          {/* MD 미리보기 */}
+          {dsMdPreview && (
+            <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700 max-h-96 overflow-auto">
+              <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
+                {generateDataSourceMd(normalizedDSConfig)}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1519,6 +1704,8 @@ export const SettingsView: React.FC = () => {
                 channelCosts: JSON.parse(localStorage.getItem('ZCMS_CHANNEL_COSTS_V2') || '[]'),
                 laborRecords: JSON.parse(localStorage.getItem('ZCMS_LABOR_RECORDS') || '[]'),
                 dataSourceConfig: JSON.parse(localStorage.getItem('ZCMS_DATASOURCE_CONFIG') || '{}'),
+                normalizedDataSource: JSON.parse(localStorage.getItem('Z_CMS_DATA_SOURCE_CONFIG') || '{}'),
+                dataSourceMd: localStorage.getItem('Z_CMS_DATA_SOURCE_MD') || '',
               };
               const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
@@ -1570,6 +1757,12 @@ export const SettingsView: React.FC = () => {
                   }
                   if (data.dataSourceConfig && Object.keys(data.dataSourceConfig).length > 0) {
                     localStorage.setItem('ZCMS_DATASOURCE_CONFIG', JSON.stringify(data.dataSourceConfig));
+                  }
+                  if (data.normalizedDataSource && Object.keys(data.normalizedDataSource).length > 0) {
+                    localStorage.setItem('Z_CMS_DATA_SOURCE_CONFIG', JSON.stringify(data.normalizedDataSource));
+                  }
+                  if (data.dataSourceMd) {
+                    localStorage.setItem('Z_CMS_DATA_SOURCE_MD', data.dataSourceMd);
                   }
                   alert('설정을 성공적으로 가져왔습니다. 페이지를 새로고침합니다.');
                   window.location.reload();

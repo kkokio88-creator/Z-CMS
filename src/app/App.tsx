@@ -19,30 +19,17 @@ import { DataProvider, DataContextType } from '../contexts/DataContext.tsx';
 import { UIProvider, UIContextType, ViewType as UIViewType } from '../contexts/UIContext.tsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
 import {
-  MOCK_COST_BREAKDOWN,
-  MOCK_INVENTORY_HISTORY,
-  MOCK_STOCKTAKE_HISTORY,
-  NOTIFICATIONS_DATA,
-  MOCK_CHANNEL_MIX,
-  MOCK_DASHBOARD_SUMMARY,
-} from '../constants.ts';
-import {
   PieChart,
   Pie,
   Cell,
   Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  ReferenceLine,
   BarChart,
   Bar,
+  XAxis,
+  YAxis,
 } from 'recharts';
-// Note: Recharts imports used in modal renderModalContent
 import {
   Notification,
   ChannelProfitData,
@@ -57,13 +44,15 @@ import {
 import { syncAllEcountData, DataAvailability } from '../services/ecountService';
 import {
   syncGoogleSheetData,
-  GoogleSheetSyncResult,
   DailySalesData,
   SalesDetailData,
   ProductionData,
   PurchaseData,
   UtilityData,
   ChannelProfitItem,
+  LaborDailyData,
+  BomItemData,
+  MaterialMasterItem,
 } from '../services/googleSheetService';
 import { computeAllInsights, DashboardInsights } from '../services/insightService';
 import { getChannelCostSummaries } from '../components/ChannelCostAdmin';
@@ -82,7 +71,16 @@ const App = () => {
   const [inventoryData, setInventoryData] = useState<InventorySafetyItem[]>([]);
   const [bomItems, setBomItems] = useState<BomDiffItem[]>([]);
   const [dashboardSummary, setDashboardSummary] =
-    useState<DashboardSummary>(MOCK_DASHBOARD_SUMMARY); // Summary still needs calculation
+    useState<DashboardSummary>({
+      totalRevenue: 0,
+      revenueChange: 0,
+      avgMargin: 0,
+      marginChange: 0,
+      wasteRate: 0,
+      wasteRateChange: 0,
+      riskItems: 0,
+      anomalyCount: 0,
+    });
   const [wasteTrendData, setWasteTrendData] = useState<WasteTrendData[]>([]);
 
   const [topProfitItems, setTopProfitItems] = useState<ProfitRankItem[]>([]);
@@ -96,6 +94,9 @@ const App = () => {
   const [gsProduction, setGsProduction] = useState<ProductionData[]>([]);
   const [gsPurchases, setGsPurchases] = useState<PurchaseData[]>([]);
   const [gsUtilities, setGsUtilities] = useState<UtilityData[]>([]);
+  const [gsLabor, setGsLabor] = useState<LaborDailyData[]>([]);
+  const [gsBom, setGsBom] = useState<BomItemData[]>([]);
+  const [gsMaterialMaster, setGsMaterialMaster] = useState<MaterialMasterItem[]>([]);
   const [gsChannelProfit, setGsChannelProfit] = useState<ChannelProfitItem[]>([]);
 
   // Insights State (insightService 기반)
@@ -118,7 +119,60 @@ const App = () => {
 
   // Notification State
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const notifications = NOTIFICATIONS_DATA;
+  const notifications = useMemo<Notification[]>(() => {
+    if (!insights) return [];
+    const notifs: Notification[] = [];
+    // 재고 부족 알림
+    if (inventoryData.filter(i => i.status === 'Shortage').length > 0) {
+      const shortageItems = inventoryData.filter(i => i.status === 'Shortage');
+      notifs.push({
+        id: 'n-shortage',
+        type: 'alert',
+        title: '재고 부족 알림',
+        message: `${shortageItems[0].skuName} 외 ${shortageItems.length - 1}건이 안전재고 이하입니다.`,
+        time: '방금',
+        read: false,
+        targetView: 'inventory',
+      });
+    }
+    // 폐기율 경고
+    if (insights.wasteAnalysis && insights.wasteAnalysis.avgWasteRate > 3) {
+      notifs.push({
+        id: 'n-waste',
+        type: 'alert',
+        title: '폐기율 주의',
+        message: `평균 폐기율 ${insights.wasteAnalysis.avgWasteRate.toFixed(1)}%로 목표(3%) 초과`,
+        time: '방금',
+        read: false,
+        targetView: 'production',
+      });
+    }
+    // 수익 정보
+    if (insights.channelRevenue && insights.channelRevenue.totalRevenue > 0) {
+      notifs.push({
+        id: 'n-revenue',
+        type: 'info',
+        title: '매출 현황',
+        message: `총 매출 ${(insights.channelRevenue.totalRevenue / 10000).toFixed(0)}만원 달성`,
+        time: '방금',
+        read: true,
+        targetView: 'profit',
+      });
+    }
+    // 추천 업무
+    if (insights.recommendations.length > 0) {
+      notifs.push({
+        id: 'n-recommend',
+        type: 'success',
+        title: '추천 업무',
+        message: insights.recommendations[0].description,
+        time: '방금',
+        read: true,
+        targetView: 'home',
+      });
+    }
+    return notifs;
+  }, [insights, inventoryData]);
   const hasUnread = notifications.some(n => !n.read);
 
   // Modal State
@@ -212,6 +266,9 @@ const App = () => {
         setGsProduction(gsResult.production);
         setGsPurchases(gsResult.purchases);
         setGsUtilities(gsResult.utilities);
+        setGsLabor(gsResult.labor || []);
+        setGsBom(gsResult.bom || []);
+        setGsMaterialMaster(gsResult.materialMaster || []);
         setGsChannelProfit(gsResult.profitTrend);
 
         // 매출/수익 데이터는 Google Sheet 기준으로 설정
@@ -407,6 +464,8 @@ const App = () => {
             currentInventoryData,
             channelCosts,
             bizConfig,
+            gsResult.bom || [],
+            gsResult.materialMaster || [],
           );
           setInsights(computed);
           console.log('[App] Insights 계산 완료:', {
@@ -448,6 +507,9 @@ const App = () => {
             messages.push(`판매상세 ${gsResult.counts.salesDetail}건`);
           if (gsResult.counts.production > 0) messages.push(`생산 ${gsResult.counts.production}건`);
           if (gsResult.counts.purchases > 0) messages.push(`구매 ${gsResult.counts.purchases}건`);
+          if (gsResult.counts.labor > 0) messages.push(`노무비 ${gsResult.counts.labor}건`);
+          if (gsResult.counts.bom > 0) messages.push(`BOM ${gsResult.counts.bom}건`);
+          if (gsResult.counts.materialMaster > 0) messages.push(`자재 ${gsResult.counts.materialMaster}건`);
         }
         const sourceLabel = source === 'direct' ? ' (Supabase 직접)' : source === 'backend' ? '' : '';
         setSyncMessage(messages.length > 0 ? messages.join(', ') + ' 연동됨' + sourceLabel : '');
@@ -726,9 +788,20 @@ const App = () => {
 
     // 월간 랭킹 모달 (margin 필드가 있는 selectedItem)
     if (selectedItem.margin !== undefined && selectedItem.skuName) {
+      const COST_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+      const costData = insights?.costBreakdown?.composition?.map((c, i) => ({
+        name: c.name,
+        value: c.value,
+        color: COST_COLORS[i % COST_COLORS.length],
+      })) || [];
+      const channelData = insights?.channelRevenue?.channels?.map(ch => ({
+        name: ch.name,
+        value: ch.share,
+        marginRate: ch.marginRate3,
+      })) || [];
+
       return (
         <div className="space-y-6">
-          {/* Top Summary */}
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-100 dark:border-blue-800">
             <h4 className="font-bold text-blue-800 dark:text-blue-200">
               수익성 분석 리포트: {selectedItem.skuName}
@@ -741,56 +814,68 @@ const App = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
               <h5 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                원가 구조 (Cost)
+                원가 구조
               </h5>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={MOCK_COST_BREAKDOWN}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={60}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {MOCK_COST_BREAKDOWN.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip />
-                    <Legend wrapperStyle={{ fontSize: '10px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+              {costData.length > 0 ? (
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={costData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={60}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {costData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+                  원가 데이터 수집 중...
+                </div>
+              )}
             </div>
 
             <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
               <h5 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                채널별 판매 비중 (Sales Mix)
+                채널별 판매 비중
               </h5>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={MOCK_CHANNEL_MIX}
-                    layout="vertical"
-                    margin={{ top: 5, right: 10, bottom: 5, left: 10 }}
-                  >
-                    <XAxis type="number" hide />
-                    <YAxis type="category" dataKey="name" width={70} tick={{ fontSize: 10 }} />
-                    <RechartsTooltip />
-                    <Bar dataKey="value" name="판매비중(%)" fill="#8884d8" radius={[0, 4, 4, 0]}>
-                      {MOCK_CHANNEL_MIX.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={entry.margin < 20 ? '#EF4444' : '#3B82F6'}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {channelData.length > 0 ? (
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={channelData}
+                      layout="vertical"
+                      margin={{ top: 5, right: 10, bottom: 5, left: 10 }}
+                    >
+                      <XAxis type="number" hide />
+                      <YAxis type="category" dataKey="name" width={70} tick={{ fontSize: 10 }} />
+                      <RechartsTooltip />
+                      <Bar dataKey="value" name="판매비중(%)" fill="#8884d8" radius={[0, 4, 4, 0]}>
+                        {channelData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={entry.marginRate < 20 ? '#EF4444' : '#3B82F6'}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+                  채널 데이터 수집 중...
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -800,52 +885,51 @@ const App = () => {
     // 재고 모달 (safetyStock 필드가 있는 selectedItem)
     if (selectedItem.safetyStock !== undefined) {
       const isShortage = selectedItem.status === 'Shortage';
+      const isOverstock = selectedItem.status === 'Overstock';
+      const stockRatio = selectedItem.safetyStock > 0
+        ? Math.round((selectedItem.currentStock / selectedItem.safetyStock) * 100)
+        : 0;
       return (
         <div className="space-y-4">
           <div
-            className={`p-3 rounded-md mb-4 border ${isShortage ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-800'}`}
+            className={`p-3 rounded-md mb-4 border ${isShortage ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800' : isOverstock ? 'bg-yellow-50 border-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-800' : 'bg-green-50 border-green-100 dark:bg-green-900/20 dark:border-green-800'}`}
           >
             <h4
-              className={`font-bold ${isShortage ? 'text-red-800 dark:text-red-200' : 'text-gray-800 dark:text-white'}`}
+              className={`font-bold ${isShortage ? 'text-red-800 dark:text-red-200' : isOverstock ? 'text-yellow-800 dark:text-yellow-200' : 'text-green-800 dark:text-green-200'}`}
             >
               재고 상태:{' '}
-              {selectedItem.status === 'Shortage' ? '위험 (발주 필요)' : selectedItem.status}
+              {isShortage ? '부족 (발주 필요)' : isOverstock ? '과잉' : '정상'}
             </h4>
             <p
-              className={`text-xs ${isShortage ? 'text-red-600 dark:text-red-300' : 'text-gray-500'}`}
+              className={`text-xs mt-1 ${isShortage ? 'text-red-600 dark:text-red-300' : isOverstock ? 'text-yellow-600 dark:text-yellow-300' : 'text-green-600 dark:text-green-300'}`}
             >
               {isShortage
-                ? '최근 4주 연속 안전재고 미달 상태가 지속되고 있습니다. 즉시 발주가 권장됩니다.'
-                : '현재 재고 수준은 안정적입니다.'}
+                ? '안전재고 미달 상태입니다. 즉시 발주가 권장됩니다.'
+                : isOverstock
+                  ? '재고가 안전재고의 3배 이상입니다. 구매량 조정을 검토하세요.'
+                  : '현재 재고 수준은 안정적입니다.'}
             </p>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={MOCK_INVENTORY_HISTORY}
-                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <RechartsTooltip />
-                <ReferenceLine
-                  y={selectedItem.safetyStock}
-                  label="Safety Stock"
-                  stroke="red"
-                  strokeDasharray="3 3"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="stock"
-                  stroke="#2F5E3E"
-                  fill="#2F5E3E"
-                  fillOpacity={0.3}
-                  name="현재 재고"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
+              <p className="text-xs text-gray-500">현재 재고</p>
+              <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.currentStock.toLocaleString()}</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
+              <p className="text-xs text-gray-500">안전재고</p>
+              <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.safetyStock.toLocaleString()}</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
+              <p className="text-xs text-gray-500">재고 충족률</p>
+              <p className={`font-bold text-lg ${stockRatio < 100 ? 'text-red-600' : 'text-green-600'}`}>{stockRatio}%</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
+              <p className="text-xs text-gray-500">회전율</p>
+              <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.turnoverRate}회</p>
+            </div>
           </div>
+
           {isShortage && (
             <div className="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-700">
               <button
@@ -863,33 +947,58 @@ const App = () => {
 
     // 실사 이상 모달 (materialName 필드가 있는 selectedItem)
     if (selectedItem.materialName !== undefined) {
+      const variance = selectedItem.systemQty - selectedItem.countedQty;
+      const variancePct = selectedItem.systemQty > 0
+        ? ((variance / selectedItem.systemQty) * 100).toFixed(1)
+        : '0';
+      const isLoss = variance > 0;
       return (
         <div className="space-y-4">
-          <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-md mb-4 border border-indigo-100 dark:border-indigo-800">
-            <h4 className="font-bold text-indigo-800 dark:text-indigo-200">
-              실사 이력 분석: {selectedItem.materialName}
+          <div className={`p-3 rounded-md mb-4 border ${selectedItem.anomalyScore > 70 ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800' : 'bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800'}`}>
+            <h4 className={`font-bold ${selectedItem.anomalyScore > 70 ? 'text-red-800 dark:text-red-200' : 'text-indigo-800 dark:text-indigo-200'}`}>
+              실사 분석: {selectedItem.materialName}
             </h4>
-            <p className="text-xs text-indigo-600 dark:text-indigo-300">
-              최근 3회 연속 전산 재고가 실사 재고보다 높게 나타나는 &apos;Loss&apos; 패턴입니다.
+            <p className={`text-xs mt-1 ${selectedItem.anomalyScore > 70 ? 'text-red-600 dark:text-red-300' : 'text-indigo-600 dark:text-indigo-300'}`}>
+              {selectedItem.reason}
             </p>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={MOCK_STOCKTAKE_HISTORY}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <RechartsTooltip />
-                <ReferenceLine y={0} stroke="#000" />
-                <Bar dataKey="diff" name="차이 수량" fill="#EF4444" />
-              </BarChart>
-            </ResponsiveContainer>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded text-center">
+              <p className="text-xs text-gray-500">전산 재고</p>
+              <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.systemQty.toLocaleString()}</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded text-center">
+              <p className="text-xs text-gray-500">실사 재고</p>
+              <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.countedQty.toLocaleString()}</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded text-center">
+              <p className="text-xs text-gray-500">AI 예측</p>
+              <p className="font-bold text-blue-600 dark:text-blue-400 text-lg">{selectedItem.aiExpectedQty.toLocaleString()}</p>
+            </div>
           </div>
-          <div className="text-xs text-gray-500 text-center">
-            * 음수 막대는 전산 재고 {'>'} 실물 재고 (분실/Loss)를 의미합니다.
+
+          <div className={`p-3 rounded-md border ${isLoss ? 'bg-red-50 border-red-200 dark:bg-red-900/10' : 'bg-green-50 border-green-200 dark:bg-green-900/10'}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">차이 수량</span>
+              <span className={`font-bold text-lg ${isLoss ? 'text-red-600' : 'text-green-600'}`}>
+                {isLoss ? '-' : '+'}{Math.abs(variance).toLocaleString()} ({variancePct}%)
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {isLoss ? '전산 재고 > 실물 재고 — 분실/Loss 가능성' : '실물 재고 > 전산 재고 — 입고 미전표 가능성'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded">
+            <span className="text-xs text-gray-500">이상 점수:</span>
+            <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full ${selectedItem.anomalyScore > 70 ? 'bg-red-500' : selectedItem.anomalyScore > 40 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                style={{ width: `${selectedItem.anomalyScore}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{selectedItem.anomalyScore}점</span>
           </div>
         </div>
       );
@@ -946,6 +1055,9 @@ const App = () => {
     production: gsProduction,
     purchases: gsPurchases,
     utilities: gsUtilities,
+    labor: gsLabor,
+    bom: gsBom,
+    materialMaster: gsMaterialMaster,
     inventoryData,
     stocktakeAnomalies,
     insights,
@@ -956,7 +1068,7 @@ const App = () => {
     dataSource,
     syncStatus,
     handleSync: handleEcountSync,
-  }), [gsDailySales, gsSalesDetail, gsProduction, gsPurchases, gsUtilities, inventoryData, stocktakeAnomalies, insights, isSyncing, lastSyncTime, syncMessage, dataAvailability, dataSource, syncStatus]);
+  }), [gsDailySales, gsSalesDetail, gsProduction, gsPurchases, gsUtilities, gsLabor, gsBom, gsMaterialMaster, inventoryData, stocktakeAnomalies, insights, isSyncing, lastSyncTime, syncMessage, dataAvailability, dataSource, syncStatus]);
 
   const uiContextValue = useMemo<UIContextType>(() => ({
     activeView,

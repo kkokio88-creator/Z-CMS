@@ -12,6 +12,9 @@ import type {
   ProductionData,
   PurchaseData,
   UtilityData,
+  LaborDailyData,
+  BomItemData,
+  MaterialMasterItem,
 } from '../services/googleSheetService';
 import type {
   InventorySafetyItem,
@@ -27,6 +30,9 @@ export interface DataContextType {
   production: ProductionData[];
   purchases: PurchaseData[];
   utilities: UtilityData[];
+  labor: LaborDailyData[];
+  bom: BomItemData[];
+  materialMaster: MaterialMasterItem[];
 
   // 재고 데이터
   inventoryData: InventorySafetyItem[];

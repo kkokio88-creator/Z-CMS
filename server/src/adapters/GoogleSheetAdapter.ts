@@ -4,6 +4,7 @@
  */
 
 const SPREADSHEET_ID = '1GUo9wmwmm14zhb_gtpoNrDBfJ5DqEm5pf4jpRsto-JI';
+const BOM_SPREADSHEET_ID = '1H8EI3AaYG8m7xASFI6Rj8N6Zb7TvCnnGkr2MJtYHZO8';
 
 // 시트 GID 매핑
 const SHEET_GIDS = {
@@ -117,6 +118,43 @@ export interface LaborData {
   totalPay: number;
 }
 
+// BOM 데이터 타입 (3.SAN_BOM, 4.ZIP_BOM 시트)
+export interface BomSheetData {
+  source: 'SAN' | 'ZIP';
+  productCode: string;
+  productName: string;
+  bomVersion: string;
+  isExistingBom: boolean;
+  productionQty: number;
+  materialCode: string;
+  materialName: string;
+  materialBomVersion: string;
+  consumptionQty: number;
+  location: string;
+  remark: string;
+  additionalQty: number;
+}
+
+// 자재 마스터 데이터 타입 (1.자재정보 시트)
+export interface MaterialMasterData {
+  no: number;
+  category: string;
+  issueType: string;
+  materialCode: string;
+  materialName: string;
+  preprocessYield: number;
+  spec: string;
+  unit: string;
+  unitPrice: number;
+  safetyStock: number;
+  excessStock: number;
+  leadTimeDays: number;
+  recentOutputQty: number;
+  dailyAvg: number;
+  note: string;
+  inUse: boolean;
+}
+
 export class GoogleSheetAdapter {
   private baseUrl: string;
 
@@ -197,9 +235,14 @@ export class GoogleSheetAdapter {
 
   /**
    * 시트 이름으로 데이터 가져오기
+   * @param sheetName 시트 이름
+   * @param spreadsheetId 다른 스프레드시트에서 가져올 때 ID 지정
    */
-  private async fetchSheetByName(sheetName: string): Promise<string[][]> {
-    const url = `${this.baseUrl}&sheet=${encodeURIComponent(sheetName)}`;
+  private async fetchSheetByName(sheetName: string, spreadsheetId?: string): Promise<string[][]> {
+    const baseUrl = spreadsheetId
+      ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`
+      : this.baseUrl;
+    const url = `${baseUrl}&sheet=${encodeURIComponent(sheetName)}`;
 
     try {
       const response = await fetch(url, { headers: { Accept: 'text/csv' } });
@@ -465,18 +508,92 @@ export class GoogleSheetAdapter {
   }
 
   /**
+   * BOM 데이터 가져오기 (3.SAN_BOM 또는 4.ZIP_BOM 시트)
+   * BOM 스프레드시트에서 A~L열 파싱
+   */
+  async fetchBom(sheetName: string, source: 'SAN' | 'ZIP'): Promise<BomSheetData[]> {
+    const rows = await this.fetchSheetByName(sheetName, BOM_SPREADSHEET_ID);
+    const results: BomSheetData[] = [];
+
+    // 헤더가 2행, 데이터는 3행부터 (CSV 인덱스 기준 1부터 시작이므로 i=2)
+    for (let i = 2; i < rows.length; i++) {
+      const row = rows[i];
+      const productCode = (row[0] || '').trim();
+      if (!productCode) continue; // 빈 productCode 행 스킵
+
+      results.push({
+        source,
+        productCode,
+        productName: (row[1] || '').trim(),
+        bomVersion: (row[2] || '').trim(),
+        isExistingBom: (row[3] || '').trim() === 'Y' || (row[3] || '').trim() === '기존',
+        productionQty: this.parseNumber(row[4]),
+        materialCode: (row[5] || '').trim(),
+        materialName: (row[6] || '').trim(),
+        materialBomVersion: (row[7] || '').trim(),
+        consumptionQty: this.parseNumber(row[8]),
+        location: (row[9] || '').trim(),
+        remark: (row[10] || '').trim(),
+        additionalQty: this.parseNumber(row[11]),
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * 자재 마스터 데이터 가져오기 (1.자재정보 시트)
+   * BOM 스프레드시트에서 A~P열 파싱
+   */
+  async fetchMaterialMaster(): Promise<MaterialMasterData[]> {
+    const rows = await this.fetchSheetByName('1.자재정보', BOM_SPREADSHEET_ID);
+    const results: MaterialMasterData[] = [];
+
+    // 헤더가 2행, 데이터는 3행부터 (CSV 인덱스 기준 i=2)
+    for (let i = 2; i < rows.length; i++) {
+      const row = rows[i];
+      const materialCode = (row[3] || '').trim();
+      if (!materialCode) continue; // 빈 자재코드 행 스킵
+
+      results.push({
+        no: this.parseNumber(row[0]),
+        category: (row[1] || '').trim(),
+        issueType: (row[2] || '').trim(),
+        materialCode,
+        materialName: (row[4] || '').trim(),
+        preprocessYield: this.parseNumber(row[5]),
+        spec: (row[6] || '').trim(),
+        unit: (row[7] || '').trim(),
+        unitPrice: this.parseNumber(row[8]),
+        safetyStock: this.parseNumber(row[9]),
+        excessStock: this.parseNumber(row[10]),
+        leadTimeDays: Math.round(this.parseNumber(row[11])),
+        recentOutputQty: this.parseNumber(row[12]),
+        dailyAvg: this.parseNumber(row[13]),
+        note: (row[14] || '').trim(),
+        inUse: (row[15] || '').trim() !== 'N' && (row[15] || '').trim() !== '미사용',
+      });
+    }
+
+    return results;
+  }
+
+  /**
    * 모든 데이터 동기화
    */
   async syncAllData() {
     console.log('Syncing Google Sheet data...');
 
-    const [dailySales, salesDetail, production, purchases, utilities, labor] = await Promise.all([
+    const [dailySales, salesDetail, production, purchases, utilities, labor, sanBom, zipBom, materialMaster] = await Promise.all([
       this.fetchDailySales(),
       this.fetchSalesDetail(),
       this.fetchProduction(),
       this.fetchPurchases(),
       this.fetchUtilities(),
       this.fetchLabor(),
+      this.fetchBom('3.SAN_BOM', 'SAN'),
+      this.fetchBom('4.ZIP_BOM', 'ZIP'),
+      this.fetchMaterialMaster(),
     ]);
 
     console.log('Google Sheet sync complete:', {
@@ -486,6 +603,9 @@ export class GoogleSheetAdapter {
       purchases: purchases.length,
       utilities: utilities.length,
       labor: labor.length,
+      sanBom: sanBom.length,
+      zipBom: zipBom.length,
+      materialMaster: materialMaster.length,
     });
 
     return {
@@ -495,6 +615,9 @@ export class GoogleSheetAdapter {
       purchases,
       utilities,
       labor,
+      sanBom,
+      zipBom,
+      materialMaster,
       syncedAt: new Date().toISOString(),
     };
   }

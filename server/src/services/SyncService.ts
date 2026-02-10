@@ -16,6 +16,9 @@ import {
   type InventoryRow,
   type UtilityRow,
   type SyncLogRow,
+  type LaborDailyRow,
+  type BomRow,
+  type MaterialMasterRow,
 } from '../adapters/SupabaseAdapter.js';
 
 export interface SyncResult {
@@ -138,6 +141,66 @@ export class SyncService {
         gas_cost: d.gasCost,
       }));
 
+      // 노무비 변환
+      const laborDailyRows: LaborDailyRow[] = sheetData.labor.map(d => ({
+        date: d.date,
+        department: d.department,
+        week: d.week,
+        headcount: d.headcount,
+        weekday_regular_hours: d.weekdayRegularHours,
+        weekday_overtime_hours: d.weekdayOvertimeHours,
+        weekday_night_hours: d.weekdayNightHours,
+        weekday_total_hours: d.weekdayTotalHours,
+        holiday_regular_hours: d.holidayRegularHours,
+        holiday_overtime_hours: d.holidayOvertimeHours,
+        holiday_night_hours: d.holidayNightHours,
+        holiday_total_hours: d.holidayTotalHours,
+        weekday_regular_pay: d.weekdayRegularPay,
+        weekday_overtime_pay: d.weekdayOvertimePay,
+        weekday_night_pay: d.weekdayNightPay,
+        holiday_regular_pay: d.holidayRegularPay,
+        holiday_overtime_pay: d.holidayOvertimePay,
+        holiday_night_pay: d.holidayNightPay,
+        total_pay: d.totalPay,
+      }));
+
+      // BOM 변환 (SAN + ZIP 통합)
+      const bomRows: BomRow[] = [...sheetData.sanBom, ...sheetData.zipBom].map(d => ({
+        source: d.source,
+        product_code: d.productCode,
+        product_name: d.productName,
+        bom_version: d.bomVersion,
+        is_existing_bom: d.isExistingBom,
+        production_qty: d.productionQty,
+        material_code: d.materialCode,
+        material_name: d.materialName,
+        material_bom_version: d.materialBomVersion,
+        consumption_qty: d.consumptionQty,
+        location: d.location,
+        remark: d.remark,
+        additional_qty: d.additionalQty,
+      }));
+
+      // 자재 마스터 변환
+      const materialMasterRows: MaterialMasterRow[] = sheetData.materialMaster.map(d => ({
+        no: d.no,
+        category: d.category,
+        issue_type: d.issueType,
+        material_code: d.materialCode,
+        material_name: d.materialName,
+        preprocess_yield: d.preprocessYield,
+        spec: d.spec,
+        unit: d.unit,
+        unit_price: d.unitPrice,
+        safety_stock: d.safetyStock,
+        excess_stock: d.excessStock,
+        lead_time_days: d.leadTimeDays,
+        recent_output_qty: d.recentOutputQty,
+        daily_avg: d.dailyAvg,
+        note: d.note,
+        in_use: d.inUse,
+      }));
+
       // 테이블별 콘텐츠 해시 계산
       const currentHashes: Record<string, string> = {
         dailySales: computeHash(dailySalesRows),
@@ -145,6 +208,9 @@ export class SyncService {
         production: computeHash(productionRows),
         purchases: computeHash(purchaseRows),
         utilities: computeHash(utilityRows),
+        labor: computeHash(laborDailyRows),
+        bom: computeHash(bomRows),
+        materialMaster: computeHash(materialMasterRows),
       };
 
       // 증분 모드: 이전 해시와 비교하여 변경된 테이블만 식별
@@ -163,6 +229,9 @@ export class SyncService {
         { key: 'production', rows: productionRows, upsert: () => supabaseAdapter.upsertProductionDaily(productionRows), label: 'production_daily' },
         { key: 'purchases', rows: purchaseRows, upsert: () => supabaseAdapter.upsertPurchases(purchaseRows), label: 'purchases' },
         { key: 'utilities', rows: utilityRows, upsert: () => supabaseAdapter.upsertUtilities(utilityRows), label: 'utilities' },
+        { key: 'labor', rows: laborDailyRows, upsert: () => supabaseAdapter.upsertLaborDaily(laborDailyRows), label: 'labor_daily' },
+        { key: 'bom', rows: bomRows, upsert: () => supabaseAdapter.upsertBom(bomRows), label: 'bom' },
+        { key: 'materialMaster', rows: materialMasterRows, upsert: () => supabaseAdapter.upsertMaterialMaster(materialMasterRows), label: 'material_master' },
       ];
 
       for (const table of tables) {

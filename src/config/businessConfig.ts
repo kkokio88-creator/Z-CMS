@@ -95,6 +95,20 @@ export interface BusinessConfig {
   /** 수율 저하 허용률 (%) */
   yieldDropTolerance: number;
 
+  // === BOM 이상 감지 ===
+  /** 초과사용 경고 임계값 (%, 기본 15) */
+  bomOveruseThreshold: number;
+  /** 미달사용 경고 임계값 (%, 기본 -10) */
+  bomUnderuseThreshold: number;
+  /** 단가이상 경고 임계값 (%, 기본 20) */
+  bomPriceDeviationThreshold: number;
+  /** 최소 지출 필터 (원, 기본 50000) */
+  bomMinimumSpend: number;
+  /** 중간 심각도 기준 (%, 기본 20) */
+  bomMediumSeverity: number;
+  /** 높은 심각도 기준 (%, 기본 35) */
+  bomHighSeverity: number;
+
   // === 월 고정경비 ===
   /** 월 고정경비 (원) */
   monthlyFixedOverhead: number;
@@ -188,6 +202,14 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
   // 레시피/생산
   recipeVarianceTolerance: 5,
   yieldDropTolerance: 3,
+
+  // BOM 이상 감지
+  bomOveruseThreshold: 15,
+  bomUnderuseThreshold: -10,
+  bomPriceDeviationThreshold: 20,
+  bomMinimumSpend: 50000,
+  bomMediumSeverity: 20,
+  bomHighSeverity: 35,
 
   // 경비
   monthlyFixedOverhead: 0,
