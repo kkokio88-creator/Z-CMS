@@ -294,7 +294,26 @@ export interface SyncStatusInfo {
   source: 'direct' | 'backend';
 }
 
-/** 백엔드 API에서 동기화 상태 가져오기 */
+/** Supabase count: 'exact' 으로 빠르게 테이블 건수 조회 (데이터 전송 없음) */
+async function getTableCountsDirect(): Promise<Record<string, number>> {
+  const client = getSupabaseClient();
+  if (!client) return {};
+
+  const tables = ['daily_sales', 'sales_detail', 'production_daily', 'purchases', 'inventory', 'utilities'];
+  const counts = await Promise.all(
+    tables.map(async (table) => {
+      try {
+        const { count } = await client.from(table).select('*', { count: 'exact', head: true });
+        return [table, count ?? 0] as [string, number];
+      } catch {
+        return [table, 0] as [string, number];
+      }
+    })
+  );
+  return Object.fromEntries(counts);
+}
+
+/** 백엔드 API에서 동기화 상태 가져오기 (건수는 Supabase direct count 사용) */
 export async function fetchSyncStatusFromBackend(): Promise<SyncStatusInfo | null> {
   const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
   try {
@@ -302,26 +321,13 @@ export async function fetchSyncStatusFromBackend(): Promise<SyncStatusInfo | nul
     const json = await res.json();
     if (!json.success) return null;
 
-    // recentLogs에서 마지막 성공 동기화 시간 추출
     const lastLog = json.recentLogs?.find((l: any) => l.status === 'success');
     const lastSyncTime = lastLog?.completed_at ?? null;
 
-    // 각 테이블 레코드 수는 백엔드에서 직접 제공하지 않으므로 data 엔드포인트 사용
-    const tables = ['daily-sales', 'sales-detail', 'production', 'purchases', 'inventory', 'utilities'];
-    const tableKeys = ['daily_sales', 'sales_detail', 'production_daily', 'purchases', 'inventory', 'utilities'];
-    const counts = await Promise.all(
-      tables.map(async (endpoint, idx) => {
-        try {
-          const r = await fetch(`${BACKEND_URL}/data/${endpoint}`, { signal: AbortSignal.timeout(3000) });
-          const d = await r.json();
-          return [tableKeys[idx], d.count ?? d.data?.length ?? 0] as [string, number];
-        } catch {
-          return [tableKeys[idx], 0] as [string, number];
-        }
-      })
-    );
+    // 건수는 Supabase count: 'exact' (head: true)로 빠르게 조회 — 전체 데이터 fetch 방지
+    const tableCounts = await getTableCountsDirect();
 
-    return { lastSyncTime, tableCounts: Object.fromEntries(counts), source: 'backend' };
+    return { lastSyncTime, tableCounts, source: 'backend' };
   } catch {
     return null;
   }
@@ -345,16 +351,9 @@ export async function directFetchSyncStatus(): Promise<SyncStatusInfo | null> {
       .limit(1);
 
     const lastSyncTime = syncLog?.[0]?.completed_at ?? null;
+    const tableCounts = await getTableCountsDirect();
 
-    const tables = ['daily_sales', 'sales_detail', 'production_daily', 'purchases', 'inventory', 'utilities'];
-    const counts = await Promise.all(
-      tables.map(async (table) => {
-        const { count } = await client.from(table).select('*', { count: 'exact', head: true });
-        return [table, count ?? 0] as [string, number];
-      })
-    );
-
-    return { lastSyncTime, tableCounts: Object.fromEntries(counts), source: 'direct' };
+    return { lastSyncTime, tableCounts, source: 'direct' };
   } catch {
     return null;
   }

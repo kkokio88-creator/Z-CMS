@@ -2684,15 +2684,7 @@ export function computeProfitCenterScore(
   // 4. 매출/경비
   const actualRevToExpense = totalExpense > 0 ? revenue / totalExpense : 0;
 
-  // 5. 영업이익 (금액 기반)
-  const totalCost = rawMaterial + subMaterial + laborCost + overheadCost;
-  const operatingProfit = revenue - totalCost;
-  // 목표 영업이익액 = 매출 × 목표이익률
-  const targetProfitAmount = Math.round(revenue * targets.profitMarginTarget / 100);
-  const scoreProfitAmount = targetProfitAmount > 0
-    ? safeScore(operatingProfit, targetProfitAmount) : 0;
-
-  // 6. 폐기율 (역방향: 낮을수록 좋음 → target/actual)
+  // 5. 폐기율 (역방향: 낮을수록 좋음 → target/actual)
   const actualWasteRate = wasteAnalysis?.avgWasteRate ?? 0;
   const scoreWaste = actualWasteRate > 0 && targets.wasteRateTarget > 0
     ? Math.round(targets.wasteRateTarget / actualWasteRate * 100) : 100;
@@ -2702,11 +2694,10 @@ export function computeProfitCenterScore(
     { metric: '부재료', formula: '생산매출 ÷ 부재료비', target: Math.round(targetRevToSub * 100) / 100, actual: Math.round(actualRevToSub * 100) / 100, score: safeScore(actualRevToSub, targetRevToSub), status: getStatus(safeScore(actualRevToSub, targetRevToSub)), unit: '배', targetAmount: Math.round(revenue / targetRevToSub), actualAmount: subMaterial },
     { metric: '노무비', formula: '생산매출 ÷ 노무비', target: Math.round(targets.productionToLabor * 100) / 100, actual: Math.round(actualProdToLabor * 100) / 100, score: safeScore(actualProdToLabor, targets.productionToLabor), status: getStatus(safeScore(actualProdToLabor, targets.productionToLabor)), unit: '배', targetAmount: Math.round(revenue / targets.productionToLabor), actualAmount: laborCost },
     { metric: '수도광열전력', formula: '생산매출 ÷ 수도광열전력비', target: Math.round(targets.revenueToExpense * 100) / 100, actual: Math.round(actualRevToExpense * 100) / 100, score: safeScore(actualRevToExpense, targets.revenueToExpense), status: getStatus(safeScore(actualRevToExpense, targets.revenueToExpense)), unit: '배', targetAmount: Math.round(revenue / targets.revenueToExpense), actualAmount: overheadCost },
-    { metric: '영업이익', formula: '생산매출 - 총원가', target: targetProfitAmount, actual: operatingProfit, score: scoreProfitAmount, status: getStatus(scoreProfitAmount), unit: '원', targetAmount: targetProfitAmount, actualAmount: operatingProfit },
     { metric: '폐기율', formula: '폐기수량 ÷ 생산수량', target: Math.round(targets.wasteRateTarget * 10) / 10, actual: Math.round(actualWasteRate * 10) / 10, score: scoreWaste, status: getStatus(scoreWaste), unit: '%' },
   ];
 
-  // 종합점수 = 6개 지표 점수의 평균
+  // 종합점수 = 5개 지표 점수의 평균
   const overallScore = Math.round(scores.reduce((s, m) => s + m.score, 0) / scores.length);
 
   return { activeBracket, monthlyRevenue, calendarDays, scores, overallScore };

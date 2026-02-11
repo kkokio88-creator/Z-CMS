@@ -223,18 +223,6 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
     const prevRevenue = prevSales.reduce((s, d) => s + (d.totalRevenue || 0), 0);
     const revenueChange = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue * 100) : 0;
 
-    // 총 구매 원가
-    const totalCost = filteredPurchases.reduce((s, d) => s + (d.total || 0), 0);
-
-    // 영업이익 (금액)
-    const profitMetric = profitCenterScore?.scores?.find(s => s.metric === '영업이익');
-    const operatingProfit = profitMetric?.actual ?? (totalRevenue - totalCost);
-    const prevCost = filterByDate(purchases, prevRange.start, prevRange.end)
-      .reduce((s, d) => s + (d.total || 0), 0);
-    const prevOperatingProfit = prevRevenue - prevCost;
-    const profitChange = prevOperatingProfit !== 0
-      ? ((operatingProfit - prevOperatingProfit) / Math.abs(prevOperatingProfit) * 100) : 0;
-
     // 폐기율: 폐기수량 / 총생산수량
     const totalProdQty = filteredProduction.reduce((s, d) => s + (d.prodQtyTotal || 0), 0);
     const totalWaste = filteredProduction.reduce((s, d) => s + (d.wasteFinishedEa || 0), 0);
@@ -247,12 +235,10 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
     return {
       totalRevenue,
       revenueChange: parseFloat(revenueChange.toFixed(1)),
-      operatingProfit,
-      profitChange: parseFloat(profitChange.toFixed(1)),
       wasteRate: parseFloat(wasteRate.toFixed(1)),
       wasteRateChange: parseFloat(wasteRateChange.toFixed(1)),
     };
-  }, [filteredSales, filteredPurchases, filteredProduction, prevSales, prevProduction, purchases, prevRange, profitCenterScore]);
+  }, [filteredSales, filteredProduction, prevSales, prevProduction]);
 
   // 차트 데이터 (날짜순 정렬)
   const revenueTrend = useMemo(
@@ -330,12 +316,11 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           color="#10B981"
         />
         <KPICard
-          title="영업이익"
-          value={`₩${formatCurrency(kpis.operatingProfit)}`}
-          change={`${kpis.profitChange >= 0 ? '+' : ''}${kpis.profitChange}%`}
-          isPositive={kpis.operatingProfit >= 0}
-          icon="trending_up"
-          chartData={revenueTrend}
+          title={`총 구매원가 (${rangeLabel})`}
+          value={`₩${formatCurrency(filteredPurchases.reduce((s, d) => s + (d.total || 0), 0))}`}
+          change={`${filteredPurchases.length}건`}
+          isPositive={true}
+          icon="receipt_long"
           color="#3B82F6"
         />
         <KPICard
@@ -348,11 +333,12 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           color="#F59E0B"
         />
         <KPICard
-          title="구매 데이터"
-          value={`${filteredPurchases.length}건`}
-          change={`₩${formatCurrency(filteredPurchases.reduce((s, d) => s + (d.total || 0), 0))}`}
+          title={`총 생산량 (${rangeLabel})`}
+          value={`${filteredProduction.reduce((s, d) => s + (d.prodQtyTotal || 0), 0).toLocaleString('ko-KR')}개`}
+          change={`${filteredProduction.length}일`}
           isPositive={true}
-          icon="shopping_cart"
+          icon="precision_manufacturing"
+          chartData={wasteTrend}
           color="#EF4444"
         />
       </div>

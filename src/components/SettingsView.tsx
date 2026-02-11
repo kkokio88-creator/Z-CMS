@@ -1199,7 +1199,6 @@ export const SettingsView: React.FC = () => {
                   <th className="text-center py-2 px-1.5">부재료비</th>
                   <th className="text-center py-2 px-1.5">노무비</th>
                   <th className="text-center py-2 px-1.5">수도광열<br/>전력</th>
-                  <th className="text-center py-2 px-1.5">이익률<br/><span className="text-[10px] font-normal">(%)</span></th>
                   <th className="text-center py-2 px-1.5">폐기율<br/><span className="text-[10px] font-normal">(%)</span></th>
                   <th className="text-center py-2 px-1.5 w-8"></th>
                 </tr>
@@ -1255,7 +1254,7 @@ export const SettingsView: React.FC = () => {
                           </td>
                         );
                       })}
-                      {(['profitMarginTarget', 'wasteRateTarget'] as const).map(key => (
+                      {(['wasteRateTarget'] as const).map(key => (
                         <td key={key} className="py-1.5 px-1.5 text-center">
                           <input type="number" step="0.5" min="0" value={goal.targets[key]} onChange={e => {
                             const newGoals = [...draft.profitCenterGoals];
@@ -1288,7 +1287,7 @@ export const SettingsView: React.FC = () => {
                 label: '16억',
                 targets: {
                   productionToLabor: 5.4, revenueToMaterial: 3.8, revenueToRawMaterial: 4.2, revenueToSubMaterial: 40,
-                  revenueToExpense: 10.0, profitMarginTarget: 22, wasteRateTarget: 2,
+                  revenueToExpense: 10.0, wasteRateTarget: 2,
                   targetRecommendedRevenue: 2280000000, targetProductionRevenue: 1140000000,
                   targetRawMaterialCost: 380000000, targetSubMaterialCost: 40000000,
                   targetLaborCost: 296000000, targetOverheadCost: 160000000,

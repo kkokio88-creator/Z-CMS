@@ -410,7 +410,7 @@ export const CostManagementView: React.FC<Props> = ({
           const composition = costBreakdown?.composition || [];
           const totalCost = composition.reduce((s, c) => s + c.value, 0);
           const sc = profitCenterScore;
-          const METRIC_COLORS: Record<string, string> = { '원재료': '#3B82F6', '부재료': '#10B981', '노무비': '#F59E0B', '수도광열전력': '#EF4444', '영업이익': '#8B5CF6', '폐기율': '#6B7280' };
+          const METRIC_COLORS: Record<string, string> = { '원재료': '#3B82F6', '부재료': '#10B981', '노무비': '#F59E0B', '수도광열전력': '#EF4444', '폐기율': '#6B7280' };
 
           return (
             <div className="space-y-6">
@@ -442,7 +442,7 @@ export const CostManagementView: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {/* 6개 항목 점수 카드 — 대시보드와 동일 */}
+                    {/* 5개 항목 점수 카드 — 대시보드와 동일 */}
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {sc.scores.map(item => {
                         const statusEmoji: Record<string, string> = { excellent: '🟢', good: '🔵', warning: '🟡', danger: '🔴' };
@@ -460,10 +460,8 @@ export const CostManagementView: React.FC<Props> = ({
                                `${formatCurrency(item.actual)} / ${formatCurrency(item.target)}`}
                             </div>
                             {item.targetAmount != null && item.actualAmount != null && (
-                              <div className={`text-xs font-bold mt-0.5 ${(item.actualAmount - item.targetAmount) >= 0 && item.metric === '영업이익' ? 'text-green-600' : (item.actualAmount - item.targetAmount) <= 0 && item.metric !== '영업이익' ? 'text-green-600' : 'text-red-600'}`}>
-                                {item.metric === '영업이익'
-                                  ? `${item.actual >= 0 ? '+' : ''}${formatCurrency(item.actual)}`
-                                  : `실적: ${formatCurrency(item.actualAmount)}`}
+                              <div className={`text-xs font-bold mt-0.5 ${(item.actualAmount - item.targetAmount) <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                실적: {formatCurrency(item.actualAmount)}
                               </div>
                             )}
                           </div>
