@@ -2480,9 +2480,26 @@ export function computeAllInsights(
     config
   );
 
-  const profitCenterScore = computeProfitCenterScore(
-    channelRevenue, costBreakdown, wasteAnalysis, production, config
-  );
+  // 독립채산제 점수: 매출과 구매의 공통 기간만 사용 (기간 불일치 방지)
+  let profitCenterScore: ProfitCenterScoreInsight | null = null;
+  if (channelRevenue && costBreakdown && purchases.length > 0 && dailySales.length > 0) {
+    const pDates = purchases.map(p => p.date).sort();
+    const sDates = dailySales.map(d => d.date).sort();
+    const pStart = pDates[0];
+    const pEnd = pDates[pDates.length - 1];
+    // 매출 기간이 구매 기간보다 넓으면 구매 기간에 맞춤
+    if (sDates[0] < pStart || sDates[sDates.length - 1] > pEnd) {
+      const alignedSales = dailySales.filter(d => d.date >= pStart && d.date <= pEnd);
+      if (alignedSales.length > 0) {
+        const alignedCR = computeChannelRevenue(alignedSales, purchases, channelCosts, config);
+        const alignedProd = production.filter(p => p.date >= pStart && p.date <= pEnd);
+        const alignedWA = alignedProd.length > 0 ? computeWasteAnalysis(alignedProd, config, purchases) : wasteAnalysis;
+        profitCenterScore = computeProfitCenterScore(alignedCR, costBreakdown, alignedWA, alignedProd, config);
+      }
+    } else {
+      profitCenterScore = computeProfitCenterScore(channelRevenue, costBreakdown, wasteAnalysis, production, config);
+    }
+  }
 
   const bomConsumptionAnomaly = (bomData.length > 0 && purchases.length > 0)
     ? computeBomConsumptionAnomaly(salesDetail, purchases, bomData, materialMaster, config)

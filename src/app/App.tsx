@@ -702,26 +702,40 @@ const App = () => {
   };
 
   // 날짜 범위에 따른 독립채산제 점수 재계산
+  // 핵심: 매출과 구매 데이터의 공통 기간만 사용해야 정확한 배수 계산 가능
   const filteredProfitCenterScore = useMemo(() => {
-    if (!gsDailySales.length || !gsPurchases.length) return insights?.profitCenterScore ?? null;
+    if (!gsDailySales.length || !gsPurchases.length) return null;
     try {
-      const { start, end } = getDateRange(dateRange);
-      const fSales = filterByDate(gsDailySales, start, end);
-      const fPurchases = filterByDate(gsPurchases, start, end);
-      const fProduction = filterByDate(gsProduction, start, end);
-      const fUtilities = filterByDate(gsUtilities, start, end);
-      const fLabor = filterByDate(gsLabor, start, end);
-      if (!fSales.length || !fPurchases.length) return insights?.profitCenterScore ?? null;
       const bizConfig = loadBusinessConfig();
       const channelCosts = getChannelCostSummaries();
+      const { start, end } = getDateRange(dateRange);
+      let fSales = filterByDate(gsDailySales, start, end);
+      let fPurchases = filterByDate(gsPurchases, start, end);
+      let fProduction = filterByDate(gsProduction, start, end);
+      let fUtilities = filterByDate(gsUtilities, start, end);
+      let fLabor = filterByDate(gsLabor, start, end);
+
+      // dateRange에 구매 데이터 없으면 → 구매 데이터 존재 기간으로 정렬
+      if (!fPurchases.length) {
+        const pDates = gsPurchases.map(p => p.date).sort();
+        const pStart = pDates[0];
+        const pEnd = pDates[pDates.length - 1];
+        fSales = filterByDate(gsDailySales, pStart, pEnd);
+        fPurchases = gsPurchases;
+        fProduction = filterByDate(gsProduction, pStart, pEnd);
+        fUtilities = filterByDate(gsUtilities, pStart, pEnd);
+        fLabor = filterByDate(gsLabor, pStart, pEnd);
+      }
+
+      if (!fSales.length || !fPurchases.length) return null;
       const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, bizConfig);
       const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, bizConfig, fLabor);
       const wa = computeWasteAnalysis(fProduction, bizConfig, fPurchases);
       return computeProfitCenterScore(cr, cb, wa, fProduction, bizConfig);
     } catch {
-      return insights?.profitCenterScore ?? null;
+      return null;
     }
-  }, [dateRange, gsDailySales, gsPurchases, gsProduction, gsUtilities, gsLabor, insights]);
+  }, [dateRange, gsDailySales, gsPurchases, gsProduction, gsUtilities, gsLabor]);
 
   const renderActiveView = () => {
     // Show loading skeleton if fetching
