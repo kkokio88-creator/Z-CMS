@@ -8,7 +8,7 @@ import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation, ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../services/insightService';
-import { isSubMaterial } from '../services/insightService';
+import { isSubMaterial, computeCostBreakdown, computeMaterialPrices, computeUtilityCosts, computeLimitPrice } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 // getLaborMonthlySummaries 수동입력 대신 labor prop(Google Sheets 실데이터) 사용
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
@@ -141,17 +141,51 @@ export const CostManagementView: React.FC<Props> = ({
 
   // profitCenterScore는 App.tsx에서 prop으로 전달받음 (대시보드와 동일한 값 보장)
 
+  // 노무비: Google Sheets labor 실데이터 기반 반별 분석
+  const filteredLabor = useMemo(() => {
+    if (!labor || labor.length === 0) return [];
+    return filterByDate(labor, rangeStart, rangeEnd);
+  }, [labor, rangeStart, rangeEnd]);
+
+  // 생산매출 계산 (원가율의 분모 — 필터된 dailySales의 productionRevenue 합산)
+  const filteredDailySales = useMemo(() => filterByDate(dailySales, rangeStart, rangeEnd), [dailySales, rangeStart, rangeEnd]);
+  const productionRevenue = useMemo(() => {
+    const filtered = filteredDailySales.reduce((s, d) => s + d.productionRevenue, 0);
+    if (filtered > 0) return filtered;
+    // 폴백: 전역 insights의 totalProductionRevenue
+    const globalProdRev = insights?.channelRevenue?.totalProductionRevenue;
+    if (globalProdRev && globalProdRev > 0) return globalProdRev;
+    return 0;
+  }, [filteredDailySales, insights?.channelRevenue]);
+
   // 주간 점수 (기존 costScoring 유지 — 주간 추세 그래프용)
   const scoringParams = useMemo(() => ({
     dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays,
   }), [dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays]);
   const weeklyScores = useMemo(() => computeWeeklyCostScores(scoringParams), [scoringParams]);
 
-  const costBreakdown = insights?.costBreakdown;
-  const materialPrices = insights?.materialPrices;
-  const utilityCosts = insights?.utilityCosts;
+  // 날짜 필터된 데이터로 로컬 계산 (기간 변경 시 반응)
+  const costBreakdown = useMemo(() =>
+    filteredPurchases.length > 0
+      ? computeCostBreakdown(filteredPurchases, filteredUtilities, filteredProduction, config, filteredLabor)
+      : insights?.costBreakdown ?? null,
+    [filteredPurchases, filteredUtilities, filteredProduction, config, filteredLabor, insights?.costBreakdown]);
+  const materialPrices = useMemo(() =>
+    filteredPurchases.length > 0
+      ? computeMaterialPrices(filteredPurchases)
+      : insights?.materialPrices ?? null,
+    [filteredPurchases, insights?.materialPrices]);
+  const utilityCosts = useMemo(() =>
+    filteredUtilities.length > 0
+      ? computeUtilityCosts(filteredUtilities, filteredProduction)
+      : insights?.utilityCosts ?? null,
+    [filteredUtilities, filteredProduction, insights?.utilityCosts]);
   const recommendations = insights?.recommendations || [];
-  const limitPrice = insights?.limitPrice || null;
+  const limitPrice = useMemo(() =>
+    filteredPurchases.length > 0
+      ? computeLimitPrice(filteredPurchases)
+      : insights?.limitPrice ?? null,
+    [filteredPurchases, insights?.limitPrice]);
 
   const [rawFilter, setRawFilter] = useState('all');
   const [subFilter, setSubFilter] = useState('all');
@@ -159,19 +193,6 @@ export const CostManagementView: React.FC<Props> = ({
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [rawPage, setRawPage] = useState(1);
   const RAW_PAGE_SIZE = 20;
-
-  // 생산매출 계산 (원가율의 분모)
-  const productionRevenue = useMemo(() => {
-    const channelRev = insights?.channelRevenue;
-    if (channelRev) return channelRev.totalRevenue;
-    return production.reduce((s, p) => s + (p.prodQtyTotal || 0), 0) * 5000;
-  }, [insights?.channelRevenue, production]);
-
-  // 노무비: Google Sheets labor 실데이터 기반 반별 분석
-  const filteredLabor = useMemo(() => {
-    if (!labor || labor.length === 0) return [];
-    return filterByDate(labor, rangeStart, rangeEnd);
-  }, [labor, rangeStart, rangeEnd]);
 
   const laborByDept = useMemo(() => {
     if (filteredLabor.length === 0) return [];

@@ -46,6 +46,7 @@ export interface ChannelRevenueInsight {
   channels: ChannelProfitDetail[];
   dailyTrend: { date: string; jasa: number; coupang: number; kurly: number; total: number }[];
   totalRevenue: number;
+  totalProductionRevenue: number;
   totalRecommendedRevenue: number;
   totalDiscountAmount: number;
   totalCommissionAmount: number;
@@ -607,8 +608,11 @@ export function computeChannelRevenue(
     };
   });
 
+  const totalProductionRevenue = dailySales.reduce((s, d) => s + d.productionRevenue, 0);
+
   return {
     channels, dailyTrend, totalRevenue,
+    totalProductionRevenue,
     totalRecommendedRevenue: sumRecommended,
     totalDiscountAmount: sumDiscount,
     totalCommissionAmount: sumCommission,
@@ -2552,8 +2556,9 @@ export function computeProfitCenterScore(
     ? Math.max(1, Math.round((new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000) + 1)
     : channelRevenue.dailyTrend.length || 1;
 
-  // 월매출 추정
-  const monthlyRevenue = Math.round(channelRevenue.totalRevenue * 30 / calendarDays);
+  // 월매출 추정 (생산매출 기준)
+  const revenue = channelRevenue.totalProductionRevenue;
+  const monthlyRevenue = Math.round(revenue * 30 / calendarDays);
 
   // 가장 가까운 하위 구간 선택
   const sorted = [...goals].sort((a, b) => a.revenueBracket - b.revenueBracket);
@@ -2574,7 +2579,6 @@ export function computeProfitCenterScore(
   const overheadCost = comp.find(c => c.name === '수도광열전력')?.value || 0;
 
   const totalExpense = overheadCost;
-  const productionValue = channelRevenue.totalRevenue;
 
   function getStatus(score: number): 'excellent' | 'good' | 'warning' | 'danger' {
     if (score >= 110) return 'excellent';
@@ -2587,25 +2591,26 @@ export function computeProfitCenterScore(
   const safeScore = (actual: number, target: number) =>
     target > 0 ? Math.round(actual / target * 100) : 0;
 
+  // 모든 비율 계산에 생산매출(revenue) 사용
   // 1. 매출/원재료
-  const actualRevToRaw = rawMaterial > 0 ? channelRevenue.totalRevenue / rawMaterial : 0;
+  const actualRevToRaw = rawMaterial > 0 ? revenue / rawMaterial : 0;
   const targetRevToRaw = targets.revenueToRawMaterial ?? (targets.revenueToMaterial * 1.08);
 
   // 2. 매출/부재료
-  const actualRevToSub = subMaterial > 0 ? channelRevenue.totalRevenue / subMaterial : 0;
+  const actualRevToSub = subMaterial > 0 ? revenue / subMaterial : 0;
   const targetRevToSub = targets.revenueToSubMaterial ?? (targets.revenueToMaterial * 14.8);
 
   // 3. 매출/노무비
-  const actualProdToLabor = laborCost > 0 ? productionValue / laborCost : 0;
+  const actualProdToLabor = laborCost > 0 ? revenue / laborCost : 0;
 
   // 4. 매출/경비
-  const actualRevToExpense = totalExpense > 0 ? channelRevenue.totalRevenue / totalExpense : 0;
+  const actualRevToExpense = totalExpense > 0 ? revenue / totalExpense : 0;
 
   // 5. 영업이익 (금액 기반)
   const totalCost = rawMaterial + subMaterial + laborCost + overheadCost;
-  const operatingProfit = channelRevenue.totalRevenue - totalCost;
+  const operatingProfit = revenue - totalCost;
   // 목표 영업이익액 = 매출 × 목표이익률
-  const targetProfitAmount = Math.round(channelRevenue.totalRevenue * targets.profitMarginTarget / 100);
+  const targetProfitAmount = Math.round(revenue * targets.profitMarginTarget / 100);
   const scoreProfitAmount = targetProfitAmount > 0
     ? safeScore(operatingProfit, targetProfitAmount) : 0;
 
@@ -2615,11 +2620,11 @@ export function computeProfitCenterScore(
     ? Math.round(targets.wasteRateTarget / actualWasteRate * 100) : 100;
 
   const scores: ProfitCenterScoreMetric[] = [
-    { metric: '원재료', formula: '매출 ÷ 원재료비', target: Math.round(targetRevToRaw * 100) / 100, actual: Math.round(actualRevToRaw * 100) / 100, score: safeScore(actualRevToRaw, targetRevToRaw), status: getStatus(safeScore(actualRevToRaw, targetRevToRaw)), unit: '배', targetAmount: Math.round(channelRevenue.totalRevenue / targetRevToRaw), actualAmount: rawMaterial },
-    { metric: '부재료', formula: '매출 ÷ 부재료비', target: Math.round(targetRevToSub * 100) / 100, actual: Math.round(actualRevToSub * 100) / 100, score: safeScore(actualRevToSub, targetRevToSub), status: getStatus(safeScore(actualRevToSub, targetRevToSub)), unit: '배', targetAmount: Math.round(channelRevenue.totalRevenue / targetRevToSub), actualAmount: subMaterial },
-    { metric: '노무비', formula: '매출 ÷ 노무비', target: Math.round(targets.productionToLabor * 100) / 100, actual: Math.round(actualProdToLabor * 100) / 100, score: safeScore(actualProdToLabor, targets.productionToLabor), status: getStatus(safeScore(actualProdToLabor, targets.productionToLabor)), unit: '배', targetAmount: Math.round(productionValue / targets.productionToLabor), actualAmount: laborCost },
-    { metric: '수도광열전력', formula: '매출 ÷ 수도광열전력비', target: Math.round(targets.revenueToExpense * 100) / 100, actual: Math.round(actualRevToExpense * 100) / 100, score: safeScore(actualRevToExpense, targets.revenueToExpense), status: getStatus(safeScore(actualRevToExpense, targets.revenueToExpense)), unit: '배', targetAmount: Math.round(channelRevenue.totalRevenue / targets.revenueToExpense), actualAmount: overheadCost },
-    { metric: '영업이익', formula: '매출 - 총원가', target: targetProfitAmount, actual: operatingProfit, score: scoreProfitAmount, status: getStatus(scoreProfitAmount), unit: '원', targetAmount: targetProfitAmount, actualAmount: operatingProfit },
+    { metric: '원재료', formula: '생산매출 ÷ 원재료비', target: Math.round(targetRevToRaw * 100) / 100, actual: Math.round(actualRevToRaw * 100) / 100, score: safeScore(actualRevToRaw, targetRevToRaw), status: getStatus(safeScore(actualRevToRaw, targetRevToRaw)), unit: '배', targetAmount: Math.round(revenue / targetRevToRaw), actualAmount: rawMaterial },
+    { metric: '부재료', formula: '생산매출 ÷ 부재료비', target: Math.round(targetRevToSub * 100) / 100, actual: Math.round(actualRevToSub * 100) / 100, score: safeScore(actualRevToSub, targetRevToSub), status: getStatus(safeScore(actualRevToSub, targetRevToSub)), unit: '배', targetAmount: Math.round(revenue / targetRevToSub), actualAmount: subMaterial },
+    { metric: '노무비', formula: '생산매출 ÷ 노무비', target: Math.round(targets.productionToLabor * 100) / 100, actual: Math.round(actualProdToLabor * 100) / 100, score: safeScore(actualProdToLabor, targets.productionToLabor), status: getStatus(safeScore(actualProdToLabor, targets.productionToLabor)), unit: '배', targetAmount: Math.round(revenue / targets.productionToLabor), actualAmount: laborCost },
+    { metric: '수도광열전력', formula: '생산매출 ÷ 수도광열전력비', target: Math.round(targets.revenueToExpense * 100) / 100, actual: Math.round(actualRevToExpense * 100) / 100, score: safeScore(actualRevToExpense, targets.revenueToExpense), status: getStatus(safeScore(actualRevToExpense, targets.revenueToExpense)), unit: '배', targetAmount: Math.round(revenue / targets.revenueToExpense), actualAmount: overheadCost },
+    { metric: '영업이익', formula: '생산매출 - 총원가', target: targetProfitAmount, actual: operatingProfit, score: scoreProfitAmount, status: getStatus(scoreProfitAmount), unit: '원', targetAmount: targetProfitAmount, actualAmount: operatingProfit },
     { metric: '폐기율', formula: '폐기수량 ÷ 생산수량', target: Math.round(targets.wasteRateTarget * 10) / 10, actual: Math.round(actualWasteRate * 10) / 10, score: scoreWaste, status: getStatus(scoreWaste), unit: '%' },
   ];
 

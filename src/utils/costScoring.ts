@@ -121,7 +121,7 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const fProduction = filterByDate(production, rangeStart, rangeEnd);
 
   // 매출 계산
-  const filteredRevenue = fSales.reduce((s, d) => s + d.totalRevenue, 0);
+  const filteredRevenue = fSales.reduce((s, d) => s + d.productionRevenue, 0);
   if (filteredRevenue === 0) return null;
 
   // 월매출 추정
@@ -178,7 +178,7 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
   const fLabor = filterByDate(laborData, rangeStart, rangeEnd);
 
   // 전체 기간 월매출 → 구간 결정 (전 주간에 동일 적용)
-  const totalRev = fSales.reduce((s, d) => s + d.totalRevenue, 0);
+  const totalRev = fSales.reduce((s, d) => s + d.productionRevenue, 0);
   const rangeDays = Math.max(1, fSales.length);
   const monthlyRevenue = Math.round(totalRev * 30 / rangeDays);
   const activeBracket = findActiveBracket(goals, monthlyRevenue);
@@ -206,7 +206,7 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
     const utilItems = utilWeeks.get(wk) || [];
     const laborItems = laborWeeks.get(wk) || [];
 
-    const rev = salesItems.reduce((s, d) => s + d.totalRevenue, 0);
+    const rev = salesItems.reduce((s, d) => s + d.productionRevenue, 0);
     const raw = rawItems.reduce((s, p) => s + p.total, 0);
     const sub = subItems.reduce((s, p) => s + p.total, 0);
     const util = utilItems.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
