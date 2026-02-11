@@ -7,13 +7,15 @@ import { SubTabLayout } from './SubTabLayout';
 import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData } from '../services/googleSheetService';
-import type { DashboardInsights, CostRecommendation } from '../services/insightService';
+import type { DashboardInsights, CostRecommendation, ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../services/insightService';
+import { computeChannelRevenue, computeCostBreakdown, computeWasteAnalysis, computeProfitCenterScore, isSubMaterial } from '../services/insightService';
+import { getChannelCostSummaries } from './ChannelCostAdmin';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 // getLaborMonthlySummaries 수동입력 대신 labor prop(Google Sheets 실데이터) 사용
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate } from '../utils/dateRange';
-import { computeCostScores, computeWeeklyCostScores, type CostScoringResult, type CostItemScore } from '../utils/costScoring';
+import { computeWeeklyCostScores } from '../utils/costScoring';
 
 interface Props {
   purchases: PurchaseData[];
@@ -28,8 +30,6 @@ interface Props {
 
 const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 const COST_COLORS = { rawMaterial: '#3B82F6', subMaterial: '#10B981', labor: '#F59E0B', overhead: '#EF4444' };
-
-import { isSubMaterial } from '../services/insightService';
 
 const InsightCards: React.FC<{ items: CostRecommendation[] }> = ({ items }) => {
   if (items.length === 0) return null;
@@ -89,8 +89,8 @@ const FilterBar: React.FC<{
   </div>
 );
 
-/** 점수 요약 헤더 — 각 서브탭 상단에 표시 */
-const ScoreHeader: React.FC<{ item: CostItemScore | undefined }> = ({ item }) => {
+/** 점수 요약 헤더 — 각 서브탭 상단에 표시 (대시보드와 동일한 ProfitCenterScoreMetric 사용) */
+const ScoreHeader: React.FC<{ item: ProfitCenterScoreMetric | undefined }> = ({ item }) => {
   if (!item) return null;
   const statusColors = {
     excellent: 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800',
@@ -98,19 +98,23 @@ const ScoreHeader: React.FC<{ item: CostItemScore | undefined }> = ({ item }) =>
     warning: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800',
     danger: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800',
   };
+  const METRIC_COLORS: Record<string, string> = { '원재료': '#3B82F6', '부재료': '#10B981', '노무비': '#F59E0B', '수도광열전력': '#EF4444' };
   const statusEmoji = { excellent: '🟢', good: '🔵', warning: '🟡', danger: '🔴' };
+  const color = METRIC_COLORS[item.metric] || '#6B7280';
   return (
     <div className={`rounded-lg p-3 border ${statusColors[item.status]} flex items-center justify-between flex-wrap gap-2`}>
       <div className="flex items-center gap-3">
-        <span className="text-2xl font-black" style={{ color: item.color }}>{item.score}점</span>
+        <span className="text-2xl font-black" style={{ color }}>{item.score}점</span>
         <span className="text-lg">{statusEmoji[item.status]}</span>
         <span className="text-sm text-gray-600 dark:text-gray-300">
-          실적 {item.actualMultiplier}배 / 목표 {item.targetMultiplier}배
+          실적 {item.actual}{item.unit} / 목표 {item.target}{item.unit}
         </span>
       </div>
-      <span className={`text-sm font-bold ${item.surplus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-        {item.surplus >= 0 ? '절감 +' : '초과 '}{formatCurrency(Math.abs(item.surplus))}
-      </span>
+      {item.targetAmount != null && item.actualAmount != null && (
+        <span className={`text-sm font-bold ${(item.targetAmount - item.actualAmount) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {(item.targetAmount - item.actualAmount) >= 0 ? '절감 +' : '초과 '}{formatCurrency(Math.abs(item.targetAmount - item.actualAmount))}
+        </span>
+      )}
     </div>
   );
 };
@@ -134,11 +138,27 @@ export const CostManagementView: React.FC<Props> = ({
   const filteredUtilities = useMemo(() => filterByDate(utilities, rangeStart, rangeEnd), [utilities, rangeStart, rangeEnd]);
   const filteredProduction = useMemo(() => filterByDate(production, rangeStart, rangeEnd), [production, rangeStart, rangeEnd]);
 
-  // 원가 점수 계산
+  // 원가 점수 계산 — 대시보드와 동일한 computeProfitCenterScore 사용
+  const profitCenterScore: ProfitCenterScoreInsight | null = useMemo(() => {
+    const fSales = filterByDate(dailySales, rangeStart, rangeEnd);
+    const fPurchases = filterByDate(purchases, rangeStart, rangeEnd);
+    const fProduction = filterByDate(production, rangeStart, rangeEnd);
+    const fUtilities = filterByDate(utilities, rangeStart, rangeEnd);
+    const fLabor = filterByDate(labor, rangeStart, rangeEnd);
+    if (!fSales.length || !fPurchases.length) return null;
+    try {
+      const channelCosts = getChannelCostSummaries();
+      const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, config);
+      const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, config, fLabor);
+      const wa = computeWasteAnalysis(fProduction, config, fPurchases);
+      return computeProfitCenterScore(cr, cb, wa, fProduction, config);
+    } catch { return null; }
+  }, [dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd]);
+
+  // 주간 점수 (기존 costScoring 유지 — 주간 추세 그래프용)
   const scoringParams = useMemo(() => ({
     dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays,
   }), [dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays]);
-  const scoringResult = useMemo(() => computeCostScores(scoringParams), [scoringParams]);
   const weeklyScores = useMemo(() => computeWeeklyCostScores(scoringParams), [scoringParams]);
 
   const costBreakdown = insights?.costBreakdown;
@@ -380,12 +400,13 @@ export const CostManagementView: React.FC<Props> = ({
         // ========== 원가 총괄 ==========
         if (activeTab === 'overview') {
           const composition = costBreakdown?.composition || [];
-          const totalCost = scoringResult?.totalCost || composition.reduce((s, c) => s + c.value, 0);
-          const sc = scoringResult;
+          const totalCost = composition.reduce((s, c) => s + c.value, 0);
+          const sc = profitCenterScore;
+          const METRIC_COLORS: Record<string, string> = { '원재료': '#3B82F6', '부재료': '#10B981', '노무비': '#F59E0B', '수도광열전력': '#EF4444', '영업이익': '#8B5CF6', '폐기율': '#6B7280' };
 
           return (
             <div className="space-y-6">
-              {/* 점수 카드 섹션 */}
+              {/* 점수 카드 섹션 — 대시보드와 동일한 computeProfitCenterScore 기반 */}
               {sc ? (
                 <>
                   <div className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
@@ -408,32 +429,35 @@ export const CostManagementView: React.FC<Props> = ({
                           {sc.overallScore >= 110 ? '우수' : sc.overallScore >= 100 ? '달성' : sc.overallScore >= 90 ? '주의' : '미달'}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 space-x-3">
-                        <span>매출: {formatCurrency(sc.filteredRevenue)}</span>
-                        <span>총원가: {formatCurrency(sc.totalCost)}</span>
-                        <span className={`font-bold ${sc.totalSurplus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {sc.totalSurplus >= 0 ? '절감: +' : '초과: '}{formatCurrency(Math.abs(sc.totalSurplus))}
-                        </span>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        월매출 {formatCurrency(sc.monthlyRevenue)} 추정 ({sc.calendarDays}일 기준)
                       </div>
                     </div>
 
-                    {/* 4개 항목 점수 카드 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {sc.items.map(item => {
-                        const statusEmoji = { excellent: '🟢', good: '🔵', warning: '🟡', danger: '🔴' };
+                    {/* 6개 항목 점수 카드 — 대시보드와 동일 */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {sc.scores.map(item => {
+                        const statusEmoji: Record<string, string> = { excellent: '🟢', good: '🔵', warning: '🟡', danger: '🔴' };
+                        const color = METRIC_COLORS[item.metric] || '#6B7280';
                         return (
-                          <div key={item.label} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
+                          <div key={item.metric} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-bold" style={{ color: item.color }}>{item.label}</span>
+                              <span className="text-sm font-bold" style={{ color }}>{item.metric}</span>
                               <span>{statusEmoji[item.status]}</span>
                             </div>
-                            <div className="text-2xl font-black" style={{ color: item.color }}>{item.score}<span className="text-xs text-gray-400 font-normal">점</span></div>
+                            <div className="text-2xl font-black" style={{ color }}>{item.score}<span className="text-xs text-gray-400 font-normal">점</span></div>
                             <div className="text-[11px] text-gray-500 mt-1">
-                              {item.actualMultiplier}x / {item.targetMultiplier}x
+                              {item.unit === '배' ? `${item.actual}x / ${item.target}x` :
+                               item.unit === '%' ? `${item.actual}% / ${item.target}%` :
+                               `${formatCurrency(item.actual)} / ${formatCurrency(item.target)}`}
                             </div>
-                            <div className={`text-xs font-bold mt-0.5 ${item.surplus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {item.surplus >= 0 ? '+' : ''}{formatCurrency(item.surplus)}
-                            </div>
+                            {item.targetAmount != null && item.actualAmount != null && (
+                              <div className={`text-xs font-bold mt-0.5 ${(item.actualAmount - item.targetAmount) >= 0 && item.metric === '영업이익' ? 'text-green-600' : (item.actualAmount - item.targetAmount) <= 0 && item.metric !== '영업이익' ? 'text-green-600' : 'text-red-600'}`}>
+                                {item.metric === '영업이익'
+                                  ? `${item.actual >= 0 ? '+' : ''}${formatCurrency(item.actual)}`
+                                  : `실적: ${formatCurrency(item.actualAmount)}`}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -524,7 +548,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
-              <ScoreHeader item={scoringResult?.items.find(i => i.label === '원재료')} />
+              <ScoreHeader item={profitCenterScore?.scores.find(s => s.metric === '원재료')} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 원재료비</p>
@@ -736,7 +760,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
-              <ScoreHeader item={scoringResult?.items.find(i => i.label === '부재료')} />
+              <ScoreHeader item={profitCenterScore?.scores.find(s => s.metric === '부재료')} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 부재료비</p>
@@ -859,7 +883,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
-              <ScoreHeader item={scoringResult?.items.find(i => i.label === '노무비')} />
+              <ScoreHeader item={profitCenterScore?.scores.find(s => s.metric === '노무비')} />
 
               {/* KPI 카드 6개 */}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
@@ -1135,7 +1159,7 @@ export const CostManagementView: React.FC<Props> = ({
 
         return (
           <div className="space-y-6">
-            <ScoreHeader item={scoringResult?.items.find(i => i.label === '수도광열전력')} />
+            <ScoreHeader item={profitCenterScore?.scores.find(s => s.metric === '수도광열전력')} />
             {/* KPI — B5: 생산매출/생산량 대비 추가 */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
