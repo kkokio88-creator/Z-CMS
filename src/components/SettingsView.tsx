@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   testApiConnection,
   getEcountConfig,
@@ -6,9 +6,10 @@ import {
   EcountConfig,
 } from '../services/ecountService';
 import { useSettings } from '../contexts/SettingsContext';
+import { useUI } from '../contexts/UIContext';
 import { ChannelCostAdmin } from './ChannelCostAdmin';
 import { LaborRecordAdmin } from './LaborRecordAdmin';
-import type { ProfitCenterGoal } from '../config/businessConfig';
+import { deriveMultipliersFromTargets, type ProfitCenterGoal, type BusinessConfig } from '../config/businessConfig';
 import {
   loadDataSourceConfig,
   saveDataSourceConfig,
@@ -19,378 +20,225 @@ import {
 } from '../config/dataSourceConfig';
 import { generateDataSourceMd, saveMdToStorage } from '../utils/generateDataSourceMd';
 
-// 데이터 소스 연결 타입 정의
-type DataSourceType = 'googleSheets' | 'ecount' | 'none';
+// ─── 구글시트 연결 테스트 상태 타입 ───
+type SheetTestStatus = { status: 'idle' | 'testing' | 'ok' | 'error'; message?: string; rowCount?: number };
 
-interface DataSourceConfig {
-  type: DataSourceType;
-  googleSheets?: {
-    spreadsheetUrl: string;
-    sheetName: string;
-  };
-  ecount?: {
-    enabled: boolean;
-  };
-  status: 'connected' | 'disconnected' | 'error' | 'testing';
-  lastTested?: string;
-  errorMessage?: string;
-}
+// ─── 접이식 섹션 헬퍼 ───
+const SECTION_IDS = {
+  ecount: 'ecount',
+  googleSheets: 'google-sheets',
+  ai: 'ai',
+  inventoryCost: 'inventory-cost',
+  costConfig: 'cost-config',
+  abcXyz: 'abc-xyz',
+  anomaly: 'anomaly',
+  labor: 'labor',
+  orderParams: 'order-params',
+  viewThresholds: 'view-thresholds',
+  channelProfit: 'channel-profit',
+  channelSettlement: 'channel-settlement',
+  budget: 'budget',
+  laborRecords: 'labor-records',
+  channelCosts: 'channel-costs',
+  profitCenter: 'profit-center',
+  exportImport: 'export-import',
+} as const;
 
-interface DataSourcesConfig {
-  mealPlan: DataSourceConfig; // 식단표
-  salesHistory: DataSourceConfig; // 판매실적
-  bomSan: DataSourceConfig; // BOM (SAN)
-  bomZip: DataSourceConfig; // BOM (ZIP)
-  inventory: DataSourceConfig; // 재고현황
-  purchaseOrders: DataSourceConfig; // 발주현황
-  purchaseHistory: DataSourceConfig; // 구매현황
-}
+const DEFAULT_OPEN_SECTIONS = new Set([SECTION_IDS.ecount, SECTION_IDS.googleSheets]);
 
 const GOOGLE_SHEETS_SERVICE_ACCOUNT = 'z-cms-3077@gen-lang-client-0670850409.iam.gserviceaccount.com';
-const DATASOURCE_CONFIG_KEY = 'ZCMS_DATASOURCE_CONFIG';
 
-const defaultDataSourceConfig: DataSourceConfig = {
-  type: 'none',
-  googleSheets: { spreadsheetUrl: '', sheetName: '' },
-  ecount: { enabled: false },
-  status: 'disconnected',
-};
-
-const defaultDataSourcesConfig: DataSourcesConfig = {
-  mealPlan: { ...defaultDataSourceConfig },
-  salesHistory: { ...defaultDataSourceConfig },
-  bomSan: { ...defaultDataSourceConfig },
-  bomZip: { ...defaultDataSourceConfig },
-  inventory: { ...defaultDataSourceConfig },
-  purchaseOrders: { ...defaultDataSourceConfig },
-  purchaseHistory: { ...defaultDataSourceConfig },
-};
+// ─── 접이식 섹션 컴포넌트 ───
+const CollapsibleSection: React.FC<{
+  id: string;
+  title: string;
+  icon: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  headerBg?: string;
+  headerTextColor?: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}> = ({ id, title, icon, isOpen, onToggle, headerBg, headerTextColor, subtitle, children }) => (
+  <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <button
+      onClick={onToggle}
+      className={`w-full px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-pointer transition-colors hover:opacity-90 ${headerBg || 'bg-gray-50 dark:bg-gray-800'}`}
+    >
+      <div className="text-left">
+        <h3 className={`font-bold flex items-center ${headerTextColor || 'text-gray-900 dark:text-white'}`}>
+          <span className="material-icons-outlined mr-2">{icon}</span>
+          {title}
+        </h3>
+        {subtitle && <p className={`text-xs mt-1 opacity-70 ${headerTextColor || ''}`}>{subtitle}</p>}
+      </div>
+      <span
+        className={`material-icons-outlined transition-transform duration-200 ${headerTextColor || 'text-gray-500 dark:text-gray-400'}`}
+        style={{ transform: isOpen ? 'rotate(180deg)' : '' }}
+      >
+        expand_more
+      </span>
+    </button>
+    {isOpen && <div className="p-6">{children}</div>}
+  </div>
+);
 
 export const SettingsView: React.FC = () => {
   const { config, updateConfig, resetConfig } = useSettings();
+  const { setSettingsDirty } = useUI();
   const importFileRef = useRef<HTMLInputElement>(null);
-  const [safetyDays, setSafetyDays] = useState(14);
-  const [aiSensitivity, setAiSensitivity] = useState(80);
-  const [marginAlert, setMarginAlert] = useState(10);
 
-  // ECOUNT Config State
+  // ─── 접이식 섹션 상태 ───
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(DEFAULT_OPEN_SECTIONS));
+  const toggleSection = useCallback((id: string) => {
+    setOpenSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // ─── Draft 패턴: 즉시 저장 → 임시 상태로 변경 ───
+  const [draft, setDraft] = useState<BusinessConfig>(() => ({ ...config }));
+  const isDirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(config), [draft, config]);
+
+  const updateDraft = useCallback((partial: Partial<BusinessConfig>) => {
+    setDraft(prev => ({ ...prev, ...partial }));
+  }, []);
+
+  const handleSave = useCallback(() => {
+    updateConfig(draft);
+  }, [draft, updateConfig]);
+
+  const handleDiscard = useCallback(() => {
+    setDraft({ ...config });
+  }, [config]);
+
+  // config 외부 변경 시 draft 동기화 (reset 등)
+  useEffect(() => {
+    if (!isDirty) setDraft({ ...config });
+  }, [config]);
+
+  // isDirty 변경 시 UIContext에 알림
+  useEffect(() => {
+    setSettingsDirty(isDirty);
+    return () => setSettingsDirty(false);
+  }, [isDirty, setSettingsDirty]);
+
+  // ─── ECOUNT Config State ───
   const [ecountConfig, setEcountConfig] = useState<EcountConfig>({
-    COM_CODE: '',
-    USER_ID: '',
-    API_KEY: '',
-    ZONE: 'CD',
+    COM_CODE: '', USER_ID: '', API_KEY: '', ZONE: 'CD',
   });
-
-  const [apiTestStatus, setApiTestStatus] = useState<{ success: boolean; message: string } | null>(
-    null
-  );
+  const [apiTestStatus, setApiTestStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
-  // 데이터 소스 연결 관리 State
-  const [dataSourcesConfig, setDataSourcesConfig] =
-    useState<DataSourcesConfig>(defaultDataSourcesConfig);
-  const [testingSource, setTestingSource] = useState<keyof DataSourcesConfig | null>(null);
-
-  // 정규화 데이터 소스 관리
+  // ─── 정규화 데이터 소스 관리 ───
   const [normalizedDSConfig, setNormalizedDSConfig] = useState<NormalizedDSConfig>(loadDataSourceConfig);
   const [dsEditingSheet, setDsEditingSheet] = useState<string | null>(null);
   const [dsMdPreview, setDsMdPreview] = useState(false);
 
+  // ─── 구글시트 연결 테스트 ───
+  const [sheetTestResults, setSheetTestResults] = useState<Record<string, SheetTestStatus>>({});
+  const sheetTestRanRef = useRef(false);
+
+  const testSheetConnection = useCallback(async (sheet: DataSourceSheet) => {
+    setSheetTestResults(prev => ({ ...prev, [sheet.id]: { status: 'testing' } }));
+    try {
+      const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/api$/, '');
+      const response = await fetch(`${apiUrl}/api/sheets/test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spreadsheetId: sheet.spreadsheetId,
+          sheetName: sheet.sheetName,
+        }),
+      });
+      const result = await response.json();
+      setSheetTestResults(prev => ({
+        ...prev,
+        [sheet.id]: result.success
+          ? { status: 'ok', rowCount: result.rowCount }
+          : { status: 'error', message: result.message || '연결 실패' },
+      }));
+    } catch {
+      setSheetTestResults(prev => ({
+        ...prev,
+        [sheet.id]: { status: 'error', message: '서버 연결 실패' },
+      }));
+    }
+  }, []);
+
+  const testAllSheets = useCallback(async () => {
+    const enabled = normalizedDSConfig.sheets.filter(s => s.enabled);
+    for (const sheet of enabled) {
+      await testSheetConnection(sheet);
+    }
+  }, [normalizedDSConfig.sheets, testSheetConnection]);
+
+  // 구글시트 섹션 열릴 때 자동 1회 테스트
   useEffect(() => {
-    // Load existing config on mount
+    if (openSections.has(SECTION_IDS.googleSheets) && !sheetTestRanRef.current) {
+      sheetTestRanRef.current = true;
+      testAllSheets();
+    }
+  }, [openSections, testAllSheets]);
+
+  // ─── AI 탐지 로컬 상태 (draft 외) ───
+  const [safetyDays, setSafetyDays] = useState(14);
+  const [aiSensitivity, setAiSensitivity] = useState(80);
+  const [marginAlert, setMarginAlert] = useState(10);
+
+  // ─── 초기화 ───
+  useEffect(() => {
     const current = getEcountConfig();
     setEcountConfig(current);
-
-    // Load data sources config from localStorage
-    const savedConfig = localStorage.getItem(DATASOURCE_CONFIG_KEY);
-    if (savedConfig) {
-      try {
-        setDataSourcesConfig(JSON.parse(savedConfig));
-      } catch (e) {
-        console.error('Failed to parse data sources config:', e);
-      }
-    }
   }, []);
 
   const handleConfigChange = (field: keyof EcountConfig, value: string) => {
     setEcountConfig(prev => ({ ...prev, [field]: value }));
-    setApiTestStatus(null); // Reset test status on edit
+    setApiTestStatus(null);
   };
 
   const handleSaveAndTest = async () => {
     setIsTesting(true);
     setApiTestStatus(null);
-
-    // Save first
     updateEcountConfig(ecountConfig);
-
     try {
       const result = await testApiConnection();
       setApiTestStatus(result);
-    } catch (e) {
+    } catch {
       setApiTestStatus({ success: false, message: '알 수 없는 오류가 발생했습니다.' });
     } finally {
       setIsTesting(false);
     }
   };
 
-  // 데이터 소스 설정 변경 핸들러
-  const handleDataSourceChange = (
-    sourceKey: keyof DataSourcesConfig,
-    field: 'type' | 'spreadsheetUrl' | 'sheetName',
-    value: string
-  ) => {
-    setDataSourcesConfig(prev => {
-      const updated = { ...prev };
-      if (field === 'type') {
-        updated[sourceKey] = {
-          ...updated[sourceKey],
-          type: value as DataSourceType,
-          status: 'disconnected',
-        };
-      } else if (field === 'spreadsheetUrl' || field === 'sheetName') {
-        updated[sourceKey] = {
-          ...updated[sourceKey],
-          googleSheets: {
-            ...updated[sourceKey].googleSheets!,
-            [field]: value,
-          },
-          status: 'disconnected',
-        };
-      }
-      // Save to localStorage
-      localStorage.setItem(DATASOURCE_CONFIG_KEY, JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  // 구글 시트 연결 테스트
-  const testGoogleSheetsConnection = async (sourceKey: keyof DataSourcesConfig) => {
-    const config = dataSourcesConfig[sourceKey];
-    if (!config.googleSheets?.spreadsheetUrl || !config.googleSheets?.sheetName) {
-      return;
+  // ─── 시트 테스트 상태 배지 렌더 ───
+  const renderSheetTestBadge = (sheetId: string) => {
+    const result = sheetTestResults[sheetId];
+    if (!result || result.status === 'idle') {
+      return <span className="inline-flex items-center text-xs text-gray-400"><span className="w-2 h-2 rounded-full bg-gray-300 mr-1"></span>미확인</span>;
     }
-
-    setTestingSource(sourceKey);
-    setDataSourcesConfig(prev => ({
-      ...prev,
-      [sourceKey]: { ...prev[sourceKey], status: 'testing' },
-    }));
-
-    try {
-      const response = await fetch('http://localhost:4001/api/sheets/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spreadsheetUrl: config.googleSheets.spreadsheetUrl,
-          sheetName: config.googleSheets.sheetName,
-        }),
-      });
-
-      const result = await response.json();
-
-      setDataSourcesConfig(prev => {
-        const updated = {
-          ...prev,
-          [sourceKey]: {
-            ...prev[sourceKey],
-            status: result.success ? 'connected' : 'error',
-            lastTested: new Date().toISOString(),
-            errorMessage: result.success ? undefined : result.message,
-          },
-        };
-        localStorage.setItem(DATASOURCE_CONFIG_KEY, JSON.stringify(updated));
-        return updated;
-      });
-    } catch (e) {
-      setDataSourcesConfig(prev => {
-        const updated = {
-          ...prev,
-          [sourceKey]: {
-            ...prev[sourceKey],
-            status: 'error',
-            lastTested: new Date().toISOString(),
-            errorMessage: '서버 연결 실패. 백엔드 서버가 실행 중인지 확인하세요.',
-          },
-        };
-        localStorage.setItem(DATASOURCE_CONFIG_KEY, JSON.stringify(updated));
-        return updated;
-      });
-    } finally {
-      setTestingSource(null);
+    if (result.status === 'testing') {
+      return <span className="inline-flex items-center text-xs text-blue-500"><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mr-1"></span>테스트 중</span>;
     }
-  };
-
-  // 상태 배지 렌더링
-  const renderStatusBadge = (status: DataSourceConfig['status']) => {
-    const styles = {
-      connected: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-      disconnected: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
-      error: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-      testing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    };
-    const labels = {
-      connected: '연결됨',
-      disconnected: '미연결',
-      error: '오류',
-      testing: '테스트 중...',
-    };
-    const icons = {
-      connected: 'check_circle',
-      disconnected: 'radio_button_unchecked',
-      error: 'error',
-      testing: 'sync',
-    };
-
+    if (result.status === 'ok') {
+      return <span className="inline-flex items-center text-xs text-green-600"><span className="material-icons-outlined text-sm mr-0.5">check_circle</span>{result.rowCount}행</span>;
+    }
     return (
-      <span
-        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[status]}`}
-      >
-        <span
-          className={`material-icons-outlined text-sm mr-1 ${status === 'testing' ? 'animate-spin' : ''}`}
-        >
-          {icons[status]}
-        </span>
-        {labels[status]}
+      <span className="inline-flex items-center text-xs text-red-500 group relative">
+        <span className="material-icons-outlined text-sm mr-0.5">error</span>오류
+        {result.message && (
+          <span className="hidden group-hover:block absolute bottom-full left-0 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10 mb-1">
+            {result.message}
+          </span>
+        )}
       </span>
     );
   };
 
-  // 데이터 소스 카드 렌더링
-  const renderDataSourceCard = (
-    sourceKey: keyof DataSourcesConfig,
-    label: string,
-    description: string,
-    icon: string
-  ) => {
-    const config = dataSourcesConfig[sourceKey];
-    const isGoogleSheets = config.type === 'googleSheets';
-    const isEcount = config.type === 'ecount';
-    const isTesting = testingSource === sourceKey;
-
-    return (
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center">
-            <span className="material-icons-outlined text-gray-500 dark:text-gray-400 mr-2">
-              {icon}
-            </span>
-            <div>
-              <h4 className="font-medium text-gray-900 dark:text-white">{label}</h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
-            </div>
-          </div>
-          {renderStatusBadge(config.status)}
-        </div>
-
-        {/* 데이터 소스 타입 선택 */}
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-            연결 방식
-          </label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleDataSourceChange(sourceKey, 'type', 'googleSheets')}
-              className={`flex-1 px-3 py-2 text-sm rounded-md border transition-colors ${
-                isGoogleSheets
-                  ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-400'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'
-              }`}
-            >
-              <span className="material-icons-outlined text-sm mr-1 align-middle">table_chart</span>
-              Google Sheets
-            </button>
-            <button
-              onClick={() => handleDataSourceChange(sourceKey, 'type', 'ecount')}
-              className={`flex-1 px-3 py-2 text-sm rounded-md border transition-colors ${
-                isEcount
-                  ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-400'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'
-              }`}
-            >
-              <span className="material-icons-outlined text-sm mr-1 align-middle">api</span>
-              ECOUNT API
-            </button>
-          </div>
-        </div>
-
-        {/* Google Sheets 설정 */}
-        {isGoogleSheets && (
-          <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                스프레드시트 URL
-              </label>
-              <input
-                type="text"
-                value={config.googleSheets?.spreadsheetUrl || ''}
-                onChange={e => handleDataSourceChange(sourceKey, 'spreadsheetUrl', e.target.value)}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-green-500 focus:ring-green-500 text-xs p-2 border"
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                시트 이름
-              </label>
-              <input
-                type="text"
-                value={config.googleSheets?.sheetName || ''}
-                onChange={e => handleDataSourceChange(sourceKey, 'sheetName', e.target.value)}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-green-500 focus:ring-green-500 text-xs p-2 border"
-                placeholder="Sheet1"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-400">
-                <span className="material-icons-outlined text-xs align-middle mr-1">info</span>
-                시트에 편집 권한 공유 필요
-              </p>
-              <button
-                onClick={() => testGoogleSheetsConnection(sourceKey)}
-                disabled={
-                  isTesting ||
-                  !config.googleSheets?.spreadsheetUrl ||
-                  !config.googleSheets?.sheetName
-                }
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-              >
-                {isTesting ? (
-                  <>
-                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span>
-                    테스트 중
-                  </>
-                ) : (
-                  <>
-                    <span className="material-icons-outlined text-sm mr-1">play_arrow</span>
-                    연결 테스트
-                  </>
-                )}
-              </button>
-            </div>
-            {config.status === 'error' && config.errorMessage && (
-              <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs text-red-600 dark:text-red-400">
-                {config.errorMessage}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ECOUNT API 설정 */}
-        {isEcount && (
-          <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              <span className="material-icons-outlined text-sm align-middle mr-1">info</span>
-              상단의 ECOUNT API 설정을 사용합니다. 연결 테스트는 상단 섹션에서 진행하세요.
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-10">
+    <div className="max-w-4xl mx-auto space-y-4 animate-fade-in pb-24">
       <div>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
           시스템 및 기준 정보 설정
@@ -400,61 +248,31 @@ export const SettingsView: React.FC = () => {
         </p>
       </div>
 
-      {/* API Connection Panel */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          <h3 className="font-bold text-gray-900 dark:text-white flex items-center">
-            <span className="material-icons-outlined mr-2">api</span>
-            ERP API 연결 설정 (ECOUNT)
-          </h3>
-        </div>
-        <div className="p-6 space-y-4">
+      {/* ═══════════ 1. ERP API 연결 설정 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.ecount}
+        title="ERP API 연결 설정 (ECOUNT)"
+        icon="api"
+        isOpen={openSections.has(SECTION_IDS.ecount)}
+        onToggle={() => toggleSection(SECTION_IDS.ecount)}
+      >
+        <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                회사 코드 (Company Code)
-              </label>
-              <input
-                type="text"
-                value={ecountConfig.COM_CODE}
-                onChange={e => handleConfigChange('COM_CODE', e.target.value)}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border"
-                placeholder="예: 12345"
-              />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">회사 코드 (Company Code)</label>
+              <input type="text" value={ecountConfig.COM_CODE} onChange={e => handleConfigChange('COM_CODE', e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" placeholder="예: 12345" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                사용자 ID (User ID)
-              </label>
-              <input
-                type="text"
-                value={ecountConfig.USER_ID}
-                onChange={e => handleConfigChange('USER_ID', e.target.value)}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border"
-                placeholder="예: MASTER"
-              />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">사용자 ID (User ID)</label>
+              <input type="text" value={ecountConfig.USER_ID} onChange={e => handleConfigChange('USER_ID', e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" placeholder="예: MASTER" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                API 인증키 (API Key)
-              </label>
-              <input
-                type="password"
-                value={ecountConfig.API_KEY}
-                onChange={e => handleConfigChange('API_KEY', e.target.value)}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border"
-                placeholder="ECOUNT API 인증키 입력"
-              />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API 인증키 (API Key)</label>
+              <input type="password" value={ecountConfig.API_KEY} onChange={e => handleConfigChange('API_KEY', e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" placeholder="ECOUNT API 인증키 입력" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                API Zone
-              </label>
-              <select
-                value={ecountConfig.ZONE}
-                onChange={e => handleConfigChange('ZONE', e.target.value)}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border"
-              >
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Zone</label>
+              <select value={ecountConfig.ZONE} onChange={e => handleConfigChange('ZONE', e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border">
                 <option value="CD">CD (운영서버)</option>
                 <option value="AA">AA</option>
                 <option value="AB">AB</option>
@@ -462,80 +280,63 @@ export const SettingsView: React.FC = () => {
               </select>
             </div>
           </div>
-
           <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
-            <p className="text-xs text-gray-500">
-              * 저장 시 자동으로 연결 테스트가 수행됩니다. <br />* 변경된 정보는 로컬 브라우저에만
-              저장됩니다.
-            </p>
-            <button
-              onClick={handleSaveAndTest}
-              disabled={isTesting}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 flex items-center"
-            >
-              {isTesting ? (
-                <>
-                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
-                  연결 확인 중...
-                </>
-              ) : (
-                '저장 및 연결 테스트'
-              )}
+            <p className="text-xs text-gray-500">* 저장 시 자동으로 연결 테스트가 수행됩니다. <br />* 변경된 정보는 로컬 브라우저에만 저장됩니다.</p>
+            <button onClick={handleSaveAndTest} disabled={isTesting} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 flex items-center">
+              {isTesting ? (<><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>연결 확인 중...</>) : '저장 및 연결 테스트'}
             </button>
           </div>
           {apiTestStatus && (
-            <div
-              className={`mt-2 p-3 rounded-md text-sm ${apiTestStatus.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
-            >
+            <div className={`mt-2 p-3 rounded-md text-sm ${apiTestStatus.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
               <div className="flex items-center">
-                <span className="material-icons-outlined mr-2 text-sm">
-                  {apiTestStatus.success ? 'check_circle' : 'error'}
-                </span>
+                <span className="material-icons-outlined mr-2 text-sm">{apiTestStatus.success ? 'check_circle' : 'error'}</span>
                 {apiTestStatus.message}
               </div>
             </div>
           )}
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 정규화 데이터 소스 관리 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-green-50 dark:bg-green-900/20">
-          <h3 className="font-bold text-green-900 dark:text-green-200 flex items-center">
-            <span className="material-icons-outlined mr-2">dataset</span>
-            구글시트 데이터 소스 관리
-          </h3>
-          <p className="text-xs text-green-700 dark:text-green-400 mt-1">
-            {normalizedDSConfig.sheets.length}개 시트 연동 | v{normalizedDSConfig.version} | 최종 업데이트: {normalizedDSConfig.lastUpdated}
-          </p>
-        </div>
-
-        {/* 서비스 계정 안내 */}
-        <div className="px-6 py-3 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-100 dark:border-yellow-800">
-          <div className="flex items-start">
-            <span className="material-icons-outlined text-yellow-600 dark:text-yellow-400 mr-2 text-lg">warning</span>
-            <div>
-              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">서비스 계정 권한</p>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                아래 서비스 계정에 스프레드시트 <strong>"편집자"</strong> 권한을 공유하세요:
-              </p>
-              <div className="mt-2 flex items-center gap-2">
-                <code className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded text-xs font-mono text-yellow-900 dark:text-yellow-100">
-                  {normalizedDSConfig.serviceAccount}
-                </code>
-                <button
-                  onClick={() => navigator.clipboard.writeText(normalizedDSConfig.serviceAccount)}
-                  className="p-1 hover:bg-yellow-200 dark:hover:bg-yellow-700 rounded transition-colors"
-                  title="복사"
-                >
-                  <span className="material-icons-outlined text-sm text-yellow-700 dark:text-yellow-300">content_copy</span>
-                </button>
+      {/* ═══════════ 2. 구글시트 데이터 소스 관리 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.googleSheets}
+        title="구글시트 데이터 소스 관리"
+        icon="dataset"
+        isOpen={openSections.has(SECTION_IDS.googleSheets)}
+        onToggle={() => toggleSection(SECTION_IDS.googleSheets)}
+        headerBg="bg-green-50 dark:bg-green-900/20"
+        headerTextColor="text-green-900 dark:text-green-200"
+        subtitle={`${normalizedDSConfig.sheets.length}개 시트 연동 | v${normalizedDSConfig.version} | 최종 업데이트: ${normalizedDSConfig.lastUpdated}`}
+      >
+        <div className="space-y-3">
+          {/* 서비스 계정 안내 */}
+          <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-100 dark:border-yellow-800">
+            <div className="flex items-start">
+              <span className="material-icons-outlined text-yellow-600 dark:text-yellow-400 mr-2 text-lg">warning</span>
+              <div>
+                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">서비스 계정 권한</p>
+                <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">아래 서비스 계정에 스프레드시트 <strong>"편집자"</strong> 권한을 공유하세요:</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded text-xs font-mono text-yellow-900 dark:text-yellow-100">{normalizedDSConfig.serviceAccount}</code>
+                  <button onClick={() => navigator.clipboard.writeText(normalizedDSConfig.serviceAccount)} className="p-1 hover:bg-yellow-200 dark:hover:bg-yellow-700 rounded transition-colors" title="복사">
+                    <span className="material-icons-outlined text-sm text-yellow-700 dark:text-yellow-300">content_copy</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-6 space-y-3">
+          {/* 전체 연결 테스트 버튼 */}
+          <div className="flex justify-end">
+            <button
+              onClick={testAllSheets}
+              className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-300 rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              <span className="material-icons-outlined text-sm">wifi_tethering</span>
+              전체 연결 테스트
+            </button>
+          </div>
+
           {/* 시트 목록 테이블 */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -547,6 +348,7 @@ export const SettingsView: React.FC = () => {
                   <th className="pb-2 pr-4 text-center">헤더행</th>
                   <th className="pb-2 pr-4 text-center">시작행</th>
                   <th className="pb-2 pr-4 text-center">컬럼수</th>
+                  <th className="pb-2 pr-4 text-center">상태</th>
                   <th className="pb-2 text-center">작업</th>
                 </tr>
               </thead>
@@ -575,28 +377,18 @@ export const SettingsView: React.FC = () => {
                       <td className="py-2.5 pr-4 text-center text-gray-500">{sheet.headerRow}</td>
                       <td className="py-2.5 pr-4 text-center text-gray-500">{sheet.dataStartRow}</td>
                       <td className="py-2.5 pr-4 text-center">
-                        <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded text-xs">
-                          {sheet.columns.length}
-                        </span>
+                        <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded text-xs">{sheet.columns.length}</span>
                       </td>
+                      <td className="py-2.5 pr-4 text-center">{renderSheetTestBadge(sheet.id)}</td>
                       <td className="py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => setDsEditingSheet(dsEditingSheet === sheet.id ? null : sheet.id)}
-                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            title="편집"
-                          >
-                            <span className="material-icons-outlined text-sm text-gray-500 dark:text-gray-400">
-                              {dsEditingSheet === sheet.id ? 'expand_less' : 'edit'}
-                            </span>
+                          <button onClick={() => testSheetConnection(sheet)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="연결 테스트">
+                            <span className="material-icons-outlined text-sm text-blue-500 dark:text-blue-400">wifi_tethering</span>
                           </button>
-                          <a
-                            href={getSpreadsheetUrl(sheet.spreadsheetId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            title="시트 열기"
-                          >
+                          <button onClick={() => setDsEditingSheet(dsEditingSheet === sheet.id ? null : sheet.id)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="편집">
+                            <span className="material-icons-outlined text-sm text-gray-500 dark:text-gray-400">{dsEditingSheet === sheet.id ? 'expand_less' : 'edit'}</span>
+                          </button>
+                          <a href={getSpreadsheetUrl(sheet.spreadsheetId)} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="시트 열기">
                             <span className="material-icons-outlined text-sm text-green-600 dark:text-green-400">open_in_new</span>
                           </a>
                         </div>
@@ -605,69 +397,26 @@ export const SettingsView: React.FC = () => {
                     {/* 편집 확장 영역 */}
                     {dsEditingSheet === sheet.id && (
                       <tr>
-                        <td colSpan={7} className="bg-gray-50 dark:bg-gray-800/50 px-4 py-4">
+                        <td colSpan={8} className="bg-gray-50 dark:bg-gray-800/50 px-4 py-4">
                           <div className="space-y-3">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">시트명</label>
-                                <input
-                                  type="text"
-                                  value={sheet.sheetName}
-                                  onChange={(e) => {
-                                    const updated = { ...normalizedDSConfig };
-                                    const idx = updated.sheets.findIndex(s => s.id === sheet.id);
-                                    updated.sheets[idx] = { ...sheet, sheetName: e.target.value };
-                                    setNormalizedDSConfig(updated);
-                                  }}
-                                  className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border"
-                                />
+                                <input type="text" value={sheet.sheetName} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, sheetName: e.target.value }; setNormalizedDSConfig(updated); }} className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border" />
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">헤더행</label>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={sheet.headerRow}
-                                  onChange={(e) => {
-                                    const updated = { ...normalizedDSConfig };
-                                    const idx = updated.sheets.findIndex(s => s.id === sheet.id);
-                                    updated.sheets[idx] = { ...sheet, headerRow: Number(e.target.value) };
-                                    setNormalizedDSConfig(updated);
-                                  }}
-                                  className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border"
-                                />
+                                <input type="number" min={1} value={sheet.headerRow} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, headerRow: Number(e.target.value) }; setNormalizedDSConfig(updated); }} className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border" />
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">데이터시작행</label>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={sheet.dataStartRow}
-                                  onChange={(e) => {
-                                    const updated = { ...normalizedDSConfig };
-                                    const idx = updated.sheets.findIndex(s => s.id === sheet.id);
-                                    updated.sheets[idx] = { ...sheet, dataStartRow: Number(e.target.value) };
-                                    setNormalizedDSConfig(updated);
-                                  }}
-                                  className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border"
-                                />
+                                <input type="number" min={1} value={sheet.dataStartRow} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, dataStartRow: Number(e.target.value) }; setNormalizedDSConfig(updated); }} className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border" />
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">스프레드시트 ID</label>
-                                <input
-                                  type="text"
-                                  value={sheet.spreadsheetId}
-                                  onChange={(e) => {
-                                    const updated = { ...normalizedDSConfig };
-                                    const idx = updated.sheets.findIndex(s => s.id === sheet.id);
-                                    updated.sheets[idx] = { ...sheet, spreadsheetId: e.target.value };
-                                    setNormalizedDSConfig(updated);
-                                  }}
-                                  className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border font-mono text-xs"
-                                />
+                                <input type="text" value={sheet.spreadsheetId} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, spreadsheetId: e.target.value }; setNormalizedDSConfig(updated); }} className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border font-mono text-xs" />
                               </div>
                             </div>
-                            {/* 컬럼 매핑 테이블 */}
                             <div>
                               <h5 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">컬럼 매핑 ({sheet.columns.length}개)</h5>
                               <div className="max-h-48 overflow-auto rounded border dark:border-gray-700">
@@ -685,25 +434,11 @@ export const SettingsView: React.FC = () => {
                                       <tr key={ci} className="border-t dark:border-gray-700">
                                         <td className="px-2 py-1 font-mono text-blue-600 dark:text-blue-400">{col.key}</td>
                                         <td className="px-2 py-1 text-center">
-                                          <input
-                                            type="text"
-                                            value={col.column}
-                                            onChange={(e) => {
-                                              const updated = { ...normalizedDSConfig };
-                                              const si = updated.sheets.findIndex(s => s.id === sheet.id);
-                                              const cols = [...updated.sheets[si].columns];
-                                              cols[ci] = { ...cols[ci], column: e.target.value };
-                                              updated.sheets[si] = { ...updated.sheets[si], columns: cols };
-                                              setNormalizedDSConfig(updated);
-                                            }}
-                                            className="w-12 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 p-0.5 border"
-                                          />
+                                          <input type="text" value={col.column} onChange={(e) => { const updated = { ...normalizedDSConfig }; const si = updated.sheets.findIndex(s => s.id === sheet.id); const cols = [...updated.sheets[si].columns]; cols[ci] = { ...cols[ci], column: e.target.value }; updated.sheets[si] = { ...updated.sheets[si], columns: cols }; setNormalizedDSConfig(updated); }} className="w-12 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 p-0.5 border" />
                                         </td>
                                         <td className="px-2 py-1 text-gray-600 dark:text-gray-400">{col.label}</td>
                                         <td className="px-2 py-1 text-center">
-                                          <span className={`px-1.5 py-0.5 rounded ${col.type === 'number' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : col.type === 'date' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
-                                            {col.type}
-                                          </span>
+                                          <span className={`px-1.5 py-0.5 rounded ${col.type === 'number' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : col.type === 'date' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>{col.type}</span>
                                         </td>
                                       </tr>
                                     ))}
@@ -711,21 +446,9 @@ export const SettingsView: React.FC = () => {
                                 </table>
                               </div>
                             </div>
-                            {sheet.notes && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400 italic">{sheet.notes}</p>
-                            )}
+                            {sheet.notes && <p className="text-xs text-gray-500 dark:text-gray-400 italic">{sheet.notes}</p>}
                             <div className="flex justify-end">
-                              <button
-                                onClick={() => {
-                                  saveDataSourceConfig(normalizedDSConfig);
-                                  const md = generateDataSourceMd(normalizedDSConfig);
-                                  saveMdToStorage(md);
-                                  setDsEditingSheet(null);
-                                }}
-                                className="px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors"
-                              >
-                                저장
-                              </button>
+                              <button onClick={() => { saveDataSourceConfig(normalizedDSConfig); const md = generateDataSourceMd(normalizedDSConfig); saveMdToStorage(md); setDsEditingSheet(null); }} className="px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors">저장</button>
                             </div>
                           </div>
                         </td>
@@ -740,112 +463,52 @@ export const SettingsView: React.FC = () => {
           {/* 액션 버튼 */}
           <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
             <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  saveDataSourceConfig(normalizedDSConfig);
-                  const md = generateDataSourceMd(normalizedDSConfig);
-                  saveMdToStorage(md);
-                  alert('설정이 저장되고 MD 문서가 업데이트되었습니다.');
-                }}
-                className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-300 rounded text-xs font-medium transition-colors flex items-center gap-1"
-              >
-                <span className="material-icons-outlined text-sm">save</span>
-                전체 저장 + MD 업데이트
+              <button onClick={() => { saveDataSourceConfig(normalizedDSConfig); const md = generateDataSourceMd(normalizedDSConfig); saveMdToStorage(md); alert('설정이 저장되고 MD 문서가 업데이트되었습니다.'); }} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-300 rounded text-xs font-medium transition-colors flex items-center gap-1">
+                <span className="material-icons-outlined text-sm">save</span>전체 저장 + MD 업데이트
               </button>
-              <button
-                onClick={() => {
-                  const md = generateDataSourceMd(normalizedDSConfig);
-                  setDsMdPreview(!dsMdPreview);
-                  saveMdToStorage(md);
-                }}
-                className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300 rounded text-xs font-medium transition-colors flex items-center gap-1"
-              >
-                <span className="material-icons-outlined text-sm">description</span>
-                {dsMdPreview ? 'MD 미리보기 닫기' : 'MD 미리보기'}
+              <button onClick={() => { const md = generateDataSourceMd(normalizedDSConfig); setDsMdPreview(!dsMdPreview); saveMdToStorage(md); }} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300 rounded text-xs font-medium transition-colors flex items-center gap-1">
+                <span className="material-icons-outlined text-sm">description</span>{dsMdPreview ? 'MD 미리보기 닫기' : 'MD 미리보기'}
               </button>
-              <button
-                onClick={() => {
-                  const md = generateDataSourceMd(normalizedDSConfig);
-                  const blob = new Blob([md], { type: 'text/markdown' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `google-sheets-data-${new Date().toISOString().slice(0, 10)}.md`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-                className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded text-xs font-medium transition-colors flex items-center gap-1"
-              >
-                <span className="material-icons-outlined text-sm">download</span>
-                MD 다운로드
+              <button onClick={() => { const md = generateDataSourceMd(normalizedDSConfig); const blob = new Blob([md], { type: 'text/markdown' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `google-sheets-data-${new Date().toISOString().slice(0, 10)}.md`; a.click(); URL.revokeObjectURL(url); }} className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded text-xs font-medium transition-colors flex items-center gap-1">
+                <span className="material-icons-outlined text-sm">download</span>MD 다운로드
               </button>
             </div>
-            <button
-              onClick={() => {
-                if (window.confirm('데이터 소스 설정을 기본값으로 초기화하시겠습니까?')) {
-                  const defaultConfig = resetDataSourceConfig();
-                  setNormalizedDSConfig(defaultConfig);
-                  const md = generateDataSourceMd(defaultConfig);
-                  saveMdToStorage(md);
-                }
-              }}
-              className="text-red-500 hover:text-red-600 dark:text-red-400 text-xs flex items-center"
-            >
-              <span className="material-icons-outlined text-sm mr-1">restart_alt</span>
-              초기화
+            <button onClick={() => { if (window.confirm('데이터 소스 설정을 기본값으로 초기화하시겠습니까?')) { const defaultConfig = resetDataSourceConfig(); setNormalizedDSConfig(defaultConfig); const md = generateDataSourceMd(defaultConfig); saveMdToStorage(md); } }} className="text-red-500 hover:text-red-600 dark:text-red-400 text-xs flex items-center">
+              <span className="material-icons-outlined text-sm mr-1">restart_alt</span>초기화
             </button>
           </div>
 
-          {/* MD 미리보기 */}
           {dsMdPreview && (
             <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700 max-h-96 overflow-auto">
-              <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
-                {generateDataSourceMd(normalizedDSConfig)}
-              </pre>
+              <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">{generateDataSourceMd(normalizedDSConfig)}</pre>
             </div>
           )}
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* AI Configuration */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/20">
-          <h3 className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center">
-            <span className="material-icons-outlined mr-2">psychology</span>
-            AI 이상 탐지 설정 (Anomaly Detection)
-          </h3>
-        </div>
-        <div className="p-6 space-y-6">
+      {/* ═══════════ 3. AI 이상 탐지 설정 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.ai}
+        title="AI 이상 탐지 설정 (Anomaly Detection)"
+        icon="psychology"
+        isOpen={openSections.has(SECTION_IDS.ai)}
+        onToggle={() => toggleSection(SECTION_IDS.ai)}
+        headerBg="bg-indigo-50 dark:bg-indigo-900/20"
+        headerTextColor="text-indigo-900 dark:text-indigo-200"
+      >
+        <div className="space-y-6">
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                탐지 민감도 (Sensitivity)
-              </label>
-              <span className="text-sm font-bold text-primary dark:text-green-400">
-                {aiSensitivity}%
-              </span>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">탐지 민감도 (Sensitivity)</label>
+              <span className="text-sm font-bold text-primary dark:text-green-400">{aiSensitivity}%</span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={aiSensitivity}
-              onChange={e => setAiSensitivity(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              민감도를 높이면 작은 변동에도 알림이 발생합니다. (권장: 75~85%)
-            </p>
+            <input type="range" min="0" max="100" value={aiSensitivity} onChange={e => setAiSensitivity(Number(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary" />
+            <p className="text-xs text-gray-500 mt-2">민감도를 높이면 작은 변동에도 알림이 발생합니다. (권장: 75~85%)</p>
           </div>
-
           <div className="flex items-center justify-between py-4 border-t border-gray-100 dark:border-gray-700">
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
-                자동 BOM 학습 승인
-              </p>
-              <p className="text-xs text-gray-500">
-                AI가 95% 이상 확신할 때 표준 BOM을 자동 업데이트합니다.
-              </p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">자동 BOM 학습 승인</p>
+              <p className="text-xs text-gray-500">AI가 95% 이상 확신할 때 표준 BOM을 자동 업데이트합니다.</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" className="sr-only peer" />
@@ -853,829 +516,571 @@ export const SettingsView: React.FC = () => {
             </label>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* Inventory Rules */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          <h3 className="font-bold text-gray-900 dark:text-white flex items-center">
-            <span className="material-icons-outlined mr-2">inventory_2</span>
-            재고 및 원가 기준 (Inventory & Cost Rules)
-          </h3>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ═══════════ 4. 재고 및 원가 기준 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.inventoryCost}
+        title="재고 및 원가 기준 (Inventory & Cost Rules)"
+        icon="inventory_2"
+        isOpen={openSections.has(SECTION_IDS.inventoryCost)}
+        onToggle={() => toggleSection(SECTION_IDS.inventoryCost)}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              안전재고 산출 기준일수
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">안전재고 산출 기준일수</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={safetyDays}
-                onChange={e => setSafetyDays(Number(e.target.value))}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border"
-              />
+              <input type="number" value={safetyDays} onChange={e => setSafetyDays(Number(e.target.value))} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">일</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              일 평균 출고량 × {safetyDays}일분을 안전재고로 설정합니다.
-            </p>
+            <p className="text-xs text-gray-500 mt-1">일 평균 출고량 × {safetyDays}일분을 안전재고로 설정합니다.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              저마진 경고 알림 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">저마진 경고 알림 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={marginAlert}
-                onChange={e => setMarginAlert(Number(e.target.value))}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm p-2 border"
-              />
+              <input type="number" value={marginAlert} onChange={e => setMarginAlert(Number(e.target.value))} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              마진율이 {marginAlert}% 미만일 경우 대시보드에 경고를 표시합니다.
-            </p>
+            <p className="text-xs text-gray-500 mt-1">마진율이 {marginAlert}% 미만일 경우 대시보드에 경고를 표시합니다.</p>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 원가 관련 설정 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-orange-50 dark:bg-orange-900/20">
-          <h3 className="font-bold text-orange-900 dark:text-orange-200 flex items-center">
-            <span className="material-icons-outlined mr-2">calculate</span>
-            원가 관련 설정
-          </h3>
-          <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
-            이익률, 폐기 단가, 경비 비율 등 원가 계산에 사용되는 기준값입니다.
-          </p>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ═══════════ 5. 원가 관련 설정 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.costConfig}
+        title="원가 관련 설정"
+        icon="calculate"
+        isOpen={openSections.has(SECTION_IDS.costConfig)}
+        onToggle={() => toggleSection(SECTION_IDS.costConfig)}
+        headerBg="bg-orange-50 dark:bg-orange-900/20"
+        headerTextColor="text-orange-900 dark:text-orange-200"
+        subtitle="이익률, 폐기 단가, 경비 비율 등 원가 계산에 사용되는 기준값입니다."
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              기본 이익률
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 이익률</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={Math.round(config.defaultMarginRate * 100)}
-                onChange={e => updateConfig({ defaultMarginRate: Number(e.target.value) / 100 })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={Math.round(draft.defaultMarginRate * 100)} onChange={e => updateDraft({ defaultMarginRate: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">실제 비용 데이터 없을 때 사용하는 추정 마진율</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              폐기 기본 단가
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">폐기 기본 단가</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="100"
-                min="0"
-                value={config.wasteUnitCost}
-                onChange={e => updateConfig({ wasteUnitCost: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
-              />
+              <input type="number" step="100" min="0" value={draft.wasteUnitCost} onChange={e => updateDraft({ wasteUnitCost: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">원/개</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">품목별 단가가 없을 때 사용하는 기본 폐기 비용</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              노무비 추정 비율
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">노무비 추정 비율</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={Math.round(config.laborCostRatio * 100)}
-                onChange={e => updateConfig({ laborCostRatio: Number(e.target.value) / 100 })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={Math.round(draft.laborCostRatio * 100)} onChange={e => updateDraft({ laborCostRatio: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">총 원가 대비 노무비 추정 비율 (실데이터 없을 때)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              간접 경비 비율
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">간접 경비 비율</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={Math.round(config.overheadRatio * 100)}
-                onChange={e => updateConfig({ overheadRatio: Number(e.target.value) / 100 })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={Math.round(draft.overheadRatio * 100)} onChange={e => updateDraft({ overheadRatio: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">구매비 대비 기타 간접 경비 비율</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              월 고정경비
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">월 고정경비</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="10000"
-                min="0"
-                value={config.monthlyFixedOverhead}
-                onChange={e => updateConfig({ monthlyFixedOverhead: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
-              />
+              <input type="number" step="10000" min="0" value={draft.monthlyFixedOverhead} onChange={e => updateDraft({ monthlyFixedOverhead: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">원</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              재고 보유비 비율
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고 보유비 비율</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={Math.round(config.holdingCostRate * 100)}
-                onChange={e => updateConfig({ holdingCostRate: Number(e.target.value) / 100 })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={Math.round(draft.holdingCostRate * 100)} onChange={e => updateDraft({ holdingCostRate: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">단가 대비 연간 재고 보유비 비율</p>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 재고 분류 기준 (ABC-XYZ) */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-teal-50 dark:bg-teal-900/20">
-          <h3 className="font-bold text-teal-900 dark:text-teal-200 flex items-center">
-            <span className="material-icons-outlined mr-2">grid_view</span>
-            재고 분류 기준 (ABC-XYZ)
-          </h3>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ═══════════ 6. 재고 분류 기준 (ABC-XYZ) ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.abcXyz}
+        title="재고 분류 기준 (ABC-XYZ)"
+        icon="grid_view"
+        isOpen={openSections.has(SECTION_IDS.abcXyz)}
+        onToggle={() => toggleSection(SECTION_IDS.abcXyz)}
+        headerBg="bg-teal-50 dark:bg-teal-900/20"
+        headerTextColor="text-teal-900 dark:text-teal-200"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              ABC A등급 기준 (금액 비중)
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ABC A등급 기준 (금액 비중)</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="5"
-                min="0"
-                max="100"
-                value={config.abcClassAThreshold}
-                onChange={e => updateConfig({ abcClassAThreshold: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="5" min="0" max="100" value={draft.abcClassAThreshold} onChange={e => updateDraft({ abcClassAThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">상위 금액 비중이 이 값 이하인 품목을 A등급으로 분류</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              ABC B등급 기준 (금액 비중)
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ABC B등급 기준 (금액 비중)</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="5"
-                min="0"
-                max="100"
-                value={config.abcClassBThreshold}
-                onChange={e => updateConfig({ abcClassBThreshold: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="5" min="0" max="100" value={draft.abcClassBThreshold} onChange={e => updateDraft({ abcClassBThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              XYZ X등급 변동계수 상한
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">XYZ X등급 변동계수 상한</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="5"
-                value={config.xyzClassXThreshold}
-                onChange={e => updateConfig({ xyzClassXThreshold: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="0.1" min="0" max="5" value={draft.xyzClassXThreshold} onChange={e => updateDraft({ xyzClassXThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
             </div>
             <p className="text-xs text-gray-500 mt-1">변동계수(CV)가 이 값 이하이면 X등급 (안정 수요)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              XYZ Y등급 변동계수 상한
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">XYZ Y등급 변동계수 상한</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="5"
-                value={config.xyzClassYThreshold}
-                onChange={e => updateConfig({ xyzClassYThreshold: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="0.1" min="0" max="5" value={draft.xyzClassYThreshold} onChange={e => updateDraft({ xyzClassYThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
             </div>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 이상 감지 기준 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-red-50 dark:bg-red-900/20">
-          <h3 className="font-bold text-red-900 dark:text-red-200 flex items-center">
-            <span className="material-icons-outlined mr-2">notification_important</span>
-            이상 감지 기준
-          </h3>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ═══════════ 7. 이상 감지 기준 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.anomaly}
+        title="이상 감지 기준"
+        icon="notification_important"
+        isOpen={openSections.has(SECTION_IDS.anomaly)}
+        onToggle={() => toggleSection(SECTION_IDS.anomaly)}
+        headerBg="bg-red-50 dark:bg-red-900/20"
+        headerTextColor="text-red-900 dark:text-red-200"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              폐기율 경고 임계값
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">폐기율 경고 임계값</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                max="100"
-                value={config.wasteThresholdPct}
-                onChange={e => updateConfig({ wasteThresholdPct: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="0.5" min="0" max="100" value={draft.wasteThresholdPct} onChange={e => updateDraft({ wasteThresholdPct: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 비율을 초과하면 폐기 경고 발생</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              레시피 오차 허용률
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">레시피 오차 허용률</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={config.recipeVarianceTolerance}
-                onChange={e => updateConfig({ recipeVarianceTolerance: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={draft.recipeVarianceTolerance} onChange={e => updateDraft({ recipeVarianceTolerance: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              이상 감지 주의 임계값
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상 감지 주의 임계값</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={config.anomalyWarningThreshold}
-                onChange={e => updateConfig({ anomalyWarningThreshold: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={draft.anomalyWarningThreshold} onChange={e => updateDraft({ anomalyWarningThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              이상 감지 위험 임계값
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상 감지 위험 임계값</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={config.anomalyCriticalThreshold}
-                onChange={e => updateConfig({ anomalyCriticalThreshold: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={draft.anomalyCriticalThreshold} onChange={e => updateDraft({ anomalyCriticalThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              수율 저하 허용률
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">수율 저하 허용률</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                max="100"
-                value={config.yieldDropTolerance}
-                onChange={e => updateConfig({ yieldDropTolerance: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="0.5" min="0" max="100" value={draft.yieldDropTolerance} onChange={e => updateDraft({ yieldDropTolerance: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              성능 허용 오차
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">성능 허용 오차</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={config.performanceTolerance}
-                onChange={e => updateConfig({ performanceTolerance: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={draft.performanceTolerance} onChange={e => updateDraft({ performanceTolerance: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 노무비 관리 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
-          <h3 className="font-bold text-purple-900 dark:text-purple-200 flex items-center">
-            <span className="material-icons-outlined mr-2">groups</span>
-            노무비 관리
-          </h3>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ═══════════ 8. 노무비 관리 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.labor}
+        title="노무비 관리"
+        icon="groups"
+        isOpen={openSections.has(SECTION_IDS.labor)}
+        onToggle={() => toggleSection(SECTION_IDS.labor)}
+        headerBg="bg-purple-50 dark:bg-purple-900/20"
+        headerTextColor="text-purple-900 dark:text-purple-200"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              반별 평균 인건비
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">반별 평균 인건비</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1000"
-                min="0"
-                value={config.avgHourlyWage}
-                onChange={e => updateConfig({ avgHourlyWage: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1000" min="0" value={draft.avgHourlyWage} onChange={e => updateDraft({ avgHourlyWage: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">원/시간</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              초과근무 할증률
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">초과근무 할증률</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.1"
-                min="1"
-                max="5"
-                value={config.overtimeMultiplier}
-                onChange={e => updateConfig({ overtimeMultiplier: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="0.1" min="1" max="5" value={draft.overtimeMultiplier} onChange={e => updateDraft({ overtimeMultiplier: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">배</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">기본급 대비 초과근무 할증 배수</p>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 발주 파라미터 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-cyan-50 dark:bg-cyan-900/20">
-          <h3 className="font-bold text-cyan-900 dark:text-cyan-200 flex items-center">
-            <span className="material-icons-outlined mr-2">local_shipping</span>
-            발주 파라미터
-          </h3>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ═══════════ 9. 발주 파라미터 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.orderParams}
+        title="발주 파라미터"
+        icon="local_shipping"
+        isOpen={openSections.has(SECTION_IDS.orderParams)}
+        onToggle={() => toggleSection(SECTION_IDS.orderParams)}
+        headerBg="bg-cyan-50 dark:bg-cyan-900/20"
+        headerTextColor="text-cyan-900 dark:text-cyan-200"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              기본 리드타임
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 리드타임</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="1"
-                max="90"
-                value={config.defaultLeadTime}
-                onChange={e => updateConfig({ defaultLeadTime: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="1" max="90" value={draft.defaultLeadTime} onChange={e => updateDraft({ defaultLeadTime: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">일</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              리드타임 표준편차
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">리드타임 표준편차</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                max="30"
-                value={config.leadTimeStdDev}
-                onChange={e => updateConfig({ leadTimeStdDev: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="0.5" min="0" max="30" value={draft.leadTimeStdDev} onChange={e => updateDraft({ leadTimeStdDev: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">일</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">납품기간 변동성 (클수록 안전재고 증가)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              기본 서비스 수준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 서비스 수준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="50"
-                max="99"
-                value={config.defaultServiceLevel}
-                onChange={e => updateConfig({ defaultServiceLevel: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="50" max="99" value={draft.defaultServiceLevel} onChange={e => updateDraft({ defaultServiceLevel: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">품절 방지 목표 확률 (높을수록 안전재고 증가)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              주문 비용 (건당)
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">주문 비용 (건당)</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="5000"
-                min="0"
-                value={config.orderCost}
-                onChange={e => updateConfig({ orderCost: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="5000" min="0" value={draft.orderCost} onChange={e => updateDraft({ orderCost: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">원</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">EOQ 계산에 사용되는 1회 주문 비용</p>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 뷰 표시 임계값 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/20">
-          <h3 className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center">
-            <span className="material-icons-outlined mr-2">tune</span>
-            뷰 표시 임계값
-          </h3>
-          <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">각 대시보드 화면의 색상 분기·경고 기준값</p>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* ═══════════ 10. 뷰 표시 임계값 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.viewThresholds}
+        title="뷰 표시 임계값"
+        icon="tune"
+        isOpen={openSections.has(SECTION_IDS.viewThresholds)}
+        onToggle={() => toggleSection(SECTION_IDS.viewThresholds)}
+        headerBg="bg-indigo-50 dark:bg-indigo-900/20"
+        headerTextColor="text-indigo-900 dark:text-indigo-200"
+        subtitle="각 대시보드 화면의 색상 분기·경고 기준값"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              마진율 양호 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">마진율 양호 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={config.profitMarginGood}
-                onChange={e => updateConfig({ profitMarginGood: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={draft.profitMarginGood} onChange={e => updateDraft({ profitMarginGood: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 값 이상이면 녹색(양호)으로 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              단가상승 경고 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">단가상승 경고 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={config.priceIncreaseThreshold}
-                onChange={e => updateConfig({ priceIncreaseThreshold: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" max="100" value={draft.priceIncreaseThreshold} onChange={e => updateDraft({ priceIncreaseThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 값 이상 상승한 원재료를 경고 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              이상점수 주의 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 주의 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="5"
-                min="0"
-                max="100"
-                value={config.anomalyScoreWarning}
-                onChange={e => updateConfig({ anomalyScoreWarning: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="5" min="0" max="100" value={draft.anomalyScoreWarning} onChange={e => updateDraft({ anomalyScoreWarning: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">점</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 점수 이상이면 주의(주황) 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              이상점수 고위험 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 고위험 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="5"
-                min="0"
-                max="100"
-                value={config.anomalyScoreHigh}
-                onChange={e => updateConfig({ anomalyScoreHigh: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="5" min="0" max="100" value={draft.anomalyScoreHigh} onChange={e => updateDraft({ anomalyScoreHigh: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">점</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">이 점수 이상이면 고위험으로 분류</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              이상점수 위험 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 위험 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="5"
-                min="0"
-                max="100"
-                value={config.anomalyScoreCritical}
-                onChange={e => updateConfig({ anomalyScoreCritical: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="5" min="0" max="100" value={draft.anomalyScoreCritical} onChange={e => updateDraft({ anomalyScoreCritical: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">점</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">이 점수 이상이면 위험(빨강) 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              재고일수 긴급 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고일수 긴급 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                value={config.stockDaysUrgent}
-                onChange={e => updateConfig({ stockDaysUrgent: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" value={draft.stockDaysUrgent} onChange={e => updateDraft({ stockDaysUrgent: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">일</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 일수 미만이면 긴급(빨강) 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              재고일수 주의 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고일수 주의 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                value={config.stockDaysWarning}
-                onChange={e => updateConfig({ stockDaysWarning: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="1" min="0" value={draft.stockDaysWarning} onChange={e => updateDraft({ stockDaysWarning: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">일</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">이 일수 미만이면 주의(주황) 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              저회전 판단 기준
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">저회전 판단 기준</label>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={config.lowTurnoverThreshold}
-                onChange={e => updateConfig({ lowTurnoverThreshold: Number(e.target.value) })}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border"
-              />
+              <input type="number" step="0.1" min="0" value={draft.lowTurnoverThreshold} onChange={e => updateDraft({ lowTurnoverThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
               <span className="text-sm text-gray-500">회전율</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 값 미만이면 저회전 품목으로 분류</p>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 채널 이익 계산 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <span className="material-icons-outlined text-teal-500">calculate</span>
-          채널 이익 계산 설정
-        </h3>
+      {/* ═══════════ 11. 채널 이익 계산 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.channelProfit}
+        title="채널 이익 계산 설정"
+        icon="calculate"
+        isOpen={openSections.has(SECTION_IDS.channelProfit)}
+        onToggle={() => toggleSection(SECTION_IDS.channelProfit)}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">평균 주문 단가 (원)</label>
-            <input type="number" value={config.averageOrderValue} onChange={e => updateConfig('averageOrderValue', Number(e.target.value))} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            <input type="number" value={draft.averageOrderValue} onChange={e => updateDraft({ averageOrderValue: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
             <p className="text-xs text-gray-500 mt-1">건당 변동비 산출에 사용 (주문 건수 = 매출 / 평균단가)</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">기본 이익률 (%)</label>
-            <input type="number" step="0.01" value={Math.round(config.defaultMarginRate * 100)} onChange={e => updateConfig('defaultMarginRate', Number(e.target.value) / 100)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            <input type="number" step="0.01" value={Math.round(draft.defaultMarginRate * 100)} onChange={e => updateDraft({ defaultMarginRate: Number(e.target.value) / 100 })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
             <p className="text-xs text-gray-500 mt-1">구매 데이터 없을 때 사용하는 추정 이익률</p>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 채널 정산주기 설정 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <span className="material-icons-outlined text-purple-500">schedule</span>
-          채널 정산주기 설정
-        </h3>
-        <p className="text-xs text-gray-500 mb-4">각 채널의 매출 입금까지 소요되는 일수를 설정합니다. 현금흐름 분석에 반영됩니다.</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">자사몰 (일)</label>
-            <input type="number" value={config.channelCollectionDaysJasa} onChange={e => updateConfig({ channelCollectionDaysJasa: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
-            <p className="text-xs text-gray-500 mt-1">0 = 즉시 입금</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">쿠팡 (일)</label>
-            <input type="number" value={config.channelCollectionDaysCoupang} onChange={e => updateConfig({ channelCollectionDaysCoupang: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">컬리 (일)</label>
-            <input type="number" value={config.channelCollectionDaysKurly} onChange={e => updateConfig({ channelCollectionDaysKurly: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+      {/* ═══════════ 12. 채널 정산주기 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.channelSettlement}
+        title="채널 정산주기 설정"
+        icon="schedule"
+        isOpen={openSections.has(SECTION_IDS.channelSettlement)}
+        onToggle={() => toggleSection(SECTION_IDS.channelSettlement)}
+      >
+        <div>
+          <p className="text-xs text-gray-500 mb-4">각 채널의 매출 입금까지 소요되는 일수를 설정합니다. 현금흐름 분석에 반영됩니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">자사몰 (일)</label>
+              <input type="number" value={draft.channelCollectionDaysJasa} onChange={e => updateDraft({ channelCollectionDaysJasa: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+              <p className="text-xs text-gray-500 mt-1">0 = 즉시 입금</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">쿠팡 (일)</label>
+              <input type="number" value={draft.channelCollectionDaysCoupang} onChange={e => updateDraft({ channelCollectionDaysCoupang: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">컬리 (일)</label>
+              <input type="number" value={draft.channelCollectionDaysKurly} onChange={e => updateDraft({ channelCollectionDaysKurly: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+            </div>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 월간 예산 설정 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <span className="material-icons-outlined text-orange-500">account_balance_wallet</span>
-          월간 예산 설정
-        </h3>
-        <p className="text-xs text-gray-500 mb-4">비용 요소별 월간 예산을 설정합니다. 예산 대비 실적 분석에 활용됩니다.</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">원재료 예산 (원)</label>
-            <input type="number" value={config.budgetRawMaterial} onChange={e => updateConfig({ budgetRawMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">부재료 예산 (원)</label>
-            <input type="number" value={config.budgetSubMaterial} onChange={e => updateConfig({ budgetSubMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">노무비 예산 (원)</label>
-            <input type="number" value={config.budgetLabor} onChange={e => updateConfig({ budgetLabor: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">경비 예산 (원)</label>
-            <input type="number" value={config.budgetOverhead} onChange={e => updateConfig({ budgetOverhead: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+      {/* ═══════════ 13. 월간 예산 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.budget}
+        title="월간 예산 설정"
+        icon="account_balance_wallet"
+        isOpen={openSections.has(SECTION_IDS.budget)}
+        onToggle={() => toggleSection(SECTION_IDS.budget)}
+      >
+        <div>
+          <p className="text-xs text-gray-500 mb-4">비용 요소별 월간 예산을 설정합니다. 예산 대비 실적 분석에 활용됩니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">원재료 예산 (원)</label>
+              <input type="number" value={draft.budgetRawMaterial} onChange={e => updateDraft({ budgetRawMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">부재료 예산 (원)</label>
+              <input type="number" value={draft.budgetSubMaterial} onChange={e => updateDraft({ budgetSubMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">노무비 예산 (원)</label>
+              <input type="number" value={draft.budgetLabor} onChange={e => updateDraft({ budgetLabor: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">경비 예산 (원)</label>
+              <input type="number" value={draft.budgetOverhead} onChange={e => updateDraft({ budgetOverhead: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            </div>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 노무비 관리 */}
-      <LaborRecordAdmin />
+      {/* ═══════════ 14. 노무비 기록 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.laborRecords}
+        title="노무비 기록 관리"
+        icon="badge"
+        isOpen={openSections.has(SECTION_IDS.laborRecords)}
+        onToggle={() => toggleSection(SECTION_IDS.laborRecords)}
+        headerBg="bg-purple-50 dark:bg-purple-900/20"
+        headerTextColor="text-purple-900 dark:text-purple-200"
+      >
+        <LaborRecordAdmin />
+      </CollapsibleSection>
 
-      {/* 채널 비용 관리 */}
-      <ChannelCostAdmin />
+      {/* ═══════════ 15. 채널 비용 관리 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.channelCosts}
+        title="채널 비용 관리"
+        icon="store"
+        isOpen={openSections.has(SECTION_IDS.channelCosts)}
+        onToggle={() => toggleSection(SECTION_IDS.channelCosts)}
+      >
+        <ChannelCostAdmin />
+      </CollapsibleSection>
 
-      {/* 독립채산제 목표 설정 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
-          <h3 className="font-bold text-purple-900 dark:text-purple-200 flex items-center">
-            <span className="material-icons-outlined mr-2">emoji_events</span>
-            독립채산제 목표 설정
-          </h3>
-          <p className="text-xs text-purple-700 dark:text-purple-400 mt-1">
-            매출 구간별 경영 목표를 설정합니다. 대시보드에서 달성률을 점수화하여 표시합니다.
-          </p>
-        </div>
-        <div className="p-4 space-y-3">
+      {/* ═══════════ 16. 독립채산제 목표 설정 (통합 테이블) ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.profitCenter}
+        title="독립채산제 목표 설정"
+        icon="emoji_events"
+        isOpen={openSections.has(SECTION_IDS.profitCenter)}
+        onToggle={() => toggleSection(SECTION_IDS.profitCenter)}
+        headerBg="bg-purple-50 dark:bg-purple-900/20"
+        headerTextColor="text-purple-900 dark:text-purple-200"
+        subtitle="매출 구간별 경영 목표를 설정합니다. 금액 수정 시 배수가 자동 재계산됩니다."
+      >
+        <div className="space-y-3">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                  <th className="text-left py-2 px-2">매출 구간</th>
-                  <th className="text-center py-2 px-2">생산/노무비<br/><span className="text-[10px] font-normal">(배수)</span></th>
-                  <th className="text-center py-2 px-2">매출/재료비<br/><span className="text-[10px] font-normal">(배수)</span></th>
-                  <th className="text-center py-2 px-2">매출/경비<br/><span className="text-[10px] font-normal">(배수)</span></th>
-                  <th className="text-center py-2 px-2">영업이익률<br/><span className="text-[10px] font-normal">(%)</span></th>
-                  <th className="text-center py-2 px-2">폐기율<br/><span className="text-[10px] font-normal">(%)</span></th>
-                  <th className="text-center py-2 px-2 w-10"></th>
+                  <th className="text-left py-2 px-1.5">구간</th>
+                  <th className="text-center py-2 px-1.5">매출<br/><span className="text-[10px] font-normal">(권장판매가)</span></th>
+                  <th className="text-center py-2 px-1.5">매출<br/><span className="text-[10px] font-normal">(생산)</span></th>
+                  <th className="text-center py-2 px-1.5">원재료비</th>
+                  <th className="text-center py-2 px-1.5">부재료비</th>
+                  <th className="text-center py-2 px-1.5">노무비</th>
+                  <th className="text-center py-2 px-1.5">경비</th>
+                  <th className="text-center py-2 px-1.5">이익률<br/><span className="text-[10px] font-normal">(%)</span></th>
+                  <th className="text-center py-2 px-1.5">폐기율<br/><span className="text-[10px] font-normal">(%)</span></th>
+                  <th className="text-center py-2 px-1.5 w-8"></th>
                 </tr>
               </thead>
               <tbody>
-                {(config.profitCenterGoals || []).map((goal: ProfitCenterGoal, idx: number) => (
-                  <tr key={idx} className="border-b border-gray-50 dark:border-gray-800">
-                    <td className="py-1.5 px-2">
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          step="1"
-                          min="1"
-                          value={Math.round(goal.revenueBracket / 100000000)}
-                          onChange={e => {
-                            const newGoals = [...config.profitCenterGoals];
-                            newGoals[idx] = { ...goal, revenueBracket: Number(e.target.value) * 100000000, label: `${e.target.value}억` };
-                            updateConfig({ profitCenterGoals: newGoals });
-                          }}
-                          className="w-16 text-right rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
-                        />
-                        <span className="text-xs text-gray-400">억</span>
-                      </div>
-                    </td>
-                    {(['productionToLabor', 'revenueToMaterial', 'revenueToExpense'] as const).map(key => (
-                      <td key={key} className="py-1.5 px-2 text-center">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          value={goal.targets[key]}
-                          onChange={e => {
-                            const newGoals = [...config.profitCenterGoals];
-                            newGoals[idx] = { ...goal, targets: { ...goal.targets, [key]: Number(e.target.value) } };
-                            updateConfig({ profitCenterGoals: newGoals });
-                          }}
-                          className="w-16 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
-                        />
+                {(draft.profitCenterGoals || []).map((goal: ProfitCenterGoal, idx: number) => {
+                  const rev = goal.revenueBracket;
+                  const absFields: { key: 'targetRecommendedRevenue' | 'targetProductionRevenue' | 'targetRawMaterialCost' | 'targetSubMaterialCost' | 'targetLaborCost' | 'targetOverheadCost'; multiplierKey?: 'revenueToRawMaterial' | 'revenueToSubMaterial' | 'productionToLabor' | 'revenueToExpense'; step: number }[] = [
+                    { key: 'targetRecommendedRevenue', step: 100 },
+                    { key: 'targetProductionRevenue', step: 100 },
+                    { key: 'targetRawMaterialCost', multiplierKey: 'revenueToRawMaterial', step: 10 },
+                    { key: 'targetSubMaterialCost', multiplierKey: 'revenueToSubMaterial', step: 10 },
+                    { key: 'targetLaborCost', multiplierKey: 'productionToLabor', step: 10 },
+                    { key: 'targetOverheadCost', multiplierKey: 'revenueToExpense', step: 10 },
+                  ];
+                  return (
+                    <tr key={idx} className="border-b border-gray-50 dark:border-gray-800">
+                      <td className="py-1.5 px-1.5">
+                        <div className="flex items-center gap-1">
+                          <input type="number" step="1" min="1" value={Math.round(rev / 100000000)} onChange={e => {
+                            const newGoals = [...draft.profitCenterGoals];
+                            const updated = { ...goal, revenueBracket: Number(e.target.value) * 100000000, label: `${e.target.value}억` };
+                            newGoals[idx] = deriveMultipliersFromTargets(updated);
+                            updateDraft({ profitCenterGoals: newGoals });
+                          }} className="w-14 text-right rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border" />
+                          <span className="text-xs text-gray-400">억</span>
+                        </div>
                       </td>
-                    ))}
-                    {(['profitMarginTarget', 'wasteRateTarget'] as const).map(key => (
-                      <td key={key} className="py-1.5 px-2 text-center">
-                        <input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          value={goal.targets[key]}
-                          onChange={e => {
-                            const newGoals = [...config.profitCenterGoals];
+                      {absFields.map(({ key, multiplierKey, step }) => {
+                        const val = goal.targets[key];
+                        const multiplier = multiplierKey ? goal.targets[multiplierKey] : null;
+                        return (
+                          <td key={key} className="py-1.5 px-1.5 text-center">
+                            <input
+                              type="number"
+                              step={step}
+                              min="0"
+                              value={val != null ? Math.round((val as number) / 10000) : ''}
+                              onChange={e => {
+                                const raw = Number(e.target.value) * 10000;
+                                const updated = { ...goal, targets: { ...goal.targets, [key]: raw } };
+                                const derived = deriveMultipliersFromTargets(updated);
+                                const newGoals = [...draft.profitCenterGoals];
+                                newGoals[idx] = derived;
+                                updateDraft({ profitCenterGoals: newGoals });
+                              }}
+                              placeholder="-"
+                              className="w-[4.5rem] text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
+                            />
+                            {multiplier != null && (
+                              <div className="text-[10px] text-gray-400 mt-0.5">&times;{multiplier}</div>
+                            )}
+                          </td>
+                        );
+                      })}
+                      {(['profitMarginTarget', 'wasteRateTarget'] as const).map(key => (
+                        <td key={key} className="py-1.5 px-1.5 text-center">
+                          <input type="number" step="0.5" min="0" value={goal.targets[key]} onChange={e => {
+                            const newGoals = [...draft.profitCenterGoals];
                             newGoals[idx] = { ...goal, targets: { ...goal.targets, [key]: Number(e.target.value) } };
-                            updateConfig({ profitCenterGoals: newGoals });
-                          }}
-                          className="w-16 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
-                        />
+                            updateDraft({ profitCenterGoals: newGoals });
+                          }} className="w-14 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border" />
+                        </td>
+                      ))}
+                      <td className="py-1.5 px-1.5 text-center">
+                        <button onClick={() => {
+                          const newGoals = draft.profitCenterGoals.filter((_: ProfitCenterGoal, i: number) => i !== idx);
+                          updateDraft({ profitCenterGoals: newGoals });
+                        }} className="text-gray-400 hover:text-red-500">
+                          <span className="material-icons-outlined text-sm">close</span>
+                        </button>
                       </td>
-                    ))}
-                    <td className="py-1.5 px-2 text-center">
-                      <button
-                        onClick={() => {
-                          const newGoals = config.profitCenterGoals.filter((_: ProfitCenterGoal, i: number) => i !== idx);
-                          updateConfig({ profitCenterGoals: newGoals });
-                        }}
-                        className="text-gray-400 hover:text-red-500"
-                      >
-                        <span className="material-icons-outlined text-sm">close</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+
+          <div className="text-xs text-gray-400 px-2">만원 단위 입력 | 배수(&times;)는 금액에서 자동 계산 (읽기전용)</div>
+
           <button
             onClick={() => {
               const newGoal: ProfitCenterGoal = {
-                revenueBracket: 1100000000,
-                label: '11억',
-                targets: { productionToLabor: 2.5, revenueToMaterial: 3.0, revenueToExpense: 7.0, profitMarginTarget: 20, wasteRateTarget: 2 },
+                revenueBracket: 1600000000,
+                label: '16억',
+                targets: {
+                  productionToLabor: 5.4, revenueToMaterial: 3.8, revenueToRawMaterial: 4.2, revenueToSubMaterial: 40,
+                  revenueToExpense: 10.0, profitMarginTarget: 22, wasteRateTarget: 2,
+                  targetRecommendedRevenue: 2280000000, targetProductionRevenue: 1140000000,
+                  targetRawMaterialCost: 380000000, targetSubMaterialCost: 40000000,
+                  targetLaborCost: 296000000, targetOverheadCost: 160000000,
+                },
               };
-              updateConfig({ profitCenterGoals: [...(config.profitCenterGoals || []), newGoal] });
+              updateDraft({ profitCenterGoals: [...(draft.profitCenterGoals || []), newGoal] });
             }}
             className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 flex items-center"
           >
@@ -1683,106 +1088,99 @@ export const SettingsView: React.FC = () => {
             매출 구간 추가
           </button>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 설정 내보내기/가져오기 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
-          <span className="material-icons-outlined text-indigo-500">import_export</span>
-          설정 내보내기/가져오기
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          비즈니스 설정, 채널 비용, 노무 기록, 데이터 소스 설정을 JSON 파일로 백업하거나 복원할 수 있습니다.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              const exportData = {
-                version: 1,
-                exportedAt: new Date().toISOString(),
-                businessConfig: JSON.parse(localStorage.getItem('ZCMS_BUSINESS_CONFIG') || '{}'),
-                channelCosts: JSON.parse(localStorage.getItem('ZCMS_CHANNEL_COSTS_V2') || '[]'),
-                laborRecords: JSON.parse(localStorage.getItem('ZCMS_LABOR_RECORDS') || '[]'),
-                dataSourceConfig: JSON.parse(localStorage.getItem('ZCMS_DATASOURCE_CONFIG') || '{}'),
-                normalizedDataSource: JSON.parse(localStorage.getItem('Z_CMS_DATA_SOURCE_CONFIG') || '{}'),
-                dataSourceMd: localStorage.getItem('Z_CMS_DATA_SOURCE_MD') || '',
-              };
-              const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `zcms-settings-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded-md text-sm font-medium transition-colors flex items-center"
-          >
-            <span className="material-icons-outlined text-sm mr-1">download</span>
-            JSON 내보내기
-          </button>
-          <button
-            onClick={() => importFileRef.current?.click()}
-            className="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 rounded-md text-sm font-medium transition-colors flex items-center"
-          >
-            <span className="material-icons-outlined text-sm mr-1">upload</span>
-            JSON 가져오기
-          </button>
-          <input
-            ref={importFileRef}
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = (ev) => {
-                try {
-                  const data = JSON.parse(ev.target?.result as string);
-                  if (!data.version || !data.businessConfig) {
-                    alert('올바른 Z-CMS 설정 파일이 아닙니다.');
-                    return;
+      {/* ═══════════ 17. 설정 내보내기/가져오기 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.exportImport}
+        title="설정 내보내기/가져오기"
+        icon="import_export"
+        isOpen={openSections.has(SECTION_IDS.exportImport)}
+        onToggle={() => toggleSection(SECTION_IDS.exportImport)}
+      >
+        <div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            비즈니스 설정, 채널 비용, 노무 기록, 데이터 소스 설정을 JSON 파일로 백업하거나 복원할 수 있습니다.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                const exportData = {
+                  version: 1,
+                  exportedAt: new Date().toISOString(),
+                  businessConfig: JSON.parse(localStorage.getItem('ZCMS_BUSINESS_CONFIG') || '{}'),
+                  channelCosts: JSON.parse(localStorage.getItem('ZCMS_CHANNEL_COSTS_V2') || '[]'),
+                  laborRecords: JSON.parse(localStorage.getItem('ZCMS_LABOR_RECORDS') || '[]'),
+                  dataSourceConfig: JSON.parse(localStorage.getItem('ZCMS_DATASOURCE_CONFIG') || '{}'),
+                  normalizedDataSource: JSON.parse(localStorage.getItem('Z_CMS_DATA_SOURCE_CONFIG') || '{}'),
+                  dataSourceMd: localStorage.getItem('Z_CMS_DATA_SOURCE_MD') || '',
+                };
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `zcms-settings-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded-md text-sm font-medium transition-colors flex items-center"
+            >
+              <span className="material-icons-outlined text-sm mr-1">download</span>
+              JSON 내보내기
+            </button>
+            <button
+              onClick={() => importFileRef.current?.click()}
+              className="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 rounded-md text-sm font-medium transition-colors flex items-center"
+            >
+              <span className="material-icons-outlined text-sm mr-1">upload</span>
+              JSON 가져오기
+            </button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  try {
+                    const data = JSON.parse(ev.target?.result as string);
+                    if (!data.version || !data.businessConfig) {
+                      alert('올바른 Z-CMS 설정 파일이 아닙니다.');
+                      return;
+                    }
+                    if (!window.confirm(`설정을 가져오시겠습니까?\n\n내보낸 날짜: ${data.exportedAt || '알 수 없음'}\n\n현재 설정이 덮어씌워집니다.`)) {
+                      return;
+                    }
+                    if (data.businessConfig && Object.keys(data.businessConfig).length > 0) localStorage.setItem('ZCMS_BUSINESS_CONFIG', JSON.stringify(data.businessConfig));
+                    if (data.channelCosts) localStorage.setItem('ZCMS_CHANNEL_COSTS_V2', JSON.stringify(data.channelCosts));
+                    if (data.laborRecords) localStorage.setItem('ZCMS_LABOR_RECORDS', JSON.stringify(data.laborRecords));
+                    if (data.dataSourceConfig && Object.keys(data.dataSourceConfig).length > 0) localStorage.setItem('ZCMS_DATASOURCE_CONFIG', JSON.stringify(data.dataSourceConfig));
+                    if (data.normalizedDataSource && Object.keys(data.normalizedDataSource).length > 0) localStorage.setItem('Z_CMS_DATA_SOURCE_CONFIG', JSON.stringify(data.normalizedDataSource));
+                    if (data.dataSourceMd) localStorage.setItem('Z_CMS_DATA_SOURCE_MD', data.dataSourceMd);
+                    alert('설정을 성공적으로 가져왔습니다. 페이지를 새로고침합니다.');
+                    window.location.reload();
+                  } catch {
+                    alert('파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해주세요.');
                   }
-                  if (!window.confirm(`설정을 가져오시겠습니까?\n\n내보낸 날짜: ${data.exportedAt || '알 수 없음'}\n\n현재 설정이 덮어씌워집니다.`)) {
-                    return;
-                  }
-                  if (data.businessConfig && Object.keys(data.businessConfig).length > 0) {
-                    localStorage.setItem('ZCMS_BUSINESS_CONFIG', JSON.stringify(data.businessConfig));
-                  }
-                  if (data.channelCosts) {
-                    localStorage.setItem('ZCMS_CHANNEL_COSTS_V2', JSON.stringify(data.channelCosts));
-                  }
-                  if (data.laborRecords) {
-                    localStorage.setItem('ZCMS_LABOR_RECORDS', JSON.stringify(data.laborRecords));
-                  }
-                  if (data.dataSourceConfig && Object.keys(data.dataSourceConfig).length > 0) {
-                    localStorage.setItem('ZCMS_DATASOURCE_CONFIG', JSON.stringify(data.dataSourceConfig));
-                  }
-                  if (data.normalizedDataSource && Object.keys(data.normalizedDataSource).length > 0) {
-                    localStorage.setItem('Z_CMS_DATA_SOURCE_CONFIG', JSON.stringify(data.normalizedDataSource));
-                  }
-                  if (data.dataSourceMd) {
-                    localStorage.setItem('Z_CMS_DATA_SOURCE_MD', data.dataSourceMd);
-                  }
-                  alert('설정을 성공적으로 가져왔습니다. 페이지를 새로고침합니다.');
-                  window.location.reload();
-                } catch {
-                  alert('파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해주세요.');
-                }
-              };
-              reader.readAsText(file);
-              e.target.value = '';
-            }}
-          />
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+              }}
+            />
+          </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {/* 설정 초기화 */}
+      {/* ═══════════ 설정 초기화 ═══════════ */}
       <div className="flex justify-end">
         <button
           onClick={() => {
             if (window.confirm('모든 비즈니스 설정을 기본값으로 초기화하시겠습니까?')) {
               resetConfig();
+              setDraft({ ...config });
             }
           }}
           className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-300 rounded-md text-sm font-medium transition-colors flex items-center"
@@ -1791,6 +1189,33 @@ export const SettingsView: React.FC = () => {
           비즈니스 설정 초기화
         </button>
       </div>
+
+      {/* ═══════════ 하단 고정 저장 바 ═══════════ */}
+      {isDirty && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+              <span className="material-icons-outlined text-lg">edit_note</span>
+              저장하지 않은 변경사항이 있습니다
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleDiscard}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors flex items-center gap-1"
+              >
+                <span className="material-icons-outlined text-sm">save</span>
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

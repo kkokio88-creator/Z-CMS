@@ -8,11 +8,40 @@ export interface ProfitCenterGoal {
   revenueBracket: number;  // 월매출 기준 (원)
   label: string;           // 표시 라벨
   targets: {
-    productionToLabor: number;    // 생산매출/노무비 목표배수
-    revenueToMaterial: number;    // 매출/재료비 목표배수
+    productionToLabor: number;    // 매출/노무비 목표배수
+    revenueToMaterial: number;    // 매출/재료비 목표배수 (레거시, 합산)
+    revenueToRawMaterial: number; // 매출/원재료 목표배수
+    revenueToSubMaterial: number; // 매출/부재료 목표배수
     revenueToExpense: number;     // 매출/경비 목표배수
     profitMarginTarget: number;   // 영업이익률 목표 (%)
     wasteRateTarget: number;      // 폐기율 목표 (%)
+    // 절대 목표금액 (구글시트 '목표' 시트 기준, 월 단위)
+    targetRecommendedRevenue?: number; // 매출_권장판매가
+    targetProductionRevenue?: number;  // 매출_생산
+    targetRawMaterialCost?: number;    // 원재료비
+    targetSubMaterialCost?: number;    // 부재료비
+    targetLaborCost?: number;          // 노무비
+    targetOverheadCost?: number;       // 경비
+  };
+}
+
+/** 절대 목표금액에서 배수를 자동 계산 */
+export function deriveMultipliersFromTargets(goal: ProfitCenterGoal): ProfitCenterGoal {
+  const t = goal.targets;
+  const rev = goal.revenueBracket;
+  if (!t.targetRawMaterialCost) return goal;
+  return {
+    ...goal,
+    targets: {
+      ...t,
+      revenueToRawMaterial: t.targetRawMaterialCost > 0 ? Math.round((rev / t.targetRawMaterialCost) * 100) / 100 : t.revenueToRawMaterial,
+      revenueToSubMaterial: t.targetSubMaterialCost && t.targetSubMaterialCost > 0 ? Math.round((rev / t.targetSubMaterialCost) * 100) / 100 : t.revenueToSubMaterial,
+      productionToLabor: t.targetLaborCost && t.targetLaborCost > 0 ? Math.round((rev / t.targetLaborCost) * 100) / 100 : t.productionToLabor,
+      revenueToExpense: t.targetOverheadCost && t.targetOverheadCost > 0 ? Math.round((rev / t.targetOverheadCost) * 100) / 100 : t.revenueToExpense,
+      revenueToMaterial: (t.targetRawMaterialCost || 0) + (t.targetSubMaterialCost || 0) > 0
+        ? Math.round((rev / ((t.targetRawMaterialCost || 0) + (t.targetSubMaterialCost || 0))) * 100) / 100
+        : t.revenueToMaterial,
+    },
   };
 }
 
@@ -234,39 +263,76 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
   stockDaysWarning: 7,
   lowTurnoverThreshold: 1.0,
 
-  // 독립채산제
+  // 독립채산제 — 구글시트 '목표' 시트 기준 (7개 구간)
   profitCenterGoals: [
     {
-      revenueBracket: 800000000,
-      label: '8억',
+      revenueBracket: 900000000, label: '9억',
       targets: {
-        productionToLabor: 2.0,
-        revenueToMaterial: 2.5,
-        revenueToExpense: 5.0,
-        profitMarginTarget: 15,
-        wasteRateTarget: 3,
+        productionToLabor: 4.15, revenueToMaterial: 3.61, revenueToRawMaterial: 3.97, revenueToSubMaterial: 39.69,
+        revenueToExpense: 7.26, profitMarginTarget: 5.6, wasteRateTarget: 3,
+        targetRecommendedRevenue: 1295849907, targetProductionRevenue: 647924953,
+        targetRawMaterialCost: 226773734, targetSubMaterialCost: 22677373,
+        targetLaborCost: 217000000, targetOverheadCost: 123997749,
       },
     },
     {
-      revenueBracket: 900000000,
-      label: '9억',
+      revenueBracket: 1000000000, label: '10억',
       targets: {
-        productionToLabor: 2.2,
-        revenueToMaterial: 2.7,
-        revenueToExpense: 6.0,
-        profitMarginTarget: 18,
-        wasteRateTarget: 2.5,
+        productionToLabor: 4.38, revenueToMaterial: 3.64, revenueToRawMaterial: 4.00, revenueToSubMaterial: 39.79,
+        revenueToExpense: 7.76, profitMarginTarget: 9.5, wasteRateTarget: 2.5,
+        targetRecommendedRevenue: 1436277552, targetProductionRevenue: 718138776,
+        targetRawMaterialCost: 249912294, targetSubMaterialCost: 25134857,
+        targetLaborCost: 228300000, targetOverheadCost: 128849163,
       },
     },
     {
-      revenueBracket: 1000000000,
-      label: '10억',
+      revenueBracket: 1100000000, label: '11억',
       targets: {
-        productionToLabor: 2.5,
-        revenueToMaterial: 3.0,
-        revenueToExpense: 7.0,
-        profitMarginTarget: 20,
-        wasteRateTarget: 2,
+        productionToLabor: 4.59, revenueToMaterial: 3.66, revenueToRawMaterial: 4.03, revenueToSubMaterial: 39.87,
+        revenueToExpense: 8.23, profitMarginTarget: 12.7, wasteRateTarget: 2.5,
+        targetRecommendedRevenue: 1576705197, targetProductionRevenue: 788352598,
+        targetRawMaterialCost: 272769999, targetSubMaterialCost: 27592341,
+        targetLaborCost: 239600000, targetOverheadCost: 133700578,
+      },
+    },
+    {
+      revenueBracket: 1200000000, label: '12억',
+      targets: {
+        productionToLabor: 4.78, revenueToMaterial: 3.69, revenueToRawMaterial: 4.06, revenueToSubMaterial: 39.93,
+        revenueToExpense: 8.66, profitMarginTarget: 15.4, wasteRateTarget: 2,
+        targetRecommendedRevenue: 1717132842, targetProductionRevenue: 858566421,
+        targetRawMaterialCost: 295346849, targetSubMaterialCost: 30049825,
+        targetLaborCost: 250900000, targetOverheadCost: 138551993,
+      },
+    },
+    {
+      revenueBracket: 1300000000, label: '13억',
+      targets: {
+        productionToLabor: 4.96, revenueToMaterial: 3.71, revenueToRawMaterial: 4.09, revenueToSubMaterial: 39.99,
+        revenueToExpense: 9.07, profitMarginTarget: 17.7, wasteRateTarget: 2,
+        targetRecommendedRevenue: 1857560487, targetProductionRevenue: 928780243,
+        targetRawMaterialCost: 317642843, targetSubMaterialCost: 32507309,
+        targetLaborCost: 262200000, targetOverheadCost: 143403407,
+      },
+    },
+    {
+      revenueBracket: 1400000000, label: '14억',
+      targets: {
+        productionToLabor: 5.12, revenueToMaterial: 3.73, revenueToRawMaterial: 4.12, revenueToSubMaterial: 40.04,
+        revenueToExpense: 9.44, profitMarginTarget: 19.6, wasteRateTarget: 2,
+        targetRecommendedRevenue: 1997988132, targetProductionRevenue: 998994066,
+        targetRawMaterialCost: 339657982, targetSubMaterialCost: 34964792,
+        targetLaborCost: 273500000, targetOverheadCost: 148254822,
+      },
+    },
+    {
+      revenueBracket: 1500000000, label: '15억',
+      targets: {
+        productionToLabor: 5.27, revenueToMaterial: 3.76, revenueToRawMaterial: 4.15, revenueToSubMaterial: 40.08,
+        revenueToExpense: 9.80, profitMarginTarget: 21.4, wasteRateTarget: 2,
+        targetRecommendedRevenue: 2138415777, targetProductionRevenue: 1069207889,
+        targetRawMaterialCost: 361392266, targetSubMaterialCost: 37422276,
+        targetLaborCost: 284800000, targetOverheadCost: 153106237,
       },
     },
   ],
@@ -274,12 +340,36 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
 
 const SETTINGS_STORAGE_KEY = 'ZCMS_BUSINESS_CONFIG';
 
+/** 기존 저장 설정에 새 필드가 없으면 자동 마이그레이션 */
+function migrateProfitCenterGoals(goals: ProfitCenterGoal[]): ProfitCenterGoal[] {
+  return goals.map(g => {
+    const t = g.targets;
+    if (t.revenueToRawMaterial == null || t.revenueToSubMaterial == null) {
+      // revenueToMaterial(합산배수)에서 파생: 원재료 ≈ 합산×1.08, 부재료 ≈ 합산×14.8
+      const base = t.revenueToMaterial || 2.7;
+      return {
+        ...g,
+        targets: {
+          ...t,
+          revenueToRawMaterial: t.revenueToRawMaterial ?? Math.round(base * 1.08 * 10) / 10,
+          revenueToSubMaterial: t.revenueToSubMaterial ?? Math.round(base * 14.8),
+        },
+      };
+    }
+    return g;
+  });
+}
+
 /** localStorage에서 저장된 설정을 로드 */
 export function loadBusinessConfig(): BusinessConfig {
   try {
     const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (saved) {
-      return { ...DEFAULT_BUSINESS_CONFIG, ...JSON.parse(saved) };
+      const parsed = { ...DEFAULT_BUSINESS_CONFIG, ...JSON.parse(saved) };
+      if (parsed.profitCenterGoals) {
+        parsed.profitCenterGoals = migrateProfitCenterGoals(parsed.profitCenterGoals);
+      }
+      return parsed;
     }
   } catch (e) {
     console.error('Failed to load business config:', e);

@@ -403,6 +403,7 @@ export interface ProfitCenterScoreMetric {
 export interface ProfitCenterScoreInsight {
   activeBracket: ProfitCenterGoal;
   monthlyRevenue: number;
+  calendarDays: number;
   scores: ProfitCenterScoreMetric[];
   overallScore: number;
 }
@@ -540,7 +541,7 @@ export function computeChannelRevenue(
     const cc = costMap.get(ch.name);
 
     // === 5단계 수익 구조 ===
-    // 현재 데이터(jasaPrice 등) = 정산매출
+    // jasaPrice 등 = 채널 매출 (정산매출)
     const settlementRevenue = ch.revenue;
     const discountRate = (cc?.discountRate ?? 0) / 100;
     const commissionRate = (cc?.commissionRate ?? 0) / 100;
@@ -995,7 +996,7 @@ export function computeProductionEfficiency(production: ProductionData[]): Produ
 
 const SUB_MATERIAL_KEYWORDS = ['포장', '박스', '비닐', '라벨', '테이프', '봉투', '스티커', '밴드', '용기', '캡', '뚜껑'];
 
-function isSubMaterial(productName: string): boolean {
+export function isSubMaterial(productName: string): boolean {
   return SUB_MATERIAL_KEYWORDS.some(kw => productName.includes(kw));
 }
 
@@ -2485,7 +2486,7 @@ export function computeAllInsights(
   );
 
   const profitCenterScore = computeProfitCenterScore(
-    channelRevenue, costBreakdown, wasteAnalysis, production, config
+    channelRevenue, costBreakdown, wasteAnalysis, production, config, purchases
   );
 
   const bomConsumptionAnomaly = (bomData.length > 0 && purchases.length > 0)
@@ -2518,23 +2519,30 @@ export function computeAllInsights(
 
 /**
  * 독립채산제 점수 계산
- * 현재 월매출에 해당하는 구간을 찾아 5개 지표를 목표 대비 점수화
+ * 현재 월매출에 해당하는 구간을 찾아 6개 지표를 목표 대비 100점 만점 점수화
+ * @param allPurchases 전체 구매 데이터 (원재료 일평균 소비 추정용, 구매 시점 편차 보정)
  */
 export function computeProfitCenterScore(
   channelRevenue: ChannelRevenueInsight | null,
   costBreakdown: CostBreakdownInsight | null,
   wasteAnalysis: WasteAnalysisInsight | null,
   production: ProductionData[],
-  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
+  allPurchases?: PurchaseData[]
 ): ProfitCenterScoreInsight | null {
   if (!channelRevenue || !costBreakdown) return null;
 
   const goals = config.profitCenterGoals;
   if (!goals || goals.length === 0) return null;
 
-  // 월매출 추정: 조회 기간 매출을 30일 기준으로 환산
-  const periodDays = channelRevenue.dailyTrend.length || 1;
-  const monthlyRevenue = Math.round(channelRevenue.totalRevenue * 30 / periodDays);
+  // 조회 기간 캘린더 일수
+  const dates = channelRevenue.dailyTrend.map(d => d.date).sort();
+  const calendarDays = dates.length >= 2
+    ? Math.max(1, Math.round((new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000) + 1)
+    : channelRevenue.dailyTrend.length || 1;
+
+  // 월매출 추정
+  const monthlyRevenue = Math.round(channelRevenue.totalRevenue * 30 / calendarDays);
 
   // 가장 가까운 하위 구간 선택
   const sorted = [...goals].sort((a, b) => a.revenueBracket - b.revenueBracket);
@@ -2549,16 +2557,36 @@ export function computeProfitCenterScore(
 
   const targets = activeBracket.targets;
   const comp = costBreakdown.composition;
-  const rawMaterial = comp.find(c => c.name === '원재료')?.value || 0;
-  const subMaterial = comp.find(c => c.name === '부재료')?.value || 0;
+  const periodRaw = comp.find(c => c.name === '원재료')?.value || 0;
+  const periodSub = comp.find(c => c.name === '부재료')?.value || 0;
   const laborCost = comp.find(c => c.name === '노무비')?.value || 0;
   const overheadCost = comp.find(c => c.name === '경비')?.value || 0;
-  const totalMaterial = rawMaterial + subMaterial;
-  const totalExpense = overheadCost;
-  const totalProduction = production.reduce((s, p) => s + (p.productionQty || 0), 0);
 
-  // 생산매출 추정 (생산 수량 기반)
-  const productionValue = channelRevenue.totalRevenue; // 근사값으로 매출 사용
+  // === 원재료 소비액 추정 (기초재고 + 구매 - 기말재고 근사) ===
+  // 전체 구매 데이터의 일평균 소비율로 기간 소비액 산출 (구매 시점 편차 보정)
+  let rawMaterial = periodRaw;
+  let subMaterial = periodSub;
+  if (allPurchases && allPurchases.length > 0) {
+    const allDates = allPurchases.map(p => p.date).sort();
+    const allSpan = allDates.length >= 2
+      ? Math.max(1, Math.round((new Date(allDates[allDates.length - 1]).getTime() - new Date(allDates[0]).getTime()) / 86400000) + 1)
+      : allPurchases.length;
+
+    let allRawTotal = 0, allSubTotal = 0;
+    allPurchases.forEach(p => {
+      if (isSubMaterial(p.productName)) { allSubTotal += p.total; }
+      else { allRawTotal += p.total; }
+    });
+
+    // 일평균 × 조회 기간 일수 = 기간 소비 추정액
+    if (allSpan > 0) {
+      rawMaterial = Math.round((allRawTotal / allSpan) * calendarDays);
+      subMaterial = Math.round((allSubTotal / allSpan) * calendarDays);
+    }
+  }
+
+  const totalExpense = overheadCost;
+  const productionValue = channelRevenue.totalRevenue;
 
   function getStatus(score: number): 'excellent' | 'good' | 'warning' | 'danger' {
     if (score >= 110) return 'excellent';
@@ -2567,43 +2595,46 @@ export function computeProfitCenterScore(
     return 'danger';
   }
 
-  // 1. 생산매출/노무비
+  // 점수 = actual / target × 100 (100점 만점, 100 초과 가능)
+  const safeScore = (actual: number, target: number) =>
+    target > 0 ? Math.round(actual / target * 100) : 0;
+
+  // 1. 매출/원재료
+  const actualRevToRaw = rawMaterial > 0 ? channelRevenue.totalRevenue / rawMaterial : 0;
+  const targetRevToRaw = targets.revenueToRawMaterial ?? (targets.revenueToMaterial * 1.08);
+
+  // 2. 매출/부재료
+  const actualRevToSub = subMaterial > 0 ? channelRevenue.totalRevenue / subMaterial : 0;
+  const targetRevToSub = targets.revenueToSubMaterial ?? (targets.revenueToMaterial * 14.8);
+
+  // 3. 매출/노무비
   const actualProdToLabor = laborCost > 0 ? productionValue / laborCost : 0;
-  const scoreProdToLabor = targets.productionToLabor > 0
-    ? Math.round(actualProdToLabor / targets.productionToLabor * 100) : 0;
 
-  // 2. 매출/재료비
-  const actualRevToMaterial = totalMaterial > 0 ? channelRevenue.totalRevenue / totalMaterial : 0;
-  const scoreRevToMaterial = targets.revenueToMaterial > 0
-    ? Math.round(actualRevToMaterial / targets.revenueToMaterial * 100) : 0;
-
-  // 3. 매출/경비
+  // 4. 매출/경비
   const actualRevToExpense = totalExpense > 0 ? channelRevenue.totalRevenue / totalExpense : 0;
-  const scoreRevToExpense = targets.revenueToExpense > 0
-    ? Math.round(actualRevToExpense / targets.revenueToExpense * 100) : 0;
 
-  // 4. 영업이익률
-  const totalCost = totalMaterial + laborCost + overheadCost;
+  // 5. 영업이익률
+  const totalCost = rawMaterial + subMaterial + laborCost + overheadCost;
   const operatingProfit = channelRevenue.totalRevenue - totalCost;
   const actualProfitMargin = channelRevenue.totalRevenue > 0
     ? (operatingProfit / channelRevenue.totalRevenue) * 100 : 0;
-  const scoreProfitMargin = targets.profitMarginTarget > 0
-    ? Math.round(actualProfitMargin / targets.profitMarginTarget * 100) : 0;
 
-  // 5. 폐기율 (역방향: 낮을수록 좋음)
+  // 6. 폐기율 (역방향: 낮을수록 좋음 → target/actual)
   const actualWasteRate = wasteAnalysis?.avgWasteRate ?? 0;
   const scoreWaste = actualWasteRate > 0 && targets.wasteRateTarget > 0
     ? Math.round(targets.wasteRateTarget / actualWasteRate * 100) : 100;
 
   const scores: ProfitCenterScoreMetric[] = [
-    { metric: '생산매출/노무비', target: targets.productionToLabor, actual: Math.round(actualProdToLabor * 100) / 100, score: scoreProdToLabor, status: getStatus(scoreProdToLabor) },
-    { metric: '매출/재료비', target: targets.revenueToMaterial, actual: Math.round(actualRevToMaterial * 100) / 100, score: scoreRevToMaterial, status: getStatus(scoreRevToMaterial) },
-    { metric: '매출/경비', target: targets.revenueToExpense, actual: Math.round(actualRevToExpense * 100) / 100, score: scoreRevToExpense, status: getStatus(scoreRevToExpense) },
-    { metric: '영업이익률', target: targets.profitMarginTarget, actual: Math.round(actualProfitMargin * 10) / 10, score: scoreProfitMargin, status: getStatus(scoreProfitMargin) },
-    { metric: '폐기율', target: targets.wasteRateTarget, actual: Math.round(actualWasteRate * 10) / 10, score: scoreWaste, status: getStatus(scoreWaste) },
+    { metric: '매출/원재료', target: Math.round(targetRevToRaw * 100) / 100, actual: Math.round(actualRevToRaw * 100) / 100, score: safeScore(actualRevToRaw, targetRevToRaw), status: getStatus(safeScore(actualRevToRaw, targetRevToRaw)) },
+    { metric: '매출/부재료', target: Math.round(targetRevToSub * 100) / 100, actual: Math.round(actualRevToSub * 100) / 100, score: safeScore(actualRevToSub, targetRevToSub), status: getStatus(safeScore(actualRevToSub, targetRevToSub)) },
+    { metric: '매출/노무비', target: Math.round(targets.productionToLabor * 100) / 100, actual: Math.round(actualProdToLabor * 100) / 100, score: safeScore(actualProdToLabor, targets.productionToLabor), status: getStatus(safeScore(actualProdToLabor, targets.productionToLabor)) },
+    { metric: '매출/경비', target: Math.round(targets.revenueToExpense * 100) / 100, actual: Math.round(actualRevToExpense * 100) / 100, score: safeScore(actualRevToExpense, targets.revenueToExpense), status: getStatus(safeScore(actualRevToExpense, targets.revenueToExpense)) },
+    { metric: '영업이익률', target: Math.round(targets.profitMarginTarget * 10) / 10, actual: Math.round(actualProfitMargin * 10) / 10, score: safeScore(actualProfitMargin, targets.profitMarginTarget), status: getStatus(safeScore(actualProfitMargin, targets.profitMarginTarget)) },
+    { metric: '폐기율', target: Math.round(targets.wasteRateTarget * 10) / 10, actual: Math.round(actualWasteRate * 10) / 10, score: scoreWaste, status: getStatus(scoreWaste) },
   ];
 
+  // 종합점수 = 6개 지표 점수의 평균
   const overallScore = Math.round(scores.reduce((s, m) => s + m.score, 0) / scores.length);
 
-  return { activeBracket, monthlyRevenue, scores, overallScore };
+  return { activeBracket, monthlyRevenue, calendarDays, scores, overallScore };
 }

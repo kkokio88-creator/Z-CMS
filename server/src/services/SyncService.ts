@@ -181,26 +181,6 @@ export class SyncService {
         additional_qty: d.additionalQty,
       }));
 
-      // 자재 마스터 변환
-      const materialMasterRows: MaterialMasterRow[] = sheetData.materialMaster.map(d => ({
-        no: d.no,
-        category: d.category,
-        issue_type: d.issueType,
-        material_code: d.materialCode,
-        material_name: d.materialName,
-        preprocess_yield: d.preprocessYield,
-        spec: d.spec,
-        unit: d.unit,
-        unit_price: d.unitPrice,
-        safety_stock: d.safetyStock,
-        excess_stock: d.excessStock,
-        lead_time_days: d.leadTimeDays,
-        recent_output_qty: d.recentOutputQty,
-        daily_avg: d.dailyAvg,
-        note: d.note,
-        in_use: d.inUse,
-      }));
-
       // 테이블별 콘텐츠 해시 계산
       const currentHashes: Record<string, string> = {
         dailySales: computeHash(dailySalesRows),
@@ -210,7 +190,6 @@ export class SyncService {
         utilities: computeHash(utilityRows),
         labor: computeHash(laborDailyRows),
         bom: computeHash(bomRows),
-        materialMaster: computeHash(materialMasterRows),
       };
 
       // 증분 모드: 이전 해시와 비교하여 변경된 테이블만 식별
@@ -231,7 +210,6 @@ export class SyncService {
         { key: 'utilities', rows: utilityRows, upsert: () => supabaseAdapter.upsertUtilities(utilityRows), label: 'utilities' },
         { key: 'labor', rows: laborDailyRows, upsert: () => supabaseAdapter.upsertLaborDaily(laborDailyRows), label: 'labor_daily' },
         { key: 'bom', rows: bomRows, upsert: () => supabaseAdapter.upsertBom(bomRows), label: 'bom' },
-        { key: 'materialMaster', rows: materialMasterRows, upsert: () => supabaseAdapter.upsertMaterialMaster(materialMasterRows), label: 'material_master' },
       ];
 
       for (const table of tables) {
@@ -297,7 +275,10 @@ export class SyncService {
 
       console.log('[SyncService] ECOUNT 동기화 시작...');
 
-      const inventoryData = await ecountAdapter.fetchInventory();
+      const [inventoryData, productsData] = await Promise.all([
+        ecountAdapter.fetchInventory(),
+        ecountAdapter.fetchProducts(),
+      ]);
 
       const inventoryRows: InventoryRow[] = inventoryData.map((item: any) => ({
         product_code: item.PROD_CD || item.productCode || '',
@@ -306,8 +287,33 @@ export class SyncService {
         warehouse_code: item.WH_CD || item.warehouseCode || 'DEFAULT',
       }));
 
+      // ECOUNT 품목 마스터 → materialMaster 변환
+      const materialMasterRows: MaterialMasterRow[] = productsData.map((item: any, idx: number) => ({
+        no: idx + 1,
+        category: item.CLASS_CD2_DES || item.CLASS_CD1_DES || '',
+        issue_type: item.OUT_TYPE_DES || '',
+        material_code: item.PROD_CD || '',
+        material_name: item.PROD_DES || '',
+        preprocess_yield: 0,
+        spec: item.SIZE_DES || '',
+        unit: item.UNIT_DES || item.UNIT_CD || '',
+        unit_price: Number(item.UNIT_PRICE || item.IN_PRICE || 0),
+        safety_stock: Number(item.SAFE_QTY || 0),
+        excess_stock: 0,
+        lead_time_days: 0,
+        recent_output_qty: 0,
+        daily_avg: 0,
+        note: item.MEMO || '',
+        in_use: item.USE_YN !== 'N',
+      }));
+
       records.inventory = await supabaseAdapter.upsertInventory(inventoryRows);
       console.log(`[SyncService] inventory: ${records.inventory}건 저장`);
+
+      if (materialMasterRows.length > 0) {
+        records.materialMaster = await supabaseAdapter.upsertMaterialMaster(materialMasterRows);
+        console.log(`[SyncService] material_master: ${records.materialMaster}건 저장 (ECOUNT)`);
+      }
 
       const totalRecords = Object.values(records).reduce((a, b) => a + b, 0);
 

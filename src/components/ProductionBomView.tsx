@@ -9,6 +9,8 @@ import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../util
 import type { ProductionData, PurchaseData } from '../services/googleSheetService';
 import type { DashboardInsights, BomVarianceInsight, YieldTrackingInsight, BomConsumptionAnomalyInsight, BomConsumptionAnomalyItem } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
+import { useUI } from '../contexts/UIContext';
+import { getDateRange, filterByDate } from '../utils/dateRange';
 
 interface Props {
   production: ProductionData[];
@@ -70,6 +72,10 @@ const FilterBar: React.FC<{
 
 export const ProductionBomView: React.FC<Props> = ({ production, purchases, insights, onItemClick, onTabChange }) => {
   const config = useBusinessConfig();
+  const { dateRange } = useUI();
+  const { start: rangeStart, end: rangeEnd } = useMemo(() => getDateRange(dateRange), [dateRange]);
+  const filteredProduction = useMemo(() => filterByDate(production, rangeStart, rangeEnd), [production, rangeStart, rangeEnd]);
+
   const wasteAnalysis = insights?.wasteAnalysis;
   const prodEfficiency = insights?.productionEfficiency;
   const bomVariance = insights?.bomVariance || null;

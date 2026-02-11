@@ -3,6 +3,10 @@
  * 구글 시트에서 데이터를 가져와 정규화된 형식으로 변환
  */
 
+import { google, sheets_v4 } from 'googleapis';
+import * as fs from 'fs';
+import * as path from 'path';
+
 const SPREADSHEET_ID = '1GUo9wmwmm14zhb_gtpoNrDBfJ5DqEm5pf4jpRsto-JI';
 const BOM_SPREADSHEET_ID = '1H8EI3AaYG8m7xASFI6Rj8N6Zb7TvCnnGkr2MJtYHZO8';
 
@@ -157,9 +161,65 @@ export interface MaterialMasterData {
 
 export class GoogleSheetAdapter {
   private baseUrl: string;
+  private sheetsClient: sheets_v4.Sheets | null = null;
 
   constructor() {
     this.baseUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv`;
+  }
+
+  /**
+   * Google Sheets API 인증 클라이언트 (비공개 스프레드시트 접근용)
+   */
+  private async getAuthClient(): Promise<sheets_v4.Sheets> {
+    if (this.sheetsClient) return this.sheetsClient;
+
+    // Method 1: GOOGLE_SERVICE_ACCOUNT_JSON env var
+    const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (serviceAccountJson) {
+      const credentials = JSON.parse(serviceAccountJson);
+      const auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+      });
+      this.sheetsClient = google.sheets({ version: 'v4', auth: await auth.getClient() as any });
+      return this.sheetsClient;
+    }
+
+    // Method 2: Service account key file
+    const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
+    if (keyPath) {
+      const resolved = path.resolve(keyPath);
+      if (fs.existsSync(resolved)) {
+        const credentials = JSON.parse(fs.readFileSync(resolved, 'utf-8'));
+        const auth = new google.auth.GoogleAuth({
+          credentials,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+        });
+        this.sheetsClient = google.sheets({ version: 'v4', auth: await auth.getClient() as any });
+        return this.sheetsClient;
+      }
+    }
+
+    throw new Error('Google Sheets 인증 정보 없음 (GOOGLE_SERVICE_ACCOUNT_JSON 또는 GOOGLE_SERVICE_ACCOUNT_KEY_PATH 필요)');
+  }
+
+  /**
+   * Google Sheets API로 인증된 시트 데이터 가져오기 (비공개 스프레드시트용)
+   */
+  private async fetchSheetByApi(spreadsheetId: string, sheetName: string): Promise<string[][]> {
+    try {
+      const client = await this.getAuthClient();
+      const response = await client.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${sheetName}'!A:Z`,
+      });
+      const rows = response.data.values;
+      if (!rows || rows.length === 0) return [];
+      return rows.map(row => row.map(cell => String(cell ?? '')));
+    } catch (error) {
+      console.error(`Failed to fetch sheet "${sheetName}" via API:`, error);
+      return [];
+    }
   }
 
   /**
@@ -512,7 +572,7 @@ export class GoogleSheetAdapter {
    * BOM 스프레드시트에서 A~L열 파싱
    */
   async fetchBom(sheetName: string, source: 'SAN' | 'ZIP'): Promise<BomSheetData[]> {
-    const rows = await this.fetchSheetByName(sheetName, BOM_SPREADSHEET_ID);
+    const rows = await this.fetchSheetByApi(BOM_SPREADSHEET_ID, sheetName);
     const results: BomSheetData[] = [];
 
     // 헤더가 2행, 데이터는 3행부터 (CSV 인덱스 기준 1부터 시작이므로 i=2)
@@ -584,16 +644,15 @@ export class GoogleSheetAdapter {
   async syncAllData() {
     console.log('Syncing Google Sheet data...');
 
-    const [dailySales, salesDetail, production, purchases, utilities, labor, sanBom, zipBom, materialMaster] = await Promise.all([
+    const [dailySales, salesDetail, production, purchases, utilities, labor, sanBom, zipBom] = await Promise.all([
       this.fetchDailySales(),
       this.fetchSalesDetail(),
       this.fetchProduction(),
       this.fetchPurchases(),
       this.fetchUtilities(),
       this.fetchLabor(),
-      this.fetchBom('3.SAN_BOM', 'SAN'),
-      this.fetchBom('4.ZIP_BOM', 'ZIP'),
-      this.fetchMaterialMaster(),
+      this.fetchBom('3. SAN_BOM', 'SAN'),
+      this.fetchBom('4. ZIP_BOM', 'ZIP'),
     ]);
 
     console.log('Google Sheet sync complete:', {
@@ -605,7 +664,6 @@ export class GoogleSheetAdapter {
       labor: labor.length,
       sanBom: sanBom.length,
       zipBom: zipBom.length,
-      materialMaster: materialMaster.length,
     });
 
     return {
@@ -617,7 +675,6 @@ export class GoogleSheetAdapter {
       labor,
       sanBom,
       zipBom,
-      materialMaster,
       syncedAt: new Date().toISOString(),
     };
   }

@@ -35,7 +35,7 @@ import {
   ChannelProfitData,
   InventorySafetyItem,
   BomDiffItem,
-  DashboardSummary,
+
   ProfitRankItem,
   StocktakeAnomalyItem,
   OrderSuggestion,
@@ -54,33 +54,32 @@ import {
   BomItemData,
   MaterialMasterItem,
 } from '../services/googleSheetService';
-import { computeAllInsights, DashboardInsights } from '../services/insightService';
+import {
+  computeAllInsights,
+  DashboardInsights,
+  computeChannelRevenue,
+  computeCostBreakdown,
+  computeWasteAnalysis,
+  computeProfitCenterScore,
+} from '../services/insightService';
 import { getChannelCostSummaries } from '../components/ChannelCostAdmin';
 import { checkDataSource, directFetchSyncStatus, SyncStatusInfo } from '../services/supabaseClient';
 import { loadBusinessConfig } from '../config/businessConfig';
+import { getDateRange, filterByDate } from '../utils/dateRange';
+import type { DateRangeOption } from '../utils/dateRange';
 
 type ViewType = UIViewType;
 
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeView, setActiveView] = useState<ViewType>('home');
-  const [dateRange, setDateRange] = useState('7days');
+  const [dateRange, setDateRange] = useState<DateRangeOption>('30days');
 
   // --- Data State Management (Initialized Empty to prove Real Data Fetching) ---
   const [profitData, setProfitData] = useState<ChannelProfitData[]>([]);
   const [inventoryData, setInventoryData] = useState<InventorySafetyItem[]>([]);
   const [bomItems, setBomItems] = useState<BomDiffItem[]>([]);
-  const [dashboardSummary, setDashboardSummary] =
-    useState<DashboardSummary>({
-      totalRevenue: 0,
-      revenueChange: 0,
-      avgMargin: 0,
-      marginChange: 0,
-      wasteRate: 0,
-      wasteRateChange: 0,
-      riskItems: 0,
-      anomalyCount: 0,
-    });
+  // (대시보드 KPI는 DashboardHomeView 내부에서 dateRange 기반으로 계산)
   const [wasteTrendData, setWasteTrendData] = useState<WasteTrendData[]>([]);
 
   const [topProfitItems, setTopProfitItems] = useState<ProfitRankItem[]>([]);
@@ -186,6 +185,10 @@ const App = () => {
   const [isAIOverlayOpen, setIsAIOverlayOpen] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<string | null>(null);
 
+  // Settings dirty state + navigation guard
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [pendingView, setPendingView] = useState<ViewType | null>(null);
+
   // 기본값: 라이트 모드 고정 (시스템 다크모드 자동 감지 비활성화)
 
   useEffect(() => {
@@ -202,8 +205,25 @@ const App = () => {
   }, []);
 
   const handleSetActiveView = (view: ViewType) => {
+    if (settingsDirty && activeView === 'settings' && view !== 'settings') {
+      setPendingView(view);
+      return;
+    }
     setActiveView(view);
     setActiveSubTab(null);
+  };
+
+  const confirmNavigateAway = () => {
+    if (pendingView) {
+      setSettingsDirty(false);
+      setActiveView(pendingView);
+      setActiveSubTab(null);
+      setPendingView(null);
+    }
+  };
+
+  const cancelNavigateAway = () => {
+    setPendingView(null);
   };
 
   const toggleDarkMode = () => {
@@ -518,20 +538,7 @@ const App = () => {
       const now = new Date().toLocaleTimeString();
       setLastSyncTime(now);
 
-      // 대시보드 요약 계산
-      if (gsResult && gsResult.profitTrend?.length > 0) {
-        const totalRev = gsResult.profitTrend.reduce((sum, item) => sum + item.revenue, 0);
-        const totalProfit = gsResult.profitTrend.reduce((sum, item) => sum + item.profit, 0);
-        const avgMargin = totalRev > 0 ? (totalProfit / totalRev) * 100 : 0;
-
-        setDashboardSummary(prev => ({
-          ...prev,
-          totalRevenue: totalRev,
-          avgMargin: parseFloat(avgMargin.toFixed(1)),
-          riskItems: ecountResult?.inventory?.filter(i => i.status !== 'Normal').length || 0,
-          anomalyCount: ecountResult?.anomalies?.length || 0,
-        }));
-      }
+      // (대시보드 KPI는 DashboardHomeView에서 dateRange 기반으로 직접 계산)
     } catch (e) {
       console.error(e);
       // 에러 발생 시 빈 상태 유지 (Mock 데이터 사용 안함)
@@ -564,21 +571,25 @@ const App = () => {
     setIsModalOpen(false);
   };
 
-  // --- Filter Logic ---
-  const getFilteredData = (allData: any[], dateKey: string = 'day') => {
+  // --- Filter Logic (legacy mock data용 — date 필드 없는 배열 슬라이싱) ---
+  const getFilteredData = (allData: any[]) => {
     if (!allData || allData.length === 0) return [];
-    const dataLength = allData.length;
-    if (dateRange === '7days') return allData.slice(Math.max(dataLength - 7, 0));
-    else if (dateRange === '30days') return allData.slice(Math.max(dataLength - 30, 0));
-    return allData;
+    const len = allData.length;
+    switch (dateRange) {
+      case '7days': return allData.slice(Math.max(len - 7, 0));
+      case '30days': return allData.slice(Math.max(len - 30, 0));
+      case 'lastMonth': return allData.slice(Math.max(len - 31, 0));
+      case 'thisMonth': return allData.slice(Math.max(len - 31, 0));
+      default: return allData;
+    }
   };
 
   const filteredWasteData = useMemo(
-    () => getFilteredData(wasteTrendData, 'day'),
+    () => getFilteredData(wasteTrendData),
     [dateRange, wasteTrendData]
   );
   const filteredProfitData = useMemo(
-    () => getFilteredData(profitData, 'date'),
+    () => getFilteredData(profitData),
     [dateRange, profitData]
   );
 
@@ -621,9 +632,26 @@ const App = () => {
     document.body.removeChild(link);
   };
 
-  // Transform data for mini charts in dashboard
-  const profitTrendForChart = profitData.map(d => ({ value: d.profit }));
-  const wasteTrendForChart = wasteTrendData.map(d => ({ value: d.actual }));
+  // 날짜 범위에 따른 독립채산제 점수 재계산
+  const filteredProfitCenterScore = useMemo(() => {
+    if (!gsDailySales.length || !gsPurchases.length) return insights?.profitCenterScore ?? null;
+    try {
+      const { start, end } = getDateRange(dateRange);
+      const fSales = filterByDate(gsDailySales, start, end);
+      const fPurchases = filterByDate(gsPurchases, start, end);
+      const fProduction = filterByDate(gsProduction, start, end);
+      const fUtilities = filterByDate(gsUtilities, start, end);
+      if (!fSales.length) return null;
+      const bizConfig = loadBusinessConfig();
+      const channelCosts = getChannelCostSummaries();
+      const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, bizConfig);
+      const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, bizConfig);
+      const wa = computeWasteAnalysis(fProduction, bizConfig, fPurchases);
+      return computeProfitCenterScore(cr, cb, wa, fProduction, bizConfig, gsPurchases);
+    } catch {
+      return insights?.profitCenterScore ?? null;
+    }
+  }, [dateRange, gsDailySales, gsPurchases, gsProduction, gsUtilities, insights]);
 
   const renderActiveView = () => {
     // Show loading skeleton if fetching
@@ -632,7 +660,7 @@ const App = () => {
     }
 
     // Show empty state if no data
-    const hasData = profitData.length > 0 || inventoryData.length > 0;
+    const hasData = profitData.length > 0 || inventoryData.length > 0 || gsDailySales.length > 0 || gsPurchases.length > 0 || gsProduction.length > 0;
     if (initialLoadDone && !hasData && activeView !== 'settings') {
       return (
         <div className="flex flex-col items-center justify-center h-full p-10 text-center">
@@ -669,17 +697,13 @@ const App = () => {
               onSync={handleEcountSync}
               isSyncing={isSyncing}
               lastSyncTime={lastSyncTime}
-              summaryData={dashboardSummary}
-              profitTrend={profitTrendForChart}
-              wasteTrend={wasteTrendForChart}
-              syncMessage={syncMessage}
-              dataAvailability={dataAvailability}
-              inventoryCount={inventoryData.length}
-              onNavigateToSettings={() => handleSetActiveView('settings')}
+              dailySales={gsDailySales}
+              production={gsProduction}
+              purchases={gsPurchases}
               onNavigate={view => handleSetActiveView(view as ViewType)}
               dataSource={dataSource}
               syncStatus={syncStatus}
-              profitCenterScore={insights?.profitCenterScore}
+              profitCenterScore={filteredProfitCenterScore}
             />
           </ErrorBoundary>
         );
@@ -703,6 +727,7 @@ const App = () => {
               purchases={gsPurchases}
               utilities={gsUtilities}
               production={gsProduction}
+              dailySales={gsDailySales}
               insights={insights}
               onItemClick={handleItemClick}
               onTabChange={setActiveSubTab}
@@ -747,17 +772,13 @@ const App = () => {
               onSync={handleEcountSync}
               isSyncing={isSyncing}
               lastSyncTime={lastSyncTime}
-              summaryData={dashboardSummary}
-              profitTrend={profitTrendForChart}
-              wasteTrend={wasteTrendForChart}
-              syncMessage={syncMessage}
-              dataAvailability={dataAvailability}
-              inventoryCount={inventoryData.length}
-              onNavigateToSettings={() => handleSetActiveView('settings')}
+              dailySales={gsDailySales}
+              production={gsProduction}
+              purchases={gsPurchases}
               onNavigate={view => handleSetActiveView(view as ViewType)}
               dataSource={dataSource}
               syncStatus={syncStatus}
-              profitCenterScore={insights?.profitCenterScore}
+              profitCenterScore={filteredProfitCenterScore}
             />
           </ErrorBoundary>
         );
@@ -1079,7 +1100,9 @@ const App = () => {
     setDateRange,
     isDarkMode,
     toggleDarkMode,
-  }), [activeView, activeSubTab, dateRange, isDarkMode]);
+    settingsDirty,
+    setSettingsDirty,
+  }), [activeView, activeSubTab, dateRange, isDarkMode, settingsDirty]);
 
   return (
     <SettingsProvider>
@@ -1095,6 +1118,7 @@ const App = () => {
 
         <main className="flex-1 flex flex-col overflow-hidden relative">
           <Header
+            pageTitle={getPageTitle()}
             toggleDarkMode={toggleDarkMode}
             isDarkMode={isDarkMode}
             dateRange={dateRange}
@@ -1110,14 +1134,6 @@ const App = () => {
             notifications={notifications}
             onNotificationClick={handleNotificationClick}
           />
-
-          {activeView === 'home' && (
-            <div className="px-6 pt-4 pb-2">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white transition-colors">
-                {getPageTitle()}
-              </h2>
-            </div>
-          )}
 
           <div className="flex-1 overflow-auto p-6 scroll-smooth">{renderActiveView()}</div>
         </main>
@@ -1153,6 +1169,35 @@ const App = () => {
         >
           {renderModalContent()}
         </Modal>
+
+        {/* 미저장 설정 경고 모달 */}
+        {pendingView && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm mx-4">
+              <div className="flex items-center mb-4">
+                <span className="material-icons-outlined text-amber-500 mr-2">warning</span>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">저장하지 않은 변경사항</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                설정 페이지에 저장하지 않은 변경사항이 있습니다. 페이지를 이동하면 변경 내용이 사라집니다.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={cancelNavigateAway}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+                >
+                  돌아가기
+                </button>
+                <button
+                  onClick={confirmNavigateAway}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
+                >
+                  저장 안 하고 이동
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AgentProvider>
     </UIProvider>

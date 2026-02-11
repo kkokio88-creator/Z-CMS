@@ -213,6 +213,47 @@ export class SupabaseAdapter {
     return !!(this.url && this.key);
   }
 
+  /**
+   * Supabase PostgREST max-rows (기본 1000행) 제한을 우회하는 페이지네이션 헬퍼.
+   * .range()를 사용해 1000행씩 가져와서 전체 데이터를 합친다.
+   */
+  private async fetchAllPaginated<T>(
+    table: string,
+    options?: {
+      orderBy?: string;
+      ascending?: boolean;
+      dateFrom?: string;
+      dateTo?: string;
+      dateColumn?: string;
+    }
+  ): Promise<T[]> {
+    const client = this.getClient();
+    const pageSize = 1000;
+    const allData: T[] = [];
+    let from = 0;
+
+    while (true) {
+      let query = client
+        .from(table)
+        .select('*')
+        .order(options?.orderBy || 'date', { ascending: options?.ascending ?? false })
+        .range(from, from + pageSize - 1);
+
+      if (options?.dateFrom) query = query.gte(options.dateColumn || 'date', options.dateFrom);
+      if (options?.dateTo) query = query.lte(options.dateColumn || 'date', options.dateTo);
+
+      const { data, error } = await query;
+      if (error) throw new Error(`${table} query failed: ${error.message}`);
+      if (!data || data.length === 0) break;
+
+      allData.push(...(data as T[]));
+      if (data.length < pageSize) break; // 마지막 페이지
+      from += pageSize;
+    }
+
+    return allData;
+  }
+
   // ==============================
   // Daily Sales
   // ==============================
@@ -233,15 +274,7 @@ export class SupabaseAdapter {
   }
 
   async getDailySales(dateFrom?: string, dateTo?: string): Promise<DailySalesRow[]> {
-    const client = this.getClient();
-    let query = client.from('daily_sales').select('*').order('date', { ascending: false });
-
-    if (dateFrom) query = query.gte('date', dateFrom);
-    if (dateTo) query = query.lte('date', dateTo);
-
-    const { data, error } = await query;
-    if (error) throw new Error(`daily_sales query failed: ${error.message}`);
-    return data || [];
+    return this.fetchAllPaginated<DailySalesRow>('daily_sales', { dateFrom, dateTo });
   }
 
   // ==============================
@@ -275,15 +308,7 @@ export class SupabaseAdapter {
   }
 
   async getSalesDetail(dateFrom?: string, dateTo?: string): Promise<SalesDetailRow[]> {
-    const client = this.getClient();
-    let query = client.from('sales_detail').select('*').order('date', { ascending: false });
-
-    if (dateFrom) query = query.gte('date', dateFrom);
-    if (dateTo) query = query.lte('date', dateTo);
-
-    const { data, error } = await query;
-    if (error) throw new Error(`sales_detail query failed: ${error.message}`);
-    return data || [];
+    return this.fetchAllPaginated<SalesDetailRow>('sales_detail', { dateFrom, dateTo });
   }
 
   // ==============================
@@ -306,15 +331,7 @@ export class SupabaseAdapter {
   }
 
   async getProductionDaily(dateFrom?: string, dateTo?: string): Promise<ProductionDailyRow[]> {
-    const client = this.getClient();
-    let query = client.from('production_daily').select('*').order('date', { ascending: false });
-
-    if (dateFrom) query = query.gte('date', dateFrom);
-    if (dateTo) query = query.lte('date', dateTo);
-
-    const { data, error } = await query;
-    if (error) throw new Error(`production_daily query failed: ${error.message}`);
-    return data || [];
+    return this.fetchAllPaginated<ProductionDailyRow>('production_daily', { dateFrom, dateTo });
   }
 
   // ==============================
@@ -346,15 +363,7 @@ export class SupabaseAdapter {
   }
 
   async getPurchases(dateFrom?: string, dateTo?: string): Promise<PurchaseRow[]> {
-    const client = this.getClient();
-    let query = client.from('purchases').select('*').order('date', { ascending: false });
-
-    if (dateFrom) query = query.gte('date', dateFrom);
-    if (dateTo) query = query.lte('date', dateTo);
-
-    const { data, error } = await query;
-    if (error) throw new Error(`purchases query failed: ${error.message}`);
-    return data || [];
+    return this.fetchAllPaginated<PurchaseRow>('purchases', { dateFrom, dateTo });
   }
 
   // ==============================
@@ -381,15 +390,10 @@ export class SupabaseAdapter {
   }
 
   async getInventory(): Promise<InventoryRow[]> {
-    const client = this.getClient();
-
-    const { data, error } = await client
-      .from('inventory')
-      .select('*')
-      .order('product_name', { ascending: true });
-
-    if (error) throw new Error(`inventory query failed: ${error.message}`);
-    return data || [];
+    return this.fetchAllPaginated<InventoryRow>('inventory', {
+      orderBy: 'product_name',
+      ascending: true,
+    });
   }
 
   // ==============================
@@ -412,15 +416,7 @@ export class SupabaseAdapter {
   }
 
   async getUtilities(dateFrom?: string, dateTo?: string): Promise<UtilityRow[]> {
-    const client = this.getClient();
-    let query = client.from('utilities').select('*').order('date', { ascending: false });
-
-    if (dateFrom) query = query.gte('date', dateFrom);
-    if (dateTo) query = query.lte('date', dateTo);
-
-    const { data, error } = await query;
-    if (error) throw new Error(`utilities query failed: ${error.message}`);
-    return data || [];
+    return this.fetchAllPaginated<UtilityRow>('utilities', { dateFrom, dateTo });
   }
 
   // ==============================
@@ -521,15 +517,7 @@ export class SupabaseAdapter {
   }
 
   async getLaborDaily(dateFrom?: string, dateTo?: string): Promise<LaborDailyRow[]> {
-    const client = this.getClient();
-    let query = client.from('labor_daily').select('*').order('date', { ascending: false });
-
-    if (dateFrom) query = query.gte('date', dateFrom);
-    if (dateTo) query = query.lte('date', dateTo);
-
-    const { data, error } = await query;
-    if (error) throw new Error(`labor_daily query failed: ${error.message}`);
-    return data || [];
+    return this.fetchAllPaginated<LaborDailyRow>('labor_daily', { dateFrom, dateTo });
   }
 
   // ==============================
@@ -560,13 +548,29 @@ export class SupabaseAdapter {
 
   async getBom(source?: string): Promise<BomRow[]> {
     const client = this.getClient();
-    let query = client.from('bom').select('*').order('product_code', { ascending: true });
+    const pageSize = 1000;
+    const allData: BomRow[] = [];
+    let from = 0;
 
-    if (source) query = query.eq('source', source);
+    while (true) {
+      let query = client
+        .from('bom')
+        .select('*')
+        .order('product_code', { ascending: true })
+        .range(from, from + pageSize - 1);
 
-    const { data, error } = await query;
-    if (error) throw new Error(`bom query failed: ${error.message}`);
-    return data || [];
+      if (source) query = query.eq('source', source);
+
+      const { data, error } = await query;
+      if (error) throw new Error(`bom query failed: ${error.message}`);
+      if (!data || data.length === 0) break;
+
+      allData.push(...data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+
+    return allData;
   }
 
   // ==============================
@@ -589,15 +593,10 @@ export class SupabaseAdapter {
   }
 
   async getMaterialMaster(): Promise<MaterialMasterRow[]> {
-    const client = this.getClient();
-
-    const { data, error } = await client
-      .from('material_master')
-      .select('*')
-      .order('no', { ascending: true });
-
-    if (error) throw new Error(`material_master query failed: ${error.message}`);
-    return data || [];
+    return this.fetchAllPaginated<MaterialMasterRow>('material_master', {
+      orderBy: 'no',
+      ascending: true,
+    });
   }
 
   // ==============================

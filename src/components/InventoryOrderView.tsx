@@ -13,6 +13,8 @@ import type { DashboardInsights, StatisticalOrderInsight, ABCXYZInsight, Freshne
 import { computeStatisticalOrder } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
+import { useUI } from '../contexts/UIContext';
+import { getDateRange, filterByDate } from '../utils/dateRange';
 
 interface Props {
   inventoryData: InventorySafetyItem[];
@@ -169,6 +171,10 @@ export const InventoryOrderView: React.FC<Props> = ({
   onTabChange,
 }) => {
   const config = useBusinessConfig();
+  const { dateRange } = useUI();
+  const { start: rangeStart, end: rangeEnd } = useMemo(() => getDateRange(dateRange), [dateRange]);
+  const filteredPurchases = useMemo(() => filterByDate(purchases, rangeStart, rangeEnd), [purchases, rangeStart, rangeEnd]);
+
   const materialPrices = insights?.materialPrices;
   const [serviceLevel, setServiceLevel] = useState(95);
   const [orderDate, setOrderDate] = useState(formatDateStr(new Date()));

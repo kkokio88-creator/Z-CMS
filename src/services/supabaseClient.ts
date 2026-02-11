@@ -266,24 +266,61 @@ export async function directFetchMaterialMaster(): Promise<MaterialMasterItem[]>
 export interface SyncStatusInfo {
   lastSyncTime: string | null;
   tableCounts: Record<string, number>;
-  source: 'direct';
+  source: 'direct' | 'backend';
+}
+
+/** 백엔드 API에서 동기화 상태 가져오기 */
+export async function fetchSyncStatusFromBackend(): Promise<SyncStatusInfo | null> {
+  const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
+  try {
+    const res = await fetch(`${BACKEND_URL}/sync/status`, { signal: AbortSignal.timeout(5000) });
+    const json = await res.json();
+    if (!json.success) return null;
+
+    // recentLogs에서 마지막 성공 동기화 시간 추출
+    const lastLog = json.recentLogs?.find((l: any) => l.status === 'success');
+    const lastSyncTime = lastLog?.completed_at ?? null;
+
+    // 각 테이블 레코드 수는 백엔드에서 직접 제공하지 않으므로 data 엔드포인트 사용
+    const tables = ['daily-sales', 'sales-detail', 'production', 'purchases', 'inventory', 'utilities'];
+    const tableKeys = ['daily_sales', 'sales_detail', 'production_daily', 'purchases', 'inventory', 'utilities'];
+    const counts = await Promise.all(
+      tables.map(async (endpoint, idx) => {
+        try {
+          const r = await fetch(`${BACKEND_URL}/data/${endpoint}`, { signal: AbortSignal.timeout(3000) });
+          const d = await r.json();
+          return [tableKeys[idx], d.count ?? d.data?.length ?? 0] as [string, number];
+        } catch {
+          return [tableKeys[idx], 0] as [string, number];
+        }
+      })
+    );
+
+    return { lastSyncTime, tableCounts: Object.fromEntries(counts), source: 'backend' };
+  } catch {
+    return null;
+  }
 }
 
 export async function directFetchSyncStatus(): Promise<SyncStatusInfo | null> {
+  // Tier 1: 백엔드 API 우선
+  const backendStatus = await fetchSyncStatusFromBackend();
+  if (backendStatus) return backendStatus;
+
+  // Tier 2: Supabase 직접
   const client = getSupabaseClient();
   if (!client) return null;
 
   try {
-    // sync_log에서 마지막 동기화 시간 조회
     const { data: syncLog } = await client
       .from('sync_log')
-      .select('synced_at')
-      .order('synced_at', { ascending: false })
+      .select('completed_at')
+      .eq('status', 'success')
+      .order('completed_at', { ascending: false })
       .limit(1);
 
-    const lastSyncTime = syncLog?.[0]?.synced_at ?? null;
+    const lastSyncTime = syncLog?.[0]?.completed_at ?? null;
 
-    // 각 테이블의 레코드 수 조회 (병렬)
     const tables = ['daily_sales', 'sales_detail', 'production_daily', 'purchases', 'inventory', 'utilities'];
     const counts = await Promise.all(
       tables.map(async (table) => {
@@ -292,11 +329,7 @@ export async function directFetchSyncStatus(): Promise<SyncStatusInfo | null> {
       })
     );
 
-    return {
-      lastSyncTime,
-      tableCounts: Object.fromEntries(counts),
-      source: 'direct',
-    };
+    return { lastSyncTime, tableCounts: Object.fromEntries(counts), source: 'direct' };
   } catch {
     return null;
   }
@@ -318,7 +351,7 @@ export async function checkDataSource(): Promise<'backend' | 'direct' | false> {
     const client = getSupabaseClient();
     if (client) {
       try {
-        const { error } = await client.from('sync_log').select('synced_at').limit(1);
+        const { error } = await client.from('sync_log').select('completed_at').limit(1);
         if (!error) return 'direct';
       } catch { /* Supabase 직접 연결 실패 */ }
     }

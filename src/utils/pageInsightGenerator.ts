@@ -64,7 +64,7 @@ function generateHomeInsights(ins: DashboardInsights): AIInsightCard[] {
       title: '수익센터 종합 점수',
       explanation: `현재 수익센터 종합 점수는 ${s.overallScore}점입니다. ${status === 'good' ? '전반적으로 양호한 상태입니다.' : status === 'warning' ? '일부 영역에서 개선이 필요합니다.' : '긴급하게 점검이 필요한 항목이 있습니다.'}`,
       keyMetrics: s.scores.slice(0, 3).map(m => ({
-        label: m.label,
+        label: m.metric,
         value: `${m.score}점`,
         trend: m.score >= 80 ? 'up' as const : m.score >= 50 ? 'flat' as const : 'down' as const,
       })),

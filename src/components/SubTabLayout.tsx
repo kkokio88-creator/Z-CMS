@@ -11,10 +11,11 @@ interface SubTabLayoutProps {
   tabs: SubTab[];
   defaultTab?: string;
   onTabChange?: (tab: string) => void;
+  headerRight?: React.ReactNode;
   children: (activeTab: string) => React.ReactNode;
 }
 
-export const SubTabLayout: React.FC<SubTabLayoutProps> = ({ title, tabs, defaultTab, onTabChange, children }) => {
+export const SubTabLayout: React.FC<SubTabLayoutProps> = ({ title, tabs, defaultTab, onTabChange, headerRight, children }) => {
   const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.key || '');
 
   useEffect(() => {
@@ -28,9 +29,11 @@ export const SubTabLayout: React.FC<SubTabLayoutProps> = ({ title, tabs, default
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{title}</h2>
-      </div>
+      {headerRight && (
+        <div className="flex items-center justify-end">
+          {headerRight}
+        </div>
+      )}
       <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="flex gap-1 -mb-px">
           {tabs.map(tab => (

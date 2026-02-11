@@ -6,16 +6,20 @@ import {
 import { SubTabLayout } from './SubTabLayout';
 import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
-import type { PurchaseData, UtilityData, ProductionData } from '../services/googleSheetService';
+import type { PurchaseData, UtilityData, ProductionData, DailySalesData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 import { getLaborMonthlySummaries, LaborMonthlySummary } from './LaborRecordAdmin';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
+import { useUI } from '../contexts/UIContext';
+import { getDateRange, filterByDate } from '../utils/dateRange';
+import { computeCostScores, computeWeeklyCostScores, type CostScoringResult, type CostItemScore } from '../utils/costScoring';
 
 interface Props {
   purchases: PurchaseData[];
   utilities: UtilityData[];
   production: ProductionData[];
+  dailySales: DailySalesData[];
   insights: DashboardInsights | null;
   onItemClick: (item: any) => void;
   onTabChange?: (tab: string) => void;
@@ -85,15 +89,57 @@ const FilterBar: React.FC<{
   </div>
 );
 
+/** 점수 요약 헤더 — 각 서브탭 상단에 표시 */
+const ScoreHeader: React.FC<{ item: CostItemScore | undefined }> = ({ item }) => {
+  if (!item) return null;
+  const statusColors = {
+    excellent: 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800',
+    good: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800',
+    warning: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800',
+    danger: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800',
+  };
+  const statusEmoji = { excellent: '🟢', good: '🔵', warning: '🟡', danger: '🔴' };
+  return (
+    <div className={`rounded-lg p-3 border ${statusColors[item.status]} flex items-center justify-between flex-wrap gap-2`}>
+      <div className="flex items-center gap-3">
+        <span className="text-2xl font-black" style={{ color: item.color }}>{item.score}점</span>
+        <span className="text-lg">{statusEmoji[item.status]}</span>
+        <span className="text-sm text-gray-600 dark:text-gray-300">
+          실적 {item.actualMultiplier}배 / 목표 {item.targetMultiplier}배
+        </span>
+      </div>
+      <span className={`text-sm font-bold ${item.surplus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+        {item.surplus >= 0 ? '절감 +' : '초과 '}{formatCurrency(Math.abs(item.surplus))}
+      </span>
+    </div>
+  );
+};
+
 export const CostManagementView: React.FC<Props> = ({
   purchases,
   utilities,
   production,
+  dailySales,
   insights,
   onItemClick,
   onTabChange,
 }) => {
   const config = useBusinessConfig();
+  const { dateRange } = useUI();
+  const { start: rangeStart, end: rangeEnd, days: rangeDays } = useMemo(() => getDateRange(dateRange), [dateRange]);
+
+  // 글로벌 날짜 필터 적용
+  const filteredPurchases = useMemo(() => filterByDate(purchases, rangeStart, rangeEnd), [purchases, rangeStart, rangeEnd]);
+  const filteredUtilities = useMemo(() => filterByDate(utilities, rangeStart, rangeEnd), [utilities, rangeStart, rangeEnd]);
+  const filteredProduction = useMemo(() => filterByDate(production, rangeStart, rangeEnd), [production, rangeStart, rangeEnd]);
+
+  // 원가 점수 계산
+  const scoringParams = useMemo(() => ({
+    dailySales, purchases, utilities, production, config, rangeStart, rangeEnd, rangeDays,
+  }), [dailySales, purchases, utilities, production, config, rangeStart, rangeEnd, rangeDays]);
+  const scoringResult = useMemo(() => computeCostScores(scoringParams), [scoringParams]);
+  const weeklyScores = useMemo(() => computeWeeklyCostScores(scoringParams), [scoringParams]);
+
   const costBreakdown = insights?.costBreakdown;
   const materialPrices = insights?.materialPrices;
   const utilityCosts = insights?.utilityCosts;
@@ -124,14 +170,14 @@ export const CostManagementView: React.FC<Props> = ({
   // =============================================
   const weeklyData = useMemo(() => {
     // purchases를 원재료/부재료로 분류
-    const rawPurchases = purchases.filter(p => !isSubMaterial(p.productName));
-    const subPurchases = purchases.filter(p => isSubMaterial(p.productName));
+    const rawPurchases = filteredPurchases.filter(p => !isSubMaterial(p.productName));
+    const subPurchases = filteredPurchases.filter(p => isSubMaterial(p.productName));
 
     // 주간별 그룹핑
     const rawWeeks = groupByWeek(rawPurchases, 'date');
     const subWeeks = groupByWeek(subPurchases, 'date');
-    const utilWeeks = groupByWeek(utilities, 'date');
-    const prodWeeks = groupByWeek(production, 'date');
+    const utilWeeks = groupByWeek(filteredUtilities, 'date');
+    const prodWeeks = groupByWeek(filteredProduction, 'date');
 
     // 모든 주간 키 수집
     const allWeekKeys = new Set<string>();
@@ -151,7 +197,7 @@ export const CostManagementView: React.FC<Props> = ({
       const gas = utilItems.reduce((s, u) => s + u.gasCost, 0);
       const utilTotal = elec + water + gas;
       const prodQty = prodItems.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
-      const prodQuantity = prodItems.reduce((s, p) => s + (p.quantity || 0), 0);
+      const prodQuantity = prodItems.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
 
       // 노무비 추정 (주간)
       const labor = Math.round((rawTotal + subTotal + utilTotal) * config.laborCostRatio);
@@ -187,7 +233,7 @@ export const CostManagementView: React.FC<Props> = ({
     });
 
     return weeklyEntries;
-  }, [purchases, utilities, production, config]);
+  }, [filteredPurchases, filteredUtilities, filteredProduction, config]);
 
   // 주간 원재료비/부재료비 차트 데이터
   const weeklyRaw = useMemo(() => weeklyData.map(w => ({
@@ -284,102 +330,115 @@ export const CostManagementView: React.FC<Props> = ({
         // ========== 원가 총괄 ==========
         if (activeTab === 'overview') {
           const composition = costBreakdown?.composition || [];
-          const totalCost = composition.reduce((s, c) => s + c.value, 0);
-
-          const totalCostRate = productionRevenue > 0 ? Math.round((totalCost / productionRevenue) * 1000) / 10 : 0;
-          const rawCostRate = productionRevenue > 0
-            ? Math.round(((composition.find(c => c.name === '원재료')?.value || 0) / productionRevenue) * 1000) / 10 : 0;
-          const subCostRate = productionRevenue > 0
-            ? Math.round(((composition.find(c => c.name === '부재료')?.value || 0) / productionRevenue) * 1000) / 10 : 0;
-          const laborCostRate = productionRevenue > 0
-            ? Math.round(((composition.find(c => c.name === '노무비')?.value || 0) / productionRevenue) * 1000) / 10 : 0;
-          const overheadCostRate = productionRevenue > 0
-            ? Math.round(((composition.find(c => c.name === '경비')?.value || 0) / productionRevenue) * 1000) / 10 : 0;
-
-          let prevWeekChange = 0;
-          if (weeklyData.length >= 2) {
-            const last = weeklyData[weeklyData.length - 1].total;
-            const prev = weeklyData[weeklyData.length - 2].total;
-            prevWeekChange = prev > 0 ? Math.round(((last - prev) / prev) * 1000) / 10 : 0;
-          }
+          const totalCost = scoringResult?.totalCost || composition.reduce((s, c) => s + c.value, 0);
+          const sc = scoringResult;
 
           return (
             <div className="space-y-6">
-              {/* 원가율 KPI */}
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">생산매출</p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{formatCurrency(productionRevenue)}</p>
-                  <p className="text-xs text-gray-400 mt-1">분모 기준</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">총 원가율</p>
-                  <p className={`text-2xl font-bold mt-1 ${totalCostRate > 80 ? 'text-red-600' : totalCostRate > 60 ? 'text-orange-600' : 'text-blue-600'}`}>
-                    {totalCostRate}%
+              {/* 점수 카드 섹션 */}
+              {sc ? (
+                <>
+                  <div className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-bold">
+                          {sc.activeBracket.label} 구간
+                        </span>
+                        <span className={`text-4xl font-black ${
+                          sc.overallScore >= 110 ? 'text-green-500' :
+                          sc.overallScore >= 100 ? 'text-blue-500' :
+                          sc.overallScore >= 90 ? 'text-orange-500' : 'text-red-500'
+                        }`}>{sc.overallScore}<span className="text-lg font-bold text-gray-400">점</span></span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          sc.overallScore >= 110 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          sc.overallScore >= 100 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                          sc.overallScore >= 90 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
+                          {sc.overallScore >= 110 ? '우수' : sc.overallScore >= 100 ? '달성' : sc.overallScore >= 90 ? '주의' : '미달'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 space-x-3">
+                        <span>매출: {formatCurrency(sc.filteredRevenue)}</span>
+                        <span>총원가: {formatCurrency(sc.totalCost)}</span>
+                        <span className={`font-bold ${sc.totalSurplus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {sc.totalSurplus >= 0 ? '절감: +' : '초과: '}{formatCurrency(Math.abs(sc.totalSurplus))}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 4개 항목 점수 카드 */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {sc.items.map(item => {
+                        const statusEmoji = { excellent: '🟢', good: '🔵', warning: '🟡', danger: '🔴' };
+                        return (
+                          <div key={item.label} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-bold" style={{ color: item.color }}>{item.label}</span>
+                              <span>{statusEmoji[item.status]}</span>
+                            </div>
+                            <div className="text-2xl font-black" style={{ color: item.color }}>{item.score}<span className="text-xs text-gray-400 font-normal">점</span></div>
+                            <div className="text-[11px] text-gray-500 mt-1">
+                              {item.actualMultiplier}x / {item.targetMultiplier}x
+                            </div>
+                            <div className={`text-xs font-bold mt-0.5 ${item.surplus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {item.surplus >= 0 ? '+' : ''}{formatCurrency(item.surplus)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-yellow-50 dark:bg-yellow-900/10 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
+                    <span className="material-icons-outlined text-base">info</span>
+                    매출 데이터가 없어 점수를 계산할 수 없습니다. 구글시트에서 매출 데이터를 확인하세요.
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(totalCost)}</p>
                 </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">원재료율</p>
-                  <p className="text-2xl font-bold mt-1" style={{ color: COST_COLORS.rawMaterial }}>{rawCostRate}%</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(composition.find(c => c.name === '원재료')?.value || 0)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">부재료율</p>
-                  <p className="text-2xl font-bold mt-1" style={{ color: COST_COLORS.subMaterial }}>{subCostRate}%</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(composition.find(c => c.name === '부재료')?.value || 0)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">노무비율</p>
-                  <p className="text-2xl font-bold mt-1" style={{ color: COST_COLORS.labor }}>{laborCostRate}%</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(composition.find(c => c.name === '노무비')?.value || 0)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">경비율</p>
-                  <p className="text-2xl font-bold mt-1" style={{ color: COST_COLORS.overhead }}>{overheadCostRate}%</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(composition.find(c => c.name === '경비')?.value || 0)}</p>
-                </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 주간 원가율 추이 */}
+                {/* 주간 점수 추이 */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 원가율 추이</h3>
-                  {weeklyCostRate.length > 0 ? (
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 점수 추이</h3>
+                  {weeklyScores.length > 0 ? (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={weeklyCostRate}>
+                        <LineChart data={weeklyScores}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="week" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" height={50} />
-                          <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                          <Tooltip formatter={(v: number) => `${v}%`} />
+                          <XAxis dataKey="weekLabel" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" height={50} />
+                          <YAxis tick={{ fontSize: 10 }} domain={[0, 150]} tickFormatter={v => `${v}`} />
+                          <Tooltip formatter={(v: number, name: string) => [`${v}점`, name]} />
                           <Legend wrapperStyle={{ fontSize: 11 }} />
-                          <Area type="monotone" dataKey="원재료율" stackId="1" stroke={COST_COLORS.rawMaterial} fill={COST_COLORS.rawMaterial} fillOpacity={0.7} />
-                          <Area type="monotone" dataKey="부재료율" stackId="1" stroke={COST_COLORS.subMaterial} fill={COST_COLORS.subMaterial} fillOpacity={0.7} />
-                          <Area type="monotone" dataKey="노무비율" stackId="1" stroke={COST_COLORS.labor} fill={COST_COLORS.labor} fillOpacity={0.7} />
-                          <Area type="monotone" dataKey="경비율" stackId="1" stroke={COST_COLORS.overhead} fill={COST_COLORS.overhead} fillOpacity={0.7} />
-                        </AreaChart>
+                          {/* 100점 기준선 */}
+                          <Line type="monotone" dataKey={() => 100} name="기준(100)" stroke="#9CA3AF" strokeDasharray="5 5" strokeWidth={1} dot={false} />
+                          <Line type="monotone" dataKey="rawScore" name="원재료" stroke={COST_COLORS.rawMaterial} strokeWidth={2} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="subScore" name="부재료" stroke={COST_COLORS.subMaterial} strokeWidth={2} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="laborScore" name="노무비" stroke={COST_COLORS.labor} strokeWidth={2} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="overheadScore" name="경비" stroke={COST_COLORS.overhead} strokeWidth={2} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="overallScore" name="종합" stroke="#8B5CF6" strokeWidth={3} dot={{ r: 4 }} />
+                        </LineChart>
                       </ResponsiveContainer>
                     </div>
-                  ) : <p className="text-gray-400 text-center py-10">원가 데이터 없음</p>}
+                  ) : <p className="text-gray-400 text-center py-10">주간 데이터 없음</p>}
                 </div>
                 {/* 원가 구성비 Pie */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">원가 구성비 (원가율 기준)</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">원가 구성비</h3>
                   {composition.length > 0 && totalCost > 0 ? (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie data={composition} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value"
-                            label={({ name }) => {
-                              const rate = productionRevenue > 0
-                                ? Math.round(((composition.find(c => c.name === name)?.value || 0) / productionRevenue) * 1000) / 10
-                                : 0;
-                              return `${name} ${rate}%`;
+                            label={({ name, value }) => {
+                              const pct = totalCost > 0 ? Math.round((value / totalCost) * 1000) / 10 : 0;
+                              return `${name} ${pct}%`;
                             }}>
                             {composition.map((_, i) => <Cell key={i} fill={Object.values(COST_COLORS)[i] || PIE_COLORS[i]} />)}
                           </Pie>
-                          <Tooltip formatter={(v: number) => [`${formatCurrency(v)} (${productionRevenue > 0 ? (v / productionRevenue * 100).toFixed(1) : 0}%)`, '원가']} />
+                          <Tooltip formatter={(v: number) => [`${formatCurrency(v)} (${totalCost > 0 ? (v / totalCost * 100).toFixed(1) : 0}%)`, '원가']} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -387,45 +446,10 @@ export const CostManagementView: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* 주간 원가율 테이블 */}
-              {weeklyCostRate.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 원가율 상세</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">주간</th>
-                          <th className="text-right py-2 px-3" style={{ color: COST_COLORS.rawMaterial }}>원재료율</th>
-                          <th className="text-right py-2 px-3" style={{ color: COST_COLORS.subMaterial }}>부재료율</th>
-                          <th className="text-right py-2 px-3" style={{ color: COST_COLORS.labor }}>노무비율</th>
-                          <th className="text-right py-2 px-3" style={{ color: COST_COLORS.overhead }}>경비율</th>
-                          <th className="text-right py-2 px-3 text-gray-500">총원가율</th>
-                          <th className="text-right py-2 px-3 text-gray-500">총원가액</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {weeklyCostRate.map(m => (
-                          <tr key={m.week} className="border-b border-gray-100 dark:border-gray-800">
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{m.week}</td>
-                            <td className="py-2 px-3 text-right font-medium" style={{ color: COST_COLORS.rawMaterial }}>{m.원재료율}%</td>
-                            <td className="py-2 px-3 text-right font-medium" style={{ color: COST_COLORS.subMaterial }}>{m.부재료율}%</td>
-                            <td className="py-2 px-3 text-right font-medium" style={{ color: COST_COLORS.labor }}>{m.노무비율}%</td>
-                            <td className="py-2 px-3 text-right font-medium" style={{ color: COST_COLORS.overhead }}>{m.경비율}%</td>
-                            <td className={`py-2 px-3 text-right font-bold ${m.총원가율 > 80 ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>{m.총원가율}%</td>
-                            <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(m.total)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
               <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
                 <p className="text-sm text-blue-800 dark:text-blue-300 flex items-center gap-2">
                   <span className="material-icons-outlined text-base">info</span>
-                  원가율 = 원가액 / 생산매출 × 100 | 전주 대비 원가액 변동: {prevWeekChange > 0 ? '+' : ''}{prevWeekChange}%
+                  점수 = (실적배수 / 목표배수) x 100 | 100점 이상 = 목표 달성 | 절감 = 목표원가 - 실제원가
                 </p>
               </div>
 
@@ -450,6 +474,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
+              <ScoreHeader item={scoringResult?.items.find(i => i.label === '원재료')} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 원재료비</p>
@@ -661,6 +686,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
+              <ScoreHeader item={scoringResult?.items.find(i => i.label === '부재료')} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 부재료비</p>
@@ -788,6 +814,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
+              <ScoreHeader item={scoringResult?.items.find(i => i.label === '노무비')} />
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 노무비{hasLaborRecords ? '' : ' (추정)'}</p>
@@ -999,6 +1026,7 @@ export const CostManagementView: React.FC<Props> = ({
 
         return (
           <div className="space-y-6">
+            <ScoreHeader item={scoringResult?.items.find(i => i.label === '경비')} />
             {/* KPI — B5: 생산매출/생산량 대비 추가 */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">

@@ -4,6 +4,7 @@
  */
 
 import React, { createContext, useContext, ReactNode } from 'react';
+import type { DateRangeOption } from '../utils/dateRange';
 
 export type ViewType =
   | 'home'
@@ -18,10 +19,12 @@ export interface UIContextType {
   setActiveView: (view: ViewType) => void;
   activeSubTab: string | null;
   setActiveSubTab: (tab: string | null) => void;
-  dateRange: string;
-  setDateRange: (range: string) => void;
+  dateRange: DateRangeOption;
+  setDateRange: (range: DateRangeOption) => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+  settingsDirty: boolean;
+  setSettingsDirty: (dirty: boolean) => void;
 }
 
 const UIContext = createContext<UIContextType | null>(null);

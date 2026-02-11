@@ -7,8 +7,18 @@ import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { DailySalesData, SalesDetailData, PurchaseData } from '../services/googleSheetService';
 import type { DashboardInsights } from '../services/insightService';
+import {
+  computeChannelRevenue,
+  computeProductProfit,
+  computeRevenueTrend,
+  computeProductBEP,
+  computeCostBreakdown,
+} from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
+import { getChannelCostSummaries } from './ChannelCostAdmin';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
+import { useUI } from '../contexts/UIContext';
+import { getDateRange, filterByDate, getRangeLabel } from '../utils/dateRange';
 
 interface Props {
   dailySales: DailySalesData[];
@@ -25,11 +35,50 @@ const BUDGET_COLORS = { rawMaterial: '#3B82F6', subMaterial: '#10B981', labor: '
 
 export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, purchases, insights, onItemClick, onTabChange }) => {
   const config = useBusinessConfig();
-  const channelRevenue = insights?.channelRevenue;
-  const productProfit = insights?.productProfit;
-  const revenueTrend = insights?.revenueTrend;
-  const productBEP = insights?.productBEP;
-  const costBreakdown = insights?.costBreakdown;
+  const { dateRange } = useUI();
+
+  // ─── 날짜 범위에 따라 데이터 필터 ───
+  const { start: rangeStart, end: rangeEnd } = useMemo(() => getDateRange(dateRange), [dateRange]);
+
+  const filteredDailySales = useMemo(
+    () => filterByDate(dailySales, rangeStart, rangeEnd),
+    [dailySales, rangeStart, rangeEnd]
+  );
+  const filteredSalesDetail = useMemo(
+    () => filterByDate(salesDetail, rangeStart, rangeEnd),
+    [salesDetail, rangeStart, rangeEnd]
+  );
+  const filteredPurchases = useMemo(
+    () => filterByDate(purchases, rangeStart, rangeEnd),
+    [purchases, rangeStart, rangeEnd]
+  );
+
+  // ─── 필터된 데이터로 인사이트 재계산 ───
+  const channelCosts = useMemo(() => getChannelCostSummaries(), []);
+
+  const channelRevenue = useMemo(
+    () => filteredDailySales.length > 0 ? computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config) : null,
+    [filteredDailySales, filteredPurchases, channelCosts, config]
+  );
+  const productProfit = useMemo(
+    () => filteredSalesDetail.length > 0 ? computeProductProfit(filteredSalesDetail, filteredPurchases) : null,
+    [filteredSalesDetail, filteredPurchases]
+  );
+  const revenueTrend = useMemo(
+    () => filteredDailySales.length > 0 ? computeRevenueTrend(filteredDailySales, filteredPurchases, channelCosts, config) : null,
+    [filteredDailySales, filteredPurchases, channelCosts, config]
+  );
+  const productBEP = useMemo(
+    () => productProfit ? computeProductBEP(productProfit, channelRevenue, config) : null,
+    [productProfit, channelRevenue, config]
+  );
+  const costBreakdown = useMemo(
+    () => filteredPurchases.length > 0 ? computeCostBreakdown(filteredPurchases, [], [], config) : null,
+    [filteredPurchases, config]
+  );
+
+  // 날짜 라벨
+  const rangeLabelText = getRangeLabel(dateRange);
 
   // A2: 주간 채널 매출 집계
   const weeklyChannelTrend = useMemo(() => {
@@ -68,8 +117,8 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
       rate: item.budget > 0 ? Math.round(item.actual / item.budget * 1000) / 10 : 0,
     }));
 
-    // 일별 누적 지출 (purchases 기반)
-    const dailySpend = purchases
+    // 일별 누적 지출 (필터된 purchases 기반)
+    const dailySpend = filteredPurchases
       .filter(p => p.date && p.total > 0)
       .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -78,7 +127,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
     const daysSet = new Set(dailySpend.map(p => p.date));
     const sortedDays = Array.from(daysSet).sort();
     const totalDays = sortedDays.length || 30;
-    const dailyBudget = totalBudget / 30;
+    const dailyBudget = totalBudget / totalDays;
 
     sortedDays.forEach((day, idx) => {
       const dayTotal = dailySpend.filter(p => p.date === day).reduce((s, p) => s + p.total, 0);
@@ -91,7 +140,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
     });
 
     return { totalBudget, totalActual, diff: totalActual - totalBudget, achievementRate, items, dailyCumulative };
-  }, [costBreakdown, purchases, config]);
+  }, [costBreakdown, filteredPurchases, config]);
 
   const tabs = [
     { key: 'channel', label: '채널별 수익', icon: 'storefront' },
@@ -331,7 +380,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
               {/* A3: 최근 30일 기반 표시 */}
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2">
                 <span className="material-icons-outlined text-blue-500 text-lg">info</span>
-                <p className="text-sm text-blue-700 dark:text-blue-300">최근 30일 판매 데이터 기준 품목별 매출/마진 분석입니다.</p>
+                <p className="text-sm text-blue-700 dark:text-blue-300">{rangeLabelText} 판매 데이터 기준 품목별 매출/마진 분석입니다.</p>
               </div>
 
               {/* KPI */}
