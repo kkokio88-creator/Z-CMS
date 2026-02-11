@@ -321,7 +321,7 @@ export const CostManagementView: React.FC<Props> = ({
     { key: 'raw', label: '원재료', icon: 'inventory_2' },
     { key: 'sub', label: '부재료', icon: 'category' },
     { key: 'labor', label: '노무비', icon: 'people' },
-    { key: 'overhead', label: '경비', icon: 'bolt' },
+    { key: 'overhead', label: '수도광열전력', icon: 'bolt' },
   ];
 
   return (
@@ -417,7 +417,7 @@ export const CostManagementView: React.FC<Props> = ({
                           <Line type="monotone" dataKey="rawScore" name="원재료" stroke={COST_COLORS.rawMaterial} strokeWidth={2} dot={{ r: 3 }} />
                           <Line type="monotone" dataKey="subScore" name="부재료" stroke={COST_COLORS.subMaterial} strokeWidth={2} dot={{ r: 3 }} />
                           <Line type="monotone" dataKey="laborScore" name="노무비" stroke={COST_COLORS.labor} strokeWidth={2} dot={{ r: 3 }} />
-                          <Line type="monotone" dataKey="overheadScore" name="경비" stroke={COST_COLORS.overhead} strokeWidth={2} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="overheadScore" name="수도광열전력" stroke={COST_COLORS.overhead} strokeWidth={2} dot={{ r: 3 }} />
                           <Line type="monotone" dataKey="overallScore" name="종합" stroke="#8B5CF6" strokeWidth={3} dot={{ r: 4 }} />
                         </LineChart>
                       </ResponsiveContainer>
@@ -1026,11 +1026,11 @@ export const CostManagementView: React.FC<Props> = ({
 
         return (
           <div className="space-y-6">
-            <ScoreHeader item={scoringResult?.items.find(i => i.label === '경비')} />
+            <ScoreHeader item={scoringResult?.items.find(i => i.label === '수도광열전력')} />
             {/* KPI — B5: 생산매출/생산량 대비 추가 */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">총 경비</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">총 수도광열전력</p>
                 <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(overheadDetail?.total || 0)}</p>
               </div>
               <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">

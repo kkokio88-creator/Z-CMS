@@ -1,6 +1,6 @@
 /**
  * 원가관리 점수 평가 시스템
- * 매출/원가 배수 기반으로 4개 항목(원재료/부재료/노무비/경비)을 점수화
+ * 매출/원가 배수 기반으로 4개 항목(원재료/부재료/노무비/수도광열전력)을 점수화
  */
 import type { ProfitCenterGoal, BusinessConfig } from '../config/businessConfig';
 import type { DailySalesData, PurchaseData, UtilityData, ProductionData } from '../services/googleSheetService';
@@ -11,7 +11,7 @@ import { getLaborMonthlySummaries } from '../components/LaborRecordAdmin';
 export type ScoreStatus = 'excellent' | 'good' | 'warning' | 'danger';
 
 export interface CostItemScore {
-  label: string;               // '원재료' | '부재료' | '노무비' | '경비'
+  label: string;               // '원재료' | '부재료' | '노무비' | '수도광열전력'
   actualMultiplier: number;    // 매출/원가 실적배수
   targetMultiplier: number;    // 목표배수
   score: number;               // (실적/목표) × 100
@@ -27,7 +27,7 @@ export interface CostScoringResult {
   filteredRevenue: number;
   monthlyRevenue: number;
   overallScore: number;        // 4항목 평균
-  items: CostItemScore[];      // [원재료, 부재료, 노무비, 경비]
+  items: CostItemScore[];      // [원재료, 부재료, 노무비, 수도광열전력]
   totalSurplus: number;
   totalCost: number;
 }
@@ -158,7 +158,7 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
     computeItem('원재료', filteredRevenue, rawCost, targets.revenueToRawMaterial, COST_COLORS.rawMaterial),
     computeItem('부재료', filteredRevenue, subCost, targets.revenueToSubMaterial, COST_COLORS.subMaterial),
     computeItem('노무비', filteredRevenue, laborCost, targets.productionToLabor, COST_COLORS.labor),
-    computeItem('경비', filteredRevenue, overheadCost, targets.revenueToExpense, COST_COLORS.overhead),
+    computeItem('수도광열전력', filteredRevenue, overheadCost, targets.revenueToExpense, COST_COLORS.overhead),
   ];
 
   const overallScore = Math.round(items.reduce((s, it) => s + it.score, 0) / items.length);

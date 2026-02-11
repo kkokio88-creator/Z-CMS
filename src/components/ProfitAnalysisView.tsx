@@ -102,7 +102,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
     const rawActual = comp.find(c => c.name === '원재료')?.value || 0;
     const subActual = comp.find(c => c.name === '부재료')?.value || 0;
     const laborActual = comp.find(c => c.name === '노무비')?.value || 0;
-    const overheadActual = comp.find(c => c.name === '경비')?.value || 0;
+    const overheadActual = comp.find(c => c.name === '수도광열전력')?.value || 0;
     const totalActual = rawActual + subActual + laborActual + overheadActual;
     const achievementRate = totalBudget > 0 ? Math.round(totalActual / totalBudget * 1000) / 10 : 0;
 
@@ -110,7 +110,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
       { name: '원재료', budget: config.budgetRawMaterial, actual: rawActual, color: BUDGET_COLORS.rawMaterial },
       { name: '부재료', budget: config.budgetSubMaterial, actual: subActual, color: BUDGET_COLORS.subMaterial },
       { name: '노무비', budget: config.budgetLabor, actual: laborActual, color: BUDGET_COLORS.labor },
-      { name: '경비', budget: config.budgetOverhead, actual: overheadActual, color: BUDGET_COLORS.overhead },
+      { name: '수도광열전력', budget: config.budgetOverhead, actual: overheadActual, color: BUDGET_COLORS.overhead },
     ].map(item => ({
       ...item,
       diff: item.actual - item.budget,

@@ -1085,7 +1085,7 @@ export function computeCostBreakdown(
     { name: '원재료', value: totalRaw, rate: grandTotal > 0 ? Math.round((totalRaw / grandTotal) * 1000) / 10 : 0 },
     { name: '부재료', value: totalSub, rate: grandTotal > 0 ? Math.round((totalSub / grandTotal) * 1000) / 10 : 0 },
     { name: '노무비', value: totalLabor, rate: grandTotal > 0 ? Math.round((totalLabor / grandTotal) * 1000) / 10 : 0 },
-    { name: '경비', value: totalOverhead, rate: grandTotal > 0 ? Math.round((totalOverhead / grandTotal) * 1000) / 10 : 0 },
+    { name: '수도광열전력', value: totalOverhead, rate: grandTotal > 0 ? Math.round((totalOverhead / grandTotal) * 1000) / 10 : 0 },
   ];
 
   // 원재료 상세
@@ -2550,7 +2550,7 @@ export function computeProfitCenterScore(
   const periodRaw = comp.find(c => c.name === '원재료')?.value || 0;
   const periodSub = comp.find(c => c.name === '부재료')?.value || 0;
   const laborCost = comp.find(c => c.name === '노무비')?.value || 0;
-  const overheadCost = comp.find(c => c.name === '경비')?.value || 0;
+  const overheadCost = comp.find(c => c.name === '수도광열전력')?.value || 0;
 
   // === 원재료 소비액 추정 (기초재고 + 구매 - 기말재고 근사) ===
   // 전체 구매 데이터의 일평균 소비율로 기간 소비액 산출 (구매 시점 편차 보정)
@@ -2618,7 +2618,7 @@ export function computeProfitCenterScore(
     { metric: '매출/원재료', target: Math.round(targetRevToRaw * 100) / 100, actual: Math.round(actualRevToRaw * 100) / 100, score: safeScore(actualRevToRaw, targetRevToRaw), status: getStatus(safeScore(actualRevToRaw, targetRevToRaw)) },
     { metric: '매출/부재료', target: Math.round(targetRevToSub * 100) / 100, actual: Math.round(actualRevToSub * 100) / 100, score: safeScore(actualRevToSub, targetRevToSub), status: getStatus(safeScore(actualRevToSub, targetRevToSub)) },
     { metric: '매출/노무비', target: Math.round(targets.productionToLabor * 100) / 100, actual: Math.round(actualProdToLabor * 100) / 100, score: safeScore(actualProdToLabor, targets.productionToLabor), status: getStatus(safeScore(actualProdToLabor, targets.productionToLabor)) },
-    { metric: '매출/경비', target: Math.round(targets.revenueToExpense * 100) / 100, actual: Math.round(actualRevToExpense * 100) / 100, score: safeScore(actualRevToExpense, targets.revenueToExpense), status: getStatus(safeScore(actualRevToExpense, targets.revenueToExpense)) },
+    { metric: '매출/수도광열전력', target: Math.round(targets.revenueToExpense * 100) / 100, actual: Math.round(actualRevToExpense * 100) / 100, score: safeScore(actualRevToExpense, targets.revenueToExpense), status: getStatus(safeScore(actualRevToExpense, targets.revenueToExpense)) },
     { metric: '영업이익률', target: Math.round(targets.profitMarginTarget * 10) / 10, actual: Math.round(actualProfitMargin * 10) / 10, score: safeScore(actualProfitMargin, targets.profitMarginTarget), status: getStatus(safeScore(actualProfitMargin, targets.profitMarginTarget)) },
     { metric: '폐기율', target: Math.round(targets.wasteRateTarget * 10) / 10, actual: Math.round(actualWasteRate * 10) / 10, score: scoreWaste, status: getStatus(scoreWaste) },
   ];

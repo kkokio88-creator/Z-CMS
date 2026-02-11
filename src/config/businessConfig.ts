@@ -12,7 +12,7 @@ export interface ProfitCenterGoal {
     revenueToMaterial: number;    // 매출/재료비 목표배수 (레거시, 합산)
     revenueToRawMaterial: number; // 매출/원재료 목표배수
     revenueToSubMaterial: number; // 매출/부재료 목표배수
-    revenueToExpense: number;     // 매출/경비 목표배수
+    revenueToExpense: number;     // 매출/수도광열전력 목표배수
     profitMarginTarget: number;   // 영업이익률 목표 (%)
     wasteRateTarget: number;      // 폐기율 목표 (%)
     // 절대 목표금액 (구글시트 '목표' 시트 기준, 월 단위)
@@ -21,7 +21,7 @@ export interface ProfitCenterGoal {
     targetRawMaterialCost?: number;    // 원재료비
     targetSubMaterialCost?: number;    // 부재료비
     targetLaborCost?: number;          // 노무비
-    targetOverheadCost?: number;       // 경비
+    targetOverheadCost?: number;       // 수도광열전력
   };
 }
 
@@ -269,70 +269,70 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
       revenueBracket: 900000000, label: '9억',
       targets: {
         productionToLabor: 4.15, revenueToMaterial: 3.61, revenueToRawMaterial: 3.97, revenueToSubMaterial: 39.69,
-        revenueToExpense: 7.26, profitMarginTarget: 5.6, wasteRateTarget: 3,
+        revenueToExpense: 72.58, profitMarginTarget: 5.6, wasteRateTarget: 3,
         targetRecommendedRevenue: 1295849907, targetProductionRevenue: 647924953,
         targetRawMaterialCost: 226773734, targetSubMaterialCost: 22677373,
-        targetLaborCost: 217000000, targetOverheadCost: 123997749,
+        targetLaborCost: 217000000, targetOverheadCost: 12400000,
       },
     },
     {
       revenueBracket: 1000000000, label: '10억',
       targets: {
         productionToLabor: 4.38, revenueToMaterial: 3.64, revenueToRawMaterial: 4.00, revenueToSubMaterial: 39.79,
-        revenueToExpense: 7.76, profitMarginTarget: 9.5, wasteRateTarget: 2.5,
+        revenueToExpense: 77.52, profitMarginTarget: 9.5, wasteRateTarget: 2.5,
         targetRecommendedRevenue: 1436277552, targetProductionRevenue: 718138776,
         targetRawMaterialCost: 249912294, targetSubMaterialCost: 25134857,
-        targetLaborCost: 228300000, targetOverheadCost: 128849163,
+        targetLaborCost: 228300000, targetOverheadCost: 12900000,
       },
     },
     {
       revenueBracket: 1100000000, label: '11억',
       targets: {
         productionToLabor: 4.59, revenueToMaterial: 3.66, revenueToRawMaterial: 4.03, revenueToSubMaterial: 39.87,
-        revenueToExpense: 8.23, profitMarginTarget: 12.7, wasteRateTarget: 2.5,
+        revenueToExpense: 82.09, profitMarginTarget: 12.7, wasteRateTarget: 2.5,
         targetRecommendedRevenue: 1576705197, targetProductionRevenue: 788352598,
         targetRawMaterialCost: 272769999, targetSubMaterialCost: 27592341,
-        targetLaborCost: 239600000, targetOverheadCost: 133700578,
+        targetLaborCost: 239600000, targetOverheadCost: 13400000,
       },
     },
     {
       revenueBracket: 1200000000, label: '12억',
       targets: {
         productionToLabor: 4.78, revenueToMaterial: 3.69, revenueToRawMaterial: 4.06, revenueToSubMaterial: 39.93,
-        revenueToExpense: 8.66, profitMarginTarget: 15.4, wasteRateTarget: 2,
+        revenueToExpense: 86.33, profitMarginTarget: 15.4, wasteRateTarget: 2,
         targetRecommendedRevenue: 1717132842, targetProductionRevenue: 858566421,
         targetRawMaterialCost: 295346849, targetSubMaterialCost: 30049825,
-        targetLaborCost: 250900000, targetOverheadCost: 138551993,
+        targetLaborCost: 250900000, targetOverheadCost: 13900000,
       },
     },
     {
       revenueBracket: 1300000000, label: '13억',
       targets: {
         productionToLabor: 4.96, revenueToMaterial: 3.71, revenueToRawMaterial: 4.09, revenueToSubMaterial: 39.99,
-        revenueToExpense: 9.07, profitMarginTarget: 17.7, wasteRateTarget: 2,
+        revenueToExpense: 90.91, profitMarginTarget: 17.7, wasteRateTarget: 2,
         targetRecommendedRevenue: 1857560487, targetProductionRevenue: 928780243,
         targetRawMaterialCost: 317642843, targetSubMaterialCost: 32507309,
-        targetLaborCost: 262200000, targetOverheadCost: 143403407,
+        targetLaborCost: 262200000, targetOverheadCost: 14300000,
       },
     },
     {
       revenueBracket: 1400000000, label: '14억',
       targets: {
         productionToLabor: 5.12, revenueToMaterial: 3.73, revenueToRawMaterial: 4.12, revenueToSubMaterial: 40.04,
-        revenueToExpense: 9.44, profitMarginTarget: 19.6, wasteRateTarget: 2,
+        revenueToExpense: 94.59, profitMarginTarget: 19.6, wasteRateTarget: 2,
         targetRecommendedRevenue: 1997988132, targetProductionRevenue: 998994066,
         targetRawMaterialCost: 339657982, targetSubMaterialCost: 34964792,
-        targetLaborCost: 273500000, targetOverheadCost: 148254822,
+        targetLaborCost: 273500000, targetOverheadCost: 14800000,
       },
     },
     {
       revenueBracket: 1500000000, label: '15억',
       targets: {
         productionToLabor: 5.27, revenueToMaterial: 3.76, revenueToRawMaterial: 4.15, revenueToSubMaterial: 40.08,
-        revenueToExpense: 9.80, profitMarginTarget: 21.4, wasteRateTarget: 2,
+        revenueToExpense: 98.04, profitMarginTarget: 21.4, wasteRateTarget: 2,
         targetRecommendedRevenue: 2138415777, targetProductionRevenue: 1069207889,
         targetRawMaterialCost: 361392266, targetSubMaterialCost: 37422276,
-        targetLaborCost: 284800000, targetOverheadCost: 153106237,
+        targetLaborCost: 284800000, targetOverheadCost: 15300000,
       },
     },
   ],

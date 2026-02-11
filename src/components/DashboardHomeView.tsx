@@ -88,7 +88,7 @@ const TABLE_LABELS: Record<string, string> = {
   production_daily: '생산',
   purchases: '구매',
   inventory: '재고',
-  utilities: '경비',
+  utilities: '수도광열전력',
 };
 
 export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({

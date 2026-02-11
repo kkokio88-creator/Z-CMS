@@ -931,7 +931,7 @@ export const SettingsView: React.FC = () => {
               <input type="number" value={draft.budgetLabor} onChange={e => updateDraft({ budgetLabor: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">경비 예산 (원)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">수도광열전력 예산 (원)</label>
               <input type="number" value={draft.budgetOverhead} onChange={e => updateDraft({ budgetOverhead: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
             </div>
           </div>
@@ -984,7 +984,7 @@ export const SettingsView: React.FC = () => {
                   <th className="text-center py-2 px-1.5">원재료비</th>
                   <th className="text-center py-2 px-1.5">부재료비</th>
                   <th className="text-center py-2 px-1.5">노무비</th>
-                  <th className="text-center py-2 px-1.5">경비</th>
+                  <th className="text-center py-2 px-1.5">수도광열<br/>전력</th>
                   <th className="text-center py-2 px-1.5">이익률<br/><span className="text-[10px] font-normal">(%)</span></th>
                   <th className="text-center py-2 px-1.5">폐기율<br/><span className="text-[10px] font-normal">(%)</span></th>
                   <th className="text-center py-2 px-1.5 w-8"></th>
