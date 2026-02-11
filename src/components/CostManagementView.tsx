@@ -159,9 +159,9 @@ export const CostManagementView: React.FC<Props> = ({
 
   // 주간 점수 (기존 costScoring 유지 — 주간 추세 그래프용)
   const scoringParams = useMemo(() => ({
-    dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays,
+    dailySales: filteredDailySales, purchases: filteredPurchases, utilities: filteredUtilities, production: filteredProduction, labor: filteredLabor, config, rangeStart, rangeEnd, rangeDays,
     channelCosts: getChannelCostSummaries(),
-  }), [dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays]);
+  }), [filteredDailySales, filteredPurchases, filteredUtilities, filteredProduction, filteredLabor, config, rangeStart, rangeEnd, rangeDays]);
   const weeklyScores = useMemo(() => computeWeeklyCostScores(scoringParams), [scoringParams]);
 
   // 날짜 필터된 데이터로 로컬 계산 (기간 변경 시 반응)

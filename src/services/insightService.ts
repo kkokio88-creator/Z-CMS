@@ -2316,13 +2316,22 @@ function computeBomConsumptionAnomaly(
   inventorySnapshots: InventorySnapshotData[],
   config: BusinessConfig
 ): BomConsumptionAnomalyInsight | null {
-  if (bomData.length === 0 || purchases.length === 0) return null;
+  if (bomData.length === 0 || purchases.length === 0 || production.length === 0) return null;
 
-  // 1. 총 생산량 (ProductionData.prodQtyTotal 합계)
-  const totalProduction = production.reduce((s, p) => s + p.prodQtyTotal, 0);
-  if (totalProduction === 0) return null;
+  // BOM 자재코드 집합 + 관련 제품명 + 자재명
+  const bomMaterialCodes = new Set<string>();
+  const bomProductNames = new Map<string, Set<string>>();
+  for (const bom of bomData) {
+    const matCode = bom.materialCode?.trim();
+    if (!matCode) continue;
+    bomMaterialCodes.add(matCode);
+    const names = bomProductNames.get(matCode) || new Set<string>();
+    const prodName = bom.productName || bom.productCode || '';
+    if (prodName) names.add(prodName);
+    bomProductNames.set(matCode, names);
+  }
 
-  // 2. materialMaster → 자재별 기준 단가 + 이름
+  // materialMaster → 자재별 기준 단가 + 이름
   const masterPriceMap = new Map<string, number>();
   const masterNameMap = new Map<string, string>();
   for (const mm of materialMaster) {
@@ -2332,19 +2341,7 @@ function computeBomConsumptionAnomaly(
     if (mm.materialName) masterNameMap.set(code, mm.materialName);
   }
 
-  // 3. purchases → 자재코드별 구매량/금액 집계 (ZIP_M_*, ZIP_H_* 등)
-  const purchaseAgg = new Map<string, { totalQty: number; totalAmount: number; count: number; name: string }>();
-  for (const p of purchases) {
-    const code = p.productCode?.trim();
-    if (!code) continue;
-    const agg = purchaseAgg.get(code) || { totalQty: 0, totalAmount: 0, count: 0, name: p.productName || code };
-    agg.totalQty += p.quantity || 0;
-    agg.totalAmount += p.total || 0;
-    agg.count += 1;
-    purchaseAgg.set(code, agg);
-  }
-
-  // 4. 재고 스냅샷 → 자재코드별 현재 재고 잔량 (복수 창고 합산)
+  // 재고 스냅샷 → 자재코드별 현재 재고 잔량
   const inventoryBalance = new Map<string, number>();
   for (const inv of inventorySnapshots) {
     const code = inv.productCode?.trim();
@@ -2352,43 +2349,41 @@ function computeBomConsumptionAnomaly(
     inventoryBalance.set(code, (inventoryBalance.get(code) || 0) + inv.balanceQty);
   }
 
-  // 5. BOM → 자재코드별 이론 소모량 (생산량 기반)
-  //    BOM: productCode(SAN_*) → materialCode(ZIP_M_*, ZIP_H_*)
-  //    이론 소모량 = totalProduction × (Σ consumptionQty / Σ productionQty)
-  //    (총 생산량 대비 자재별 평균 소모율)
-  const bomByMaterial = new Map<string, {
-    totalConsumption: number;  // Σ consumptionQty + additionalQty
-    totalProductionQty: number; // Σ productionQty
-    productNames: Set<string>;
-    materialName: string;
-  }>();
+  // BOM 자재만 필터하여 구매 데이터 추출
+  const bomPurchases = purchases.filter(p => bomMaterialCodes.has(p.productCode?.trim()));
+  if (bomPurchases.length === 0) return null;
 
-  for (const bom of bomData) {
-    const matCode = bom.materialCode?.trim();
-    if (!matCode) continue;
-    const consumptionPerBatch = (bom.consumptionQty || 0) + (bom.additionalQty || 0);
-    const prodQty = bom.productionQty || 1;
+  // 기간 분할: 전반기(기준) vs 후반기(최근)
+  const sortedPurchases = [...bomPurchases].sort((a, b) => a.date.localeCompare(b.date));
+  const midIdx = Math.floor(sortedPurchases.length / 2);
+  const basePeriod = sortedPurchases.slice(0, midIdx);
+  const recentPeriod = sortedPurchases.slice(midIdx);
 
-    const entry = bomByMaterial.get(matCode) || {
-      totalConsumption: 0,
-      totalProductionQty: 0,
-      productNames: new Set<string>(),
-      materialName: '',
-    };
-    entry.totalConsumption += consumptionPerBatch;
-    entry.totalProductionQty += prodQty;
+  const sortedProd = [...production].sort((a, b) => a.date.localeCompare(b.date));
+  const prodMidIdx = Math.floor(sortedProd.length / 2);
+  const baseProdTotal = sortedProd.slice(0, prodMidIdx).reduce((s, p) => s + p.prodQtyTotal, 0) || 1;
+  const recentProdTotal = sortedProd.slice(prodMidIdx).reduce((s, p) => s + p.prodQtyTotal, 0) || 1;
 
-    // 이름: materialMaster 우선 → BOM materialName → 코드
-    if (!entry.materialName) {
-      entry.materialName = masterNameMap.get(matCode) || bom.materialName || matCode;
+  // 기간별 자재 집계
+  type PeriodAgg = { qty: number; amount: number; count: number; name: string };
+  const aggregate = (data: PurchaseData[]) => {
+    const map = new Map<string, PeriodAgg>();
+    for (const p of data) {
+      const code = p.productCode?.trim();
+      if (!code) continue;
+      const agg = map.get(code) || { qty: 0, amount: 0, count: 0, name: p.productName || code };
+      agg.qty += p.quantity || 0;
+      agg.amount += p.total || 0;
+      agg.count += 1;
+      map.set(code, agg);
     }
-    const prodName = bom.productName || masterNameMap.get(bom.productCode?.trim() || '') || bom.productCode;
-    if (prodName) entry.productNames.add(prodName);
+    return map;
+  };
 
-    bomByMaterial.set(matCode, entry);
-  }
+  const baseAgg = aggregate(basePeriod);
+  const recentAgg = aggregate(recentPeriod);
 
-  // 6. 비교 및 이상 감지
+  // 이상 감지: 생산량 정규화 비율 비교 (전반기 vs 후반기)
   const items: BomConsumptionAnomalyItem[] = [];
   const overuseThresh = config.bomOveruseThreshold;
   const underuseThresh = config.bomUnderuseThreshold;
@@ -2397,28 +2392,34 @@ function computeBomConsumptionAnomaly(
   const medSev = config.bomMediumSeverity;
   const highSev = config.bomHighSeverity;
 
-  for (const [matCode, bomInfo] of bomByMaterial) {
-    const pAgg = purchaseAgg.get(matCode);
-    if (!pAgg) continue; // BOM에는 있지만 구매 이력 없음 → 무시
+  // BOM 자재 중 구매 이력이 있는 것만 분석
+  const allMatCodes = new Set([...baseAgg.keys(), ...recentAgg.keys()]);
 
-    const totalSpend = pAgg.totalAmount;
+  for (const matCode of allMatCodes) {
+    const base = baseAgg.get(matCode);
+    const recent = recentAgg.get(matCode);
+    if (!base || !recent) continue;
+
+    const totalSpend = base.amount + recent.amount;
     if (totalSpend < minSpend) continue;
 
-    // 이론 소모량: 총 생산량 × (BOM 소모율 = totalConsumption / totalProductionQty)
-    const bomRate = bomInfo.totalProductionQty > 0
-      ? bomInfo.totalConsumption / bomInfo.totalProductionQty
-      : 0;
-    const expectedQty = totalProduction * bomRate;
+    // 생산량 정규화: 자재 사용률 = 구매량 / 생산량
+    const baseRate = base.qty / baseProdTotal;
+    const recentRate = recent.qty / recentProdTotal;
+
+    // 기대 소모량 = 전반기 비율 × 후반기 생산량 (전반기 패턴이 정상이라 가정)
+    const expectedQty = Math.round(baseRate * recentProdTotal);
+    const actualQty = recent.qty;
+
     if (expectedQty === 0) continue;
 
-    // 실제 사용량 = 구매량 - 재고 잔량 보정 (재고 증가분은 미사용으로 간주)
-    const currentBalance = inventoryBalance.get(matCode) || 0;
-    const actualQty = pAgg.totalQty - currentBalance;
-
     const deviationPct = ((actualQty - expectedQty) / expectedQty) * 100;
-    const bomUnitPrice = masterPriceMap.get(matCode) || 0;
-    const actualAvgPrice = pAgg.totalQty > 0 ? pAgg.totalAmount / pAgg.totalQty : 0;
-    const priceDeviationPct = bomUnitPrice > 0 ? ((actualAvgPrice - bomUnitPrice) / bomUnitPrice) * 100 : 0;
+
+    // 가격 비교: 전반기 평균단가 vs 후반기 평균단가
+    const baseAvgPrice = base.qty > 0 ? base.amount / base.qty : 0;
+    const recentAvgPrice = recent.qty > 0 ? recent.amount / recent.qty : 0;
+    const bomUnitPrice = masterPriceMap.get(matCode) || baseAvgPrice;
+    const priceDeviationPct = baseAvgPrice > 0 ? ((recentAvgPrice - baseAvgPrice) / baseAvgPrice) * 100 : 0;
 
     // 이상 유형 판별
     let anomalyType: BomAnomalyType | null = null;
@@ -2438,24 +2439,28 @@ function computeBomConsumptionAnomaly(
 
     // 비용 영향
     const costImpact = anomalyType === 'price_deviation'
-      ? (actualAvgPrice - bomUnitPrice) * Math.abs(actualQty)
-      : (actualQty - expectedQty) * (bomUnitPrice || actualAvgPrice);
+      ? Math.round((recentAvgPrice - baseAvgPrice) * actualQty)
+      : Math.round((actualQty - expectedQty) * (bomUnitPrice || recentAvgPrice));
+
+    // 자재명: materialMaster 우선 → 구매 데이터 이름
+    const materialName = masterNameMap.get(matCode) || recent.name || base.name || matCode;
+    const productNames = bomProductNames.get(matCode);
 
     items.push({
       materialCode: matCode,
-      materialName: bomInfo.materialName,
-      productNames: [...bomInfo.productNames],
-      expectedConsumption: Math.round(expectedQty * 100) / 100,
-      actualConsumption: Math.round(actualQty * 100) / 100,
+      materialName,
+      productNames: productNames ? [...productNames] : [],
+      expectedConsumption: expectedQty,
+      actualConsumption: actualQty,
       deviationPct: Math.round(deviationPct * 10) / 10,
-      bomUnitPrice,
-      actualAvgPrice: Math.round(actualAvgPrice),
+      bomUnitPrice: Math.round(bomUnitPrice),
+      actualAvgPrice: Math.round(recentAvgPrice),
       priceDeviationPct: Math.round(priceDeviationPct * 10) / 10,
       anomalyType,
       severity,
-      costImpact: Math.round(costImpact),
+      costImpact,
       totalSpend: Math.round(totalSpend),
-      transactionCount: pAgg.count,
+      transactionCount: (base.count || 0) + (recent.count || 0),
     });
   }
 
