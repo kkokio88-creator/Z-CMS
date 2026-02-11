@@ -63,14 +63,7 @@ async function getSheetsClient(): Promise<sheets_v4.Sheets> {
  */
 router.post('/test-connection', async (req: Request, res: Response) => {
   try {
-    const { spreadsheetUrl, sheetName } = req.body;
-
-    if (!spreadsheetUrl) {
-      return res.json({
-        success: false,
-        message: '스프레드시트 URL을 입력해주세요.',
-      });
-    }
+    const { spreadsheetUrl, spreadsheetId: directId, sheetName } = req.body;
 
     if (!sheetName) {
       return res.json({
@@ -79,11 +72,12 @@ router.post('/test-connection', async (req: Request, res: Response) => {
       });
     }
 
-    const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+    // spreadsheetId 직접 전달 또는 URL에서 추출
+    const spreadsheetId = directId || (spreadsheetUrl ? extractSpreadsheetId(spreadsheetUrl) : null);
     if (!spreadsheetId) {
       return res.json({
         success: false,
-        message: '유효한 Google Sheets URL이 아닙니다.',
+        message: '스프레드시트 ID 또는 URL을 입력해주세요.',
       });
     }
 
