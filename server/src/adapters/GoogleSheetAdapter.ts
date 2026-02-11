@@ -79,8 +79,7 @@ export interface PurchaseData {
   supplyAmount: number;
   vat: number;
   total: number;
-  inboundPrice: number;
-  inboundTotal: number;
+  supplierName: string;
 }
 
 export interface UtilityData {
@@ -451,21 +450,25 @@ export class GoogleSheetAdapter {
 
   /**
    * 구매/원자재 데이터 가져오기
+   * 컬럼: 월/일(A), 품명 및 규격(B), 품목코드(C), 수량(D), 단가(E), 공급가액(F), 부가세(G), 합계(H), 구매처명(I)
+   * 날짜 형식: YYYY/MM/DD-N (순번 포함) → YYYY-MM-DD 로 변환
    */
   async fetchPurchases(): Promise<PurchaseData[]> {
     const rows = await this.fetchSheet(SHEET_GIDS.purchases);
     const results: PurchaseData[] = [];
 
-    // 헤더: 일별, 품목별, 품목코드, 수량, 단가, 공급가액, 부가세, 합계, 입고단가, 입고단가*수량, 사용자지정숫자2
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      const date = this.parseDate(row[0]);
+      const rawDate = (row[0] || '').trim();
 
-      if (!date || (!date.match(/^\d{4}\/\d{2}\/\d{2}$/) && !date.match(/^\d{4}-\d{2}-\d{2}$/)))
-        continue;
+      // YYYY/MM/DD-N 또는 YYYY/MM/DD 형식에서 날짜 부분만 추출
+      const dateMatch = rawDate.match(/^(\d{4}\/\d{2}\/\d{2})/);
+      if (!dateMatch) continue;
+
+      const date = dateMatch[1].replace(/\//g, '-');
 
       results.push({
-        date: date.replace(/\//g, '-'),
+        date,
         productName: row[1] || '',
         productCode: row[2] || '',
         quantity: this.parseNumber(row[3]),
@@ -473,8 +476,7 @@ export class GoogleSheetAdapter {
         supplyAmount: this.parseNumber(row[5]),
         vat: this.parseNumber(row[6]),
         total: this.parseNumber(row[7]),
-        inboundPrice: this.parseNumber(row[8]),
-        inboundTotal: this.parseNumber(row[9]),
+        supplierName: row[8] || '',
       });
     }
 

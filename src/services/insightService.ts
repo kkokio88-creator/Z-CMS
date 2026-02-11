@@ -9,6 +9,7 @@ import type {
   ProductionData,
   PurchaseData,
   UtilityData,
+  LaborDailyData,
   BomItemData,
   MaterialMasterItem,
 } from './googleSheetService';
@@ -16,7 +17,6 @@ import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
 import { BusinessConfig, DEFAULT_BUSINESS_CONFIG, ProfitCenterGoal } from '../config/businessConfig';
 import type { ChannelCostSummary } from '../components/ChannelCostAdmin';
-import { getLaborMonthlySummaries, getMonthlyLaborCost, getTotalLaborCost } from '../components/LaborRecordAdmin';
 
 // ==============================
 // 타입 정의
@@ -1004,7 +1004,8 @@ export function computeCostBreakdown(
   purchases: PurchaseData[],
   utilities: UtilityData[],
   production: ProductionData[],
-  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
+  labor: LaborDailyData[] = []
 ): CostBreakdownInsight {
   // 원재료 / 부재료 분류
   const rawItems: PurchaseData[] = [];
@@ -1019,75 +1020,62 @@ export function computeCostBreakdown(
 
   const totalRaw = rawItems.reduce((s, p) => s + p.total, 0);
   const totalSub = subItems.reduce((s, p) => s + p.total, 0);
+  // 경비 = 수도광열비 + 전력비 (유틸리티만, 고정비/변동비 제외)
   const totalUtility = utilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
-  const totalProduction = production.reduce((s, p) => s + p.quantity, 0);
 
-  // 노무비: 실제 기록이 있으면 사용, 없으면 비율 추정
-  const actualLaborCost = getTotalLaborCost(config.avgHourlyWage, config.overtimeMultiplier);
-  const totalLabor = actualLaborCost > 0
-    ? actualLaborCost
+  // 노무비: 노무비 시트 실데이터 (급여만, 잡급·퇴직급여 제외)
+  const totalLabor = labor.length > 0
+    ? labor.reduce((s, l) => s + l.totalPay, 0)
     : Math.round((totalRaw + totalSub + totalUtility) * config.laborCostRatio);
-  const laborIsActual = actualLaborCost > 0;
 
-  // 경비 계산: 고정비 + 변동비 + 공과금
-  // 고정비: 월 고정경비 설정값 (설정되지 않으면 기존 overheadRatio 방식 폴백)
-  // 변동비: 변동경비단가 × 총 생산량
-  const hasFixedOverhead = config.monthlyFixedOverhead > 0 || config.variableOverheadPerUnit > 0;
-  const fixedOverhead = config.monthlyFixedOverhead; // 월 단위 (조회 기간에 따라 비례 배분은 추후)
-  const variableOverhead = Math.round(totalProduction * config.variableOverheadPerUnit);
-  const otherOverhead = hasFixedOverhead
-    ? fixedOverhead + variableOverhead
-    : Math.round((totalRaw + totalSub) * config.overheadRatio);
-  const totalOverhead = totalUtility + otherOverhead;
+  // 경비 = 유틸리티(전기+수도+가스)만
+  const totalOverhead = totalUtility;
 
   // 월별 4요소 원가 추이
-  const monthlyMap = new Map<string, { raw: number; sub: number; utility: number; prodQty: number }>();
+  const monthlyMap = new Map<string, { raw: number; sub: number; utility: number; laborPay: number }>();
 
   rawItems.forEach(p => {
     const month = p.date.slice(0, 7);
-    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, prodQty: 0 };
+    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, laborPay: 0 };
     existing.raw += p.total;
     monthlyMap.set(month, existing);
   });
   subItems.forEach(p => {
     const month = p.date.slice(0, 7);
-    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, prodQty: 0 };
+    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, laborPay: 0 };
     existing.sub += p.total;
     monthlyMap.set(month, existing);
   });
   utilities.forEach(u => {
     const month = u.date.slice(0, 7);
-    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, prodQty: 0 };
+    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, laborPay: 0 };
     existing.utility += u.elecCost + u.waterCost + u.gasCost;
     monthlyMap.set(month, existing);
   });
-  production.forEach(p => {
-    const month = p.date.slice(0, 7);
-    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, prodQty: 0 };
-    existing.prodQty += p.quantity;
+  // 노무비 시트 데이터를 월별로 집계
+  labor.forEach(l => {
+    const month = l.date.slice(0, 7);
+    const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, laborPay: 0 };
+    existing.laborPay += l.totalPay;
     monthlyMap.set(month, existing);
   });
 
   const monthly = Array.from(monthlyMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([month, data]) => {
-      // 노무비: 해당 월 실제 기록 우선, 없으면 비율 추정
-      const monthlyActualLabor = getMonthlyLaborCost(month, config.avgHourlyWage, config.overtimeMultiplier);
-      const labor = monthlyActualLabor !== null
-        ? monthlyActualLabor
+      // 노무비: 노무비 시트 실데이터 우선, 없으면 비율 추정
+      const laborCostForMonth = data.laborPay > 0
+        ? data.laborPay
         : Math.round((data.raw + data.sub + data.utility) * config.laborCostRatio);
-      // 경비: 고정비+변동비 방식 또는 기존 비율 방식
-      const monthlyOther = hasFixedOverhead
-        ? config.monthlyFixedOverhead + Math.round(data.prodQty * config.variableOverheadPerUnit)
-        : Math.round((data.raw + data.sub) * config.overheadRatio);
-      const overhead = data.utility + monthlyOther;
+      // 경비 = 유틸리티(전기+수도+가스)만
+      const overhead = data.utility;
       return {
         month,
         rawMaterial: data.raw,
         subMaterial: data.sub,
-        labor,
+        labor: laborCostForMonth,
         overhead,
-        total: data.raw + data.sub + labor + overhead,
+        total: data.raw + data.sub + laborCostForMonth + overhead,
       };
     });
 
@@ -1149,13 +1137,13 @@ export function computeCostBreakdown(
     subMaterialDetail,
     laborDetail: {
       estimated: totalLabor,
-      note: laborIsActual
-        ? '반별 근무 기록 기반 실제 노무비'
+      note: labor.length > 0
+        ? '노무비 시트 기반 실제 급여 합계'
         : `총 원가(원재료+부재료+경비)의 ${Math.round(config.laborCostRatio * 100)}% 추정값`,
     },
     overheadDetail: {
       utilities: totalUtility,
-      other: otherOverhead,
+      other: 0,
       total: totalOverhead,
     },
   };
@@ -2431,7 +2419,8 @@ export function computeAllInsights(
   channelCosts: ChannelCostSummary[] = [],
   config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
   bomData: BomItemData[] = [],
-  materialMaster: MaterialMasterItem[] = []
+  materialMaster: MaterialMasterItem[] = [],
+  labor: LaborDailyData[] = []
 ): DashboardInsights {
   const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales, purchases, channelCosts, config) : null;
   const productProfit = salesDetail.length > 0 ? computeProductProfit(salesDetail, purchases) : null;
@@ -2442,7 +2431,7 @@ export function computeAllInsights(
   const productionEfficiency = production.length > 0 ? computeProductionEfficiency(production) : null;
 
   const costBreakdown = purchases.length > 0
-    ? computeCostBreakdown(purchases, utilities, production, config)
+    ? computeCostBreakdown(purchases, utilities, production, config, labor)
     : null;
 
   const statisticalOrder = (inventoryData && inventoryData.length > 0 && purchases.length > 0)
@@ -2486,7 +2475,7 @@ export function computeAllInsights(
   );
 
   const profitCenterScore = computeProfitCenterScore(
-    channelRevenue, costBreakdown, wasteAnalysis, production, config, purchases
+    channelRevenue, costBreakdown, wasteAnalysis, production, config, purchases, labor
   );
 
   const bomConsumptionAnomaly = (bomData.length > 0 && purchases.length > 0)
@@ -2528,7 +2517,8 @@ export function computeProfitCenterScore(
   wasteAnalysis: WasteAnalysisInsight | null,
   production: ProductionData[],
   config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
-  allPurchases?: PurchaseData[]
+  allPurchases?: PurchaseData[],
+  labor: LaborDailyData[] = []
 ): ProfitCenterScoreInsight | null {
   if (!channelRevenue || !costBreakdown) return null;
 

@@ -9,8 +9,6 @@ import { CostManagementView } from '../components/CostManagementView.tsx';
 import { ProductionBomView } from '../components/ProductionBomView.tsx';
 import { InventoryOrderView } from '../components/InventoryOrderView.tsx';
 import { Modal } from '../components/Modal.tsx';
-import { AgentProvider } from '../agents/AgentContext.tsx';
-import { AIInsightSidebar } from '../components/AIInsightSidebar.tsx';
 import { AIAssistButton } from '../components/AIAssistButton.tsx';
 import { AIAssistOverlay } from '../components/AIAssistOverlay.tsx';
 import { countDangerInsights } from '../utils/pageInsightGenerator';
@@ -177,9 +175,6 @@ const App = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
-
-  // AI Sidebar State
-  const [isAISidebarOpen, setIsAISidebarOpen] = useState(true);
 
   // AI Overlay State
   const [isAIOverlayOpen, setIsAIOverlayOpen] = useState(false);
@@ -486,6 +481,7 @@ const App = () => {
             bizConfig,
             gsResult.bom || [],
             gsResult.materialMaster || [],
+            gsResult.labor || [],
           );
           setInsights(computed);
           console.log('[App] Insights 계산 완료:', {
@@ -641,17 +637,18 @@ const App = () => {
       const fPurchases = filterByDate(gsPurchases, start, end);
       const fProduction = filterByDate(gsProduction, start, end);
       const fUtilities = filterByDate(gsUtilities, start, end);
+      const fLabor = filterByDate(gsLabor, start, end);
       if (!fSales.length) return null;
       const bizConfig = loadBusinessConfig();
       const channelCosts = getChannelCostSummaries();
       const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, bizConfig);
-      const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, bizConfig);
+      const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, bizConfig, fLabor);
       const wa = computeWasteAnalysis(fProduction, bizConfig, fPurchases);
-      return computeProfitCenterScore(cr, cb, wa, fProduction, bizConfig, gsPurchases);
+      return computeProfitCenterScore(cr, cb, wa, fProduction, bizConfig, gsPurchases, fLabor);
     } catch {
       return insights?.profitCenterScore ?? null;
     }
-  }, [dateRange, gsDailySales, gsPurchases, gsProduction, gsUtilities, insights]);
+  }, [dateRange, gsDailySales, gsPurchases, gsProduction, gsUtilities, gsLabor, insights]);
 
   const renderActiveView = () => {
     // Show loading skeleton if fetching
@@ -1108,7 +1105,6 @@ const App = () => {
     <SettingsProvider>
     <DataProvider value={dataContextValue}>
     <UIProvider value={uiContextValue}>
-    <AgentProvider autoConnect={true}>
       <div className="flex h-screen bg-background-light dark:bg-background-dark overflow-hidden font-sans">
         <Sidebar
           activeView={activeView}
@@ -1137,16 +1133,6 @@ const App = () => {
 
           <div className="flex-1 overflow-auto p-6 scroll-smooth">{renderActiveView()}</div>
         </main>
-
-        {/* AI Insight Sidebar */}
-        <AIInsightSidebar
-          isOpen={isAISidebarOpen}
-          onClose={() => setIsAISidebarOpen(!isAISidebarOpen)}
-          onInsightClick={insight => {
-            setSelectedItem(insight);
-            setIsModalOpen(true);
-          }}
-        />
 
         {/* AI Assist Overlay */}
         <AIAssistButton
@@ -1199,7 +1185,6 @@ const App = () => {
           </div>
         )}
       </div>
-    </AgentProvider>
     </UIProvider>
     </DataProvider>
     </SettingsProvider>

@@ -72,11 +72,15 @@ CREATE TABLE IF NOT EXISTS purchases (
   supply_amount numeric DEFAULT 0,
   vat numeric DEFAULT 0,
   total numeric DEFAULT 0,
-  inbound_price numeric DEFAULT 0,
-  inbound_total numeric DEFAULT 0,
+  supplier_name varchar(200) DEFAULT '',
   synced_at timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(date);
+
+-- 마이그레이션: 기존 purchases 테이블 컬럼 변경 (이미 테이블이 있는 경우)
+-- ALTER TABLE purchases ADD COLUMN IF NOT EXISTS supplier_name varchar(200) DEFAULT '';
+-- ALTER TABLE purchases DROP COLUMN IF EXISTS inbound_price;
+-- ALTER TABLE purchases DROP COLUMN IF EXISTS inbound_total;
 
 -- 5. 재고 현황
 CREATE TABLE IF NOT EXISTS inventory (

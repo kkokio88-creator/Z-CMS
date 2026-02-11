@@ -75,8 +75,7 @@ export interface PurchaseRow {
   supply_amount: number;
   vat: number;
   total: number;
-  inbound_price: number;
-  inbound_total: number;
+  supplier_name: string;
   synced_at?: string;
 }
 

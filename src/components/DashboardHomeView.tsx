@@ -131,9 +131,11 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
     const days = Math.round((new Date(rangeEnd).getTime() - new Date(rangeStart).getTime()) / (86400000)) + 1;
     const prevEnd = new Date(new Date(rangeStart).getTime() - 86400000);
     const prevStart = new Date(prevEnd.getTime() - (days - 1) * 86400000);
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     return {
-      start: prevStart.toISOString().slice(0, 10),
-      end: prevEnd.toISOString().slice(0, 10),
+      start: fmt(prevStart),
+      end: fmt(prevEnd),
     };
   }, [rangeStart, rangeEnd]);
 

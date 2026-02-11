@@ -1,5 +1,4 @@
 import React from 'react';
-import { SSEStatusIndicator } from './SSEStatusIndicator';
 import { DATE_RANGE_OPTIONS, getRangeLabel, type DateRangeOption } from '../utils/dateRange';
 
 interface HeaderProps {
@@ -53,8 +52,6 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 오른쪽: 유틸리티 버튼 */}
       <div className="flex items-center space-x-3">
-        <SSEStatusIndicator />
-
         <button
           onClick={toggleDarkMode}
           className="p-1 rounded-full text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none"

@@ -121,8 +121,7 @@ export class SyncService {
         supply_amount: d.supplyAmount,
         vat: d.vat,
         total: d.total,
-        inbound_price: d.inboundPrice,
-        inbound_total: d.inboundTotal,
+        supplier_name: d.supplierName,
       }));
 
       const utilityRows: UtilityRow[] = sheetData.utilities.map(d => ({

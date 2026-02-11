@@ -85,8 +85,7 @@ function mapPurchaseFromDb(row: any): PurchaseData {
     supplyAmount: row.supply_amount ?? 0,
     vat: row.vat ?? 0,
     total: row.total ?? 0,
-    inboundPrice: row.inbound_price ?? 0,
-    inboundTotal: row.inbound_total ?? 0,
+    supplierName: row.supplier_name ?? '',
   };
 }
 
@@ -181,8 +180,7 @@ export interface PurchaseData {
   supplyAmount: number;
   vat: number;
   total: number;
-  inboundPrice: number;
-  inboundTotal: number;
+  supplierName: string;
 }
 
 export interface UtilityData {

@@ -105,8 +105,7 @@ function mapPurchaseFromDb(row: Record<string, any>): PurchaseData {
     supplyAmount: row.supply_amount ?? 0,
     vat: row.vat ?? 0,
     total: row.total ?? 0,
-    inboundPrice: row.inbound_price ?? 0,
-    inboundTotal: row.inbound_total ?? 0,
+    supplierName: row.supplier_name ?? '',
   };
 }
 
