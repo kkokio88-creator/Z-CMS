@@ -8,6 +8,7 @@ import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
 import type { ProductionData, PurchaseData } from '../services/googleSheetService';
 import type { DashboardInsights, BomVarianceInsight, YieldTrackingInsight, BomConsumptionAnomalyInsight, BomConsumptionAnomalyItem } from '../services/insightService';
+import { computeWasteAnalysis, computeProductionEfficiency, computeBomVariance, computeYieldTracking } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate } from '../utils/dateRange';
@@ -75,11 +76,25 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
   const { dateRange } = useUI();
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getDateRange(dateRange), [dateRange]);
   const filteredProduction = useMemo(() => filterByDate(production, rangeStart, rangeEnd), [production, rangeStart, rangeEnd]);
+  const filteredPurchases = useMemo(() => filterByDate(purchases, rangeStart, rangeEnd), [purchases, rangeStart, rangeEnd]);
 
-  const wasteAnalysis = insights?.wasteAnalysis;
-  const prodEfficiency = insights?.productionEfficiency;
-  const bomVariance = insights?.bomVariance || null;
-  const yieldTracking = insights?.yieldTracking || null;
+  // dateRange 기반 인사이트 로컬 재계산
+  const wasteAnalysis = useMemo(
+    () => filteredProduction.length > 0 ? computeWasteAnalysis(filteredProduction, config, filteredPurchases) : null,
+    [filteredProduction, filteredPurchases, config]
+  );
+  const prodEfficiency = useMemo(
+    () => filteredProduction.length > 0 ? computeProductionEfficiency(filteredProduction) : null,
+    [filteredProduction]
+  );
+  const bomVariance = useMemo(
+    () => (filteredPurchases.length > 0 && filteredProduction.length > 0) ? computeBomVariance(filteredPurchases, filteredProduction) : null,
+    [filteredPurchases, filteredProduction]
+  );
+  const yieldTracking = useMemo(
+    () => (filteredProduction.length > 0 && filteredPurchases.length > 0) ? computeYieldTracking(filteredProduction, filteredPurchases, config) : null,
+    [filteredProduction, filteredPurchases, config]
+  );
 
   const [prodFilter, setProdFilter] = useState('all');
   const [wasteFilter, setWasteFilter] = useState('all');

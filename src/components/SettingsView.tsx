@@ -46,6 +46,76 @@ const SECTION_IDS = {
 
 const DEFAULT_OPEN_SECTIONS = new Set([SECTION_IDS.ecount, SECTION_IDS.googleSheets]);
 
+// ─── 카테고리 블럭 정의 ───
+interface CategoryDef {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+  textColor: string;
+  sections: string[];
+  description: string;
+}
+
+const CATEGORIES: CategoryDef[] = [
+  {
+    id: 'data-connection',
+    label: '데이터 연결',
+    icon: 'cloud_sync',
+    color: 'bg-blue-600',
+    textColor: 'text-blue-600 dark:text-blue-400',
+    sections: [SECTION_IDS.ecount, SECTION_IDS.googleSheets],
+    description: 'ERP API 및 구글시트 데이터 소스 연결',
+  },
+  {
+    id: 'cost-management',
+    label: '원가/비용 관리',
+    icon: 'payments',
+    color: 'bg-orange-500',
+    textColor: 'text-orange-600 dark:text-orange-400',
+    sections: [SECTION_IDS.costConfig, SECTION_IDS.labor, SECTION_IDS.laborRecords, SECTION_IDS.budget],
+    description: '원가 기준, 노무비, 예산 설정',
+  },
+  {
+    id: 'channel-management',
+    label: '채널/매출 관리',
+    icon: 'storefront',
+    color: 'bg-emerald-500',
+    textColor: 'text-emerald-600 dark:text-emerald-400',
+    sections: [SECTION_IDS.channelProfit, SECTION_IDS.channelSettlement, SECTION_IDS.channelCosts],
+    description: '채널별 수수료, 정산주기, 비용 설정',
+  },
+  {
+    id: 'inventory-order',
+    label: '재고/발주 관리',
+    icon: 'inventory_2',
+    color: 'bg-cyan-500',
+    textColor: 'text-cyan-600 dark:text-cyan-400',
+    sections: [SECTION_IDS.inventoryCost, SECTION_IDS.abcXyz, SECTION_IDS.orderParams],
+    description: '재고 기준, ABC-XYZ 분류, 발주 파라미터',
+  },
+  {
+    id: 'analysis-detection',
+    label: '분석/감지 설정',
+    icon: 'analytics',
+    color: 'bg-indigo-500',
+    textColor: 'text-indigo-600 dark:text-indigo-400',
+    sections: [SECTION_IDS.ai, SECTION_IDS.anomaly, SECTION_IDS.viewThresholds],
+    description: 'AI 탐지, 이상 감지, 뷰 임계값',
+  },
+  {
+    id: 'system-goals',
+    label: '경영 목표/시스템',
+    icon: 'emoji_events',
+    color: 'bg-purple-500',
+    textColor: 'text-purple-600 dark:text-purple-400',
+    sections: [SECTION_IDS.profitCenter, SECTION_IDS.exportImport],
+    description: '독립채산제 목표, 설정 백업',
+  },
+];
+
+const DEFAULT_OPEN_CATEGORIES = new Set(['data-connection']);
+
 const GOOGLE_SHEETS_SERVICE_ACCOUNT = 'z-cms-3077@gen-lang-client-0670850409.iam.gserviceaccount.com';
 
 // ─── 접이식 섹션 컴포넌트 ───
@@ -83,10 +153,80 @@ const CollapsibleSection: React.FC<{
   </div>
 );
 
+// ─── 카테고리 블럭 컴포넌트 ───
+const CategoryBlock: React.FC<{
+  category: CategoryDef;
+  isOpen: boolean;
+  onToggle: () => void;
+  warningCount: number;
+  children: React.ReactNode;
+}> = ({ category, isOpen, onToggle, warningCount, children }) => (
+  <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
+    <button
+      onClick={onToggle}
+      className={`w-full px-5 py-4 flex items-center justify-between cursor-pointer transition-all ${
+        isOpen
+          ? `${category.color} text-white`
+          : 'bg-white dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-gray-800'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <span className={`material-icons-outlined text-2xl ${isOpen ? 'text-white' : category.textColor}`}>
+          {category.icon}
+        </span>
+        <div className="text-left">
+          <div className="flex items-center gap-2">
+            <h3 className={`font-bold text-base ${isOpen ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
+              {category.label}
+            </h3>
+            {warningCount > 0 && !isOpen && (
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-amber-900 text-xs font-bold animate-pulse">
+                !
+              </span>
+            )}
+          </div>
+          <p className={`text-xs mt-0.5 ${isOpen ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
+            {category.description}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {warningCount > 0 && isOpen && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-xs font-medium text-white">
+            <span className="material-icons-outlined text-sm">warning</span>
+            {warningCount}개 확인 필요
+          </span>
+        )}
+        <span
+          className={`material-icons-outlined transition-transform duration-200 ${isOpen ? 'text-white' : 'text-gray-400'}`}
+          style={{ transform: isOpen ? 'rotate(180deg)' : '' }}
+        >
+          expand_more
+        </span>
+      </div>
+    </button>
+    {isOpen && (
+      <div className="bg-gray-50/50 dark:bg-gray-900/30 p-4 space-y-3">
+        {children}
+      </div>
+    )}
+  </div>
+);
+
 export const SettingsView: React.FC = () => {
   const { config, updateConfig, resetConfig } = useSettings();
   const { setSettingsDirty } = useUI();
   const importFileRef = useRef<HTMLInputElement>(null);
+
+  // ─── 카테고리 블럭 상태 ───
+  const [openCategories, setOpenCategories] = useState<Set<string>>(new Set(DEFAULT_OPEN_CATEGORIES));
+  const toggleCategory = useCallback((id: string) => {
+    setOpenCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
 
   // ─── 접이식 섹션 상태 ───
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(DEFAULT_OPEN_SECTIONS));
@@ -237,6 +377,30 @@ export const SettingsView: React.FC = () => {
     );
   };
 
+  // ─── 카테고리별 경고 카운트 계산 ───
+  const categoryWarnings = useMemo(() => {
+    const warnings: Record<string, number> = {};
+    let dataWarn = 0;
+    if (!ecountConfig.COM_CODE || !ecountConfig.API_KEY) dataWarn++;
+    const sheetErrors = Object.values(sheetTestResults).filter(r => r.status === 'error').length;
+    if (sheetErrors > 0) dataWarn++;
+    warnings['data-connection'] = dataWarn;
+    let costWarn = 0;
+    if (!draft.budgetRawMaterial) costWarn++;
+    if (!draft.budgetLabor) costWarn++;
+    if (!draft.budgetOverhead) costWarn++;
+    warnings['cost-management'] = costWarn;
+    let channelWarn = 0;
+    if (!draft.defaultMarginRate) channelWarn++;
+    warnings['channel-management'] = channelWarn;
+    warnings['inventory-order'] = 0;
+    warnings['analysis-detection'] = 0;
+    let sysWarn = 0;
+    if (!draft.profitCenterGoals || draft.profitCenterGoals.length === 0) sysWarn++;
+    warnings['system-goals'] = sysWarn;
+    return warnings;
+  }, [ecountConfig, sheetTestResults, draft]);
+
   return (
     <div className="max-w-4xl mx-auto space-y-4 animate-fade-in pb-24">
       <div>
@@ -248,6 +412,9 @@ export const SettingsView: React.FC = () => {
         </p>
       </div>
 
+
+      {/* ── 카테고리 1: 데이터 연결 ── */}
+      <CategoryBlock category={CATEGORIES[0]} isOpen={openCategories.has('data-connection')} onToggle={() => toggleCategory('data-connection')} warningCount={categoryWarnings['data-connection'] || 0}>
       {/* ═══════════ 1. ERP API 연결 설정 ═══════════ */}
       <CollapsibleSection
         id={SECTION_IDS.ecount}
@@ -296,7 +463,6 @@ export const SettingsView: React.FC = () => {
           )}
         </div>
       </CollapsibleSection>
-
       {/* ═══════════ 2. 구글시트 데이터 소스 관리 ═══════════ */}
       <CollapsibleSection
         id={SECTION_IDS.googleSheets}
@@ -485,67 +651,10 @@ export const SettingsView: React.FC = () => {
           )}
         </div>
       </CollapsibleSection>
+      </CategoryBlock>
 
-      {/* ═══════════ 3. AI 이상 탐지 설정 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.ai}
-        title="AI 이상 탐지 설정 (Anomaly Detection)"
-        icon="psychology"
-        isOpen={openSections.has(SECTION_IDS.ai)}
-        onToggle={() => toggleSection(SECTION_IDS.ai)}
-        headerBg="bg-indigo-50 dark:bg-indigo-900/20"
-        headerTextColor="text-indigo-900 dark:text-indigo-200"
-      >
-        <div className="space-y-6">
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">탐지 민감도 (Sensitivity)</label>
-              <span className="text-sm font-bold text-primary dark:text-green-400">{aiSensitivity}%</span>
-            </div>
-            <input type="range" min="0" max="100" value={aiSensitivity} onChange={e => setAiSensitivity(Number(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary" />
-            <p className="text-xs text-gray-500 mt-2">민감도를 높이면 작은 변동에도 알림이 발생합니다. (권장: 75~85%)</p>
-          </div>
-          <div className="flex items-center justify-between py-4 border-t border-gray-100 dark:border-gray-700">
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">자동 BOM 학습 승인</p>
-              <p className="text-xs text-gray-500">AI가 95% 이상 확신할 때 표준 BOM을 자동 업데이트합니다.</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-            </label>
-          </div>
-        </div>
-      </CollapsibleSection>
-
-      {/* ═══════════ 4. 재고 및 원가 기준 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.inventoryCost}
-        title="재고 및 원가 기준 (Inventory & Cost Rules)"
-        icon="inventory_2"
-        isOpen={openSections.has(SECTION_IDS.inventoryCost)}
-        onToggle={() => toggleSection(SECTION_IDS.inventoryCost)}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">안전재고 산출 기준일수</label>
-            <div className="flex items-center gap-2">
-              <input type="number" value={safetyDays} onChange={e => setSafetyDays(Number(e.target.value))} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" />
-              <span className="text-sm text-gray-500">일</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">일 평균 출고량 × {safetyDays}일분을 안전재고로 설정합니다.</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">저마진 경고 알림 기준</label>
-            <div className="flex items-center gap-2">
-              <input type="number" value={marginAlert} onChange={e => setMarginAlert(Number(e.target.value))} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm p-2 border" />
-              <span className="text-sm text-gray-500">%</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">마진율이 {marginAlert}% 미만일 경우 대시보드에 경고를 표시합니다.</p>
-          </div>
-        </div>
-      </CollapsibleSection>
-
+      {/* ── 카테고리 2: 원가/비용 관리 ── */}
+      <CategoryBlock category={CATEGORIES[1]} isOpen={openCategories.has('cost-management')} onToggle={() => toggleCategory('cost-management')} warningCount={categoryWarnings['cost-management'] || 0}>
       {/* ═══════════ 5. 원가 관련 설정 ═══════════ */}
       <CollapsibleSection
         id={SECTION_IDS.costConfig}
@@ -607,7 +716,169 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       </CollapsibleSection>
+      {/* ═══════════ 8. 노무비 관리 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.labor}
+        title="노무비 관리"
+        icon="groups"
+        isOpen={openSections.has(SECTION_IDS.labor)}
+        onToggle={() => toggleSection(SECTION_IDS.labor)}
+        headerBg="bg-purple-50 dark:bg-purple-900/20"
+        headerTextColor="text-purple-900 dark:text-purple-200"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">반별 평균 인건비</label>
+            <div className="flex items-center gap-2">
+              <input type="number" step="1000" min="0" value={draft.avgHourlyWage} onChange={e => updateDraft({ avgHourlyWage: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">원/시간</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">초과근무 할증률</label>
+            <div className="flex items-center gap-2">
+              <input type="number" step="0.1" min="1" max="5" value={draft.overtimeMultiplier} onChange={e => updateDraft({ overtimeMultiplier: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">배</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">기본급 대비 초과근무 할증 배수</p>
+          </div>
+        </div>
+      </CollapsibleSection>
+      {/* ═══════════ 14. 노무비 기록 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.laborRecords}
+        title="노무비 기록 관리"
+        icon="badge"
+        isOpen={openSections.has(SECTION_IDS.laborRecords)}
+        onToggle={() => toggleSection(SECTION_IDS.laborRecords)}
+        headerBg="bg-purple-50 dark:bg-purple-900/20"
+        headerTextColor="text-purple-900 dark:text-purple-200"
+      >
+        <LaborRecordAdmin />
+      </CollapsibleSection>
+      {/* ═══════════ 13. 월간 예산 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.budget}
+        title="월간 예산 설정"
+        icon="account_balance_wallet"
+        isOpen={openSections.has(SECTION_IDS.budget)}
+        onToggle={() => toggleSection(SECTION_IDS.budget)}
+      >
+        <div>
+          <p className="text-xs text-gray-500 mb-4">비용 요소별 월간 예산을 설정합니다. 예산 대비 실적 분석에 활용됩니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">원재료 예산 (원)</label>
+              <input type="number" value={draft.budgetRawMaterial} onChange={e => updateDraft({ budgetRawMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">부재료 예산 (원)</label>
+              <input type="number" value={draft.budgetSubMaterial} onChange={e => updateDraft({ budgetSubMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">노무비 예산 (원)</label>
+              <input type="number" value={draft.budgetLabor} onChange={e => updateDraft({ budgetLabor: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">수도광열전력 예산 (원)</label>
+              <input type="number" value={draft.budgetOverhead} onChange={e => updateDraft({ budgetOverhead: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+      </CategoryBlock>
 
+      {/* ── 카테고리 3: 채널/매출 관리 ── */}
+      <CategoryBlock category={CATEGORIES[2]} isOpen={openCategories.has('channel-management')} onToggle={() => toggleCategory('channel-management')} warningCount={categoryWarnings['channel-management'] || 0}>
+      {/* ═══════════ 11. 채널 이익 계산 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.channelProfit}
+        title="채널 이익 계산 설정"
+        icon="calculate"
+        isOpen={openSections.has(SECTION_IDS.channelProfit)}
+        onToggle={() => toggleSection(SECTION_IDS.channelProfit)}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">평균 주문 단가 (원)</label>
+            <input type="number" value={draft.averageOrderValue} onChange={e => updateDraft({ averageOrderValue: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            <p className="text-xs text-gray-500 mt-1">건당 변동비 산출에 사용 (주문 건수 = 매출 / 평균단가)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">기본 이익률 (%)</label>
+            <input type="number" step="0.01" value={Math.round(draft.defaultMarginRate * 100)} onChange={e => updateDraft({ defaultMarginRate: Number(e.target.value) / 100 })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            <p className="text-xs text-gray-500 mt-1">구매 데이터 없을 때 사용하는 추정 이익률</p>
+          </div>
+        </div>
+      </CollapsibleSection>
+      {/* ═══════════ 12. 채널 정산주기 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.channelSettlement}
+        title="채널 정산주기 설정"
+        icon="schedule"
+        isOpen={openSections.has(SECTION_IDS.channelSettlement)}
+        onToggle={() => toggleSection(SECTION_IDS.channelSettlement)}
+      >
+        <div>
+          <p className="text-xs text-gray-500 mb-4">각 채널의 매출 입금까지 소요되는 일수를 설정합니다. 현금흐름 분석에 반영됩니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">자사몰 (일)</label>
+              <input type="number" value={draft.channelCollectionDaysJasa} onChange={e => updateDraft({ channelCollectionDaysJasa: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+              <p className="text-xs text-gray-500 mt-1">0 = 즉시 입금</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">쿠팡 (일)</label>
+              <input type="number" value={draft.channelCollectionDaysCoupang} onChange={e => updateDraft({ channelCollectionDaysCoupang: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">컬리 (일)</label>
+              <input type="number" value={draft.channelCollectionDaysKurly} onChange={e => updateDraft({ channelCollectionDaysKurly: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+      {/* ═══════════ 15. 채널 비용 관리 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.channelCosts}
+        title="채널 비용 관리"
+        icon="store"
+        isOpen={openSections.has(SECTION_IDS.channelCosts)}
+        onToggle={() => toggleSection(SECTION_IDS.channelCosts)}
+      >
+        <ChannelCostAdmin />
+      </CollapsibleSection>
+      </CategoryBlock>
+
+      {/* ── 카테고리 4: 재고/발주 관리 ── */}
+      <CategoryBlock category={CATEGORIES[3]} isOpen={openCategories.has('inventory-order')} onToggle={() => toggleCategory('inventory-order')} warningCount={categoryWarnings['inventory-order'] || 0}>
+      {/* ═══════════ 4. 재고 및 원가 기준 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.inventoryCost}
+        title="재고 및 원가 기준 (Inventory & Cost Rules)"
+        icon="inventory_2"
+        isOpen={openSections.has(SECTION_IDS.inventoryCost)}
+        onToggle={() => toggleSection(SECTION_IDS.inventoryCost)}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">안전재고 산출 기준일수</label>
+            <div className="flex items-center gap-2">
+              <input type="number" value={safetyDays} onChange={e => setSafetyDays(Number(e.target.value))} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">일</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">일 평균 출고량 × {safetyDays}일분을 안전재고로 설정합니다.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">저마진 경고 알림 기준</label>
+            <div className="flex items-center gap-2">
+              <input type="number" value={marginAlert} onChange={e => setMarginAlert(Number(e.target.value))} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">마진율이 {marginAlert}% 미만일 경우 대시보드에 경고를 표시합니다.</p>
+          </div>
+        </div>
+      </CollapsibleSection>
       {/* ═══════════ 6. 재고 분류 기준 (ABC-XYZ) ═══════════ */}
       <CollapsibleSection
         id={SECTION_IDS.abcXyz}
@@ -649,7 +920,85 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       </CollapsibleSection>
+      {/* ═══════════ 9. 발주 파라미터 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.orderParams}
+        title="발주 파라미터"
+        icon="local_shipping"
+        isOpen={openSections.has(SECTION_IDS.orderParams)}
+        onToggle={() => toggleSection(SECTION_IDS.orderParams)}
+        headerBg="bg-cyan-50 dark:bg-cyan-900/20"
+        headerTextColor="text-cyan-900 dark:text-cyan-200"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 리드타임</label>
+            <div className="flex items-center gap-2">
+              <input type="number" step="1" min="1" max="90" value={draft.defaultLeadTime} onChange={e => updateDraft({ defaultLeadTime: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">일</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">리드타임 표준편차</label>
+            <div className="flex items-center gap-2">
+              <input type="number" step="0.5" min="0" max="30" value={draft.leadTimeStdDev} onChange={e => updateDraft({ leadTimeStdDev: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">일</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">납품기간 변동성 (클수록 안전재고 증가)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 서비스 수준</label>
+            <div className="flex items-center gap-2">
+              <input type="number" step="1" min="50" max="99" value={draft.defaultServiceLevel} onChange={e => updateDraft({ defaultServiceLevel: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">품절 방지 목표 확률 (높을수록 안전재고 증가)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">주문 비용 (건당)</label>
+            <div className="flex items-center gap-2">
+              <input type="number" step="5000" min="0" value={draft.orderCost} onChange={e => updateDraft({ orderCost: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">원</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">EOQ 계산에 사용되는 1회 주문 비용</p>
+          </div>
+        </div>
+      </CollapsibleSection>
+      </CategoryBlock>
 
+      {/* ── 카테고리 5: 분석/감지 설정 ── */}
+      <CategoryBlock category={CATEGORIES[4]} isOpen={openCategories.has('analysis-detection')} onToggle={() => toggleCategory('analysis-detection')} warningCount={categoryWarnings['analysis-detection'] || 0}>
+      {/* ═══════════ 3. AI 이상 탐지 설정 ═══════════ */}
+      <CollapsibleSection
+        id={SECTION_IDS.ai}
+        title="AI 이상 탐지 설정 (Anomaly Detection)"
+        icon="psychology"
+        isOpen={openSections.has(SECTION_IDS.ai)}
+        onToggle={() => toggleSection(SECTION_IDS.ai)}
+        headerBg="bg-indigo-50 dark:bg-indigo-900/20"
+        headerTextColor="text-indigo-900 dark:text-indigo-200"
+      >
+        <div className="space-y-6">
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">탐지 민감도 (Sensitivity)</label>
+              <span className="text-sm font-bold text-primary dark:text-green-400">{aiSensitivity}%</span>
+            </div>
+            <input type="range" min="0" max="100" value={aiSensitivity} onChange={e => setAiSensitivity(Number(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary" />
+            <p className="text-xs text-gray-500 mt-2">민감도를 높이면 작은 변동에도 알림이 발생합니다. (권장: 75~85%)</p>
+          </div>
+          <div className="flex items-center justify-between py-4 border-t border-gray-100 dark:border-gray-700">
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">자동 BOM 학습 승인</p>
+              <p className="text-xs text-gray-500">AI가 95% 이상 확신할 때 표준 BOM을 자동 업데이트합니다.</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+            </label>
+          </div>
+        </div>
+      </CollapsibleSection>
       {/* ═══════════ 7. 이상 감지 기준 ═══════════ */}
       <CollapsibleSection
         id={SECTION_IDS.anomaly}
@@ -706,81 +1055,6 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       </CollapsibleSection>
-
-      {/* ═══════════ 8. 노무비 관리 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.labor}
-        title="노무비 관리"
-        icon="groups"
-        isOpen={openSections.has(SECTION_IDS.labor)}
-        onToggle={() => toggleSection(SECTION_IDS.labor)}
-        headerBg="bg-purple-50 dark:bg-purple-900/20"
-        headerTextColor="text-purple-900 dark:text-purple-200"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">반별 평균 인건비</label>
-            <div className="flex items-center gap-2">
-              <input type="number" step="1000" min="0" value={draft.avgHourlyWage} onChange={e => updateDraft({ avgHourlyWage: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
-              <span className="text-sm text-gray-500">원/시간</span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">초과근무 할증률</label>
-            <div className="flex items-center gap-2">
-              <input type="number" step="0.1" min="1" max="5" value={draft.overtimeMultiplier} onChange={e => updateDraft({ overtimeMultiplier: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
-              <span className="text-sm text-gray-500">배</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">기본급 대비 초과근무 할증 배수</p>
-          </div>
-        </div>
-      </CollapsibleSection>
-
-      {/* ═══════════ 9. 발주 파라미터 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.orderParams}
-        title="발주 파라미터"
-        icon="local_shipping"
-        isOpen={openSections.has(SECTION_IDS.orderParams)}
-        onToggle={() => toggleSection(SECTION_IDS.orderParams)}
-        headerBg="bg-cyan-50 dark:bg-cyan-900/20"
-        headerTextColor="text-cyan-900 dark:text-cyan-200"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 리드타임</label>
-            <div className="flex items-center gap-2">
-              <input type="number" step="1" min="1" max="90" value={draft.defaultLeadTime} onChange={e => updateDraft({ defaultLeadTime: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
-              <span className="text-sm text-gray-500">일</span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">리드타임 표준편차</label>
-            <div className="flex items-center gap-2">
-              <input type="number" step="0.5" min="0" max="30" value={draft.leadTimeStdDev} onChange={e => updateDraft({ leadTimeStdDev: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
-              <span className="text-sm text-gray-500">일</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">납품기간 변동성 (클수록 안전재고 증가)</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 서비스 수준</label>
-            <div className="flex items-center gap-2">
-              <input type="number" step="1" min="50" max="99" value={draft.defaultServiceLevel} onChange={e => updateDraft({ defaultServiceLevel: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
-              <span className="text-sm text-gray-500">%</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">품절 방지 목표 확률 (높을수록 안전재고 증가)</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">주문 비용 (건당)</label>
-            <div className="flex items-center gap-2">
-              <input type="number" step="5000" min="0" value={draft.orderCost} onChange={e => updateDraft({ orderCost: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
-              <span className="text-sm text-gray-500">원</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">EOQ 계산에 사용되는 1회 주문 비용</p>
-          </div>
-        </div>
-      </CollapsibleSection>
-
       {/* ═══════════ 10. 뷰 표시 임계값 ═══════════ */}
       <CollapsibleSection
         id={SECTION_IDS.viewThresholds}
@@ -856,112 +1130,10 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       </CollapsibleSection>
+      </CategoryBlock>
 
-      {/* ═══════════ 11. 채널 이익 계산 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.channelProfit}
-        title="채널 이익 계산 설정"
-        icon="calculate"
-        isOpen={openSections.has(SECTION_IDS.channelProfit)}
-        onToggle={() => toggleSection(SECTION_IDS.channelProfit)}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">평균 주문 단가 (원)</label>
-            <input type="number" value={draft.averageOrderValue} onChange={e => updateDraft({ averageOrderValue: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-            <p className="text-xs text-gray-500 mt-1">건당 변동비 산출에 사용 (주문 건수 = 매출 / 평균단가)</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">기본 이익률 (%)</label>
-            <input type="number" step="0.01" value={Math.round(draft.defaultMarginRate * 100)} onChange={e => updateDraft({ defaultMarginRate: Number(e.target.value) / 100 })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-            <p className="text-xs text-gray-500 mt-1">구매 데이터 없을 때 사용하는 추정 이익률</p>
-          </div>
-        </div>
-      </CollapsibleSection>
-
-      {/* ═══════════ 12. 채널 정산주기 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.channelSettlement}
-        title="채널 정산주기 설정"
-        icon="schedule"
-        isOpen={openSections.has(SECTION_IDS.channelSettlement)}
-        onToggle={() => toggleSection(SECTION_IDS.channelSettlement)}
-      >
-        <div>
-          <p className="text-xs text-gray-500 mb-4">각 채널의 매출 입금까지 소요되는 일수를 설정합니다. 현금흐름 분석에 반영됩니다.</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">자사몰 (일)</label>
-              <input type="number" value={draft.channelCollectionDaysJasa} onChange={e => updateDraft({ channelCollectionDaysJasa: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
-              <p className="text-xs text-gray-500 mt-1">0 = 즉시 입금</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">쿠팡 (일)</label>
-              <input type="number" value={draft.channelCollectionDaysCoupang} onChange={e => updateDraft({ channelCollectionDaysCoupang: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">컬리 (일)</label>
-              <input type="number" value={draft.channelCollectionDaysKurly} onChange={e => updateDraft({ channelCollectionDaysKurly: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
-            </div>
-          </div>
-        </div>
-      </CollapsibleSection>
-
-      {/* ═══════════ 13. 월간 예산 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.budget}
-        title="월간 예산 설정"
-        icon="account_balance_wallet"
-        isOpen={openSections.has(SECTION_IDS.budget)}
-        onToggle={() => toggleSection(SECTION_IDS.budget)}
-      >
-        <div>
-          <p className="text-xs text-gray-500 mb-4">비용 요소별 월간 예산을 설정합니다. 예산 대비 실적 분석에 활용됩니다.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">원재료 예산 (원)</label>
-              <input type="number" value={draft.budgetRawMaterial} onChange={e => updateDraft({ budgetRawMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">부재료 예산 (원)</label>
-              <input type="number" value={draft.budgetSubMaterial} onChange={e => updateDraft({ budgetSubMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">노무비 예산 (원)</label>
-              <input type="number" value={draft.budgetLabor} onChange={e => updateDraft({ budgetLabor: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">수도광열전력 예산 (원)</label>
-              <input type="number" value={draft.budgetOverhead} onChange={e => updateDraft({ budgetOverhead: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-            </div>
-          </div>
-        </div>
-      </CollapsibleSection>
-
-      {/* ═══════════ 14. 노무비 기록 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.laborRecords}
-        title="노무비 기록 관리"
-        icon="badge"
-        isOpen={openSections.has(SECTION_IDS.laborRecords)}
-        onToggle={() => toggleSection(SECTION_IDS.laborRecords)}
-        headerBg="bg-purple-50 dark:bg-purple-900/20"
-        headerTextColor="text-purple-900 dark:text-purple-200"
-      >
-        <LaborRecordAdmin />
-      </CollapsibleSection>
-
-      {/* ═══════════ 15. 채널 비용 관리 ═══════════ */}
-      <CollapsibleSection
-        id={SECTION_IDS.channelCosts}
-        title="채널 비용 관리"
-        icon="store"
-        isOpen={openSections.has(SECTION_IDS.channelCosts)}
-        onToggle={() => toggleSection(SECTION_IDS.channelCosts)}
-      >
-        <ChannelCostAdmin />
-      </CollapsibleSection>
-
+      {/* ── 카테고리 6: 경영 목표/시스템 ── */}
+      <CategoryBlock category={CATEGORIES[5]} isOpen={openCategories.has('system-goals')} onToggle={() => toggleCategory('system-goals')} warningCount={categoryWarnings['system-goals'] || 0}>
       {/* ═══════════ 16. 독립채산제 목표 설정 (통합 테이블) ═══════════ */}
       <CollapsibleSection
         id={SECTION_IDS.profitCenter}
@@ -1089,7 +1261,6 @@ export const SettingsView: React.FC = () => {
           </button>
         </div>
       </CollapsibleSection>
-
       {/* ═══════════ 17. 설정 내보내기/가져오기 ═══════════ */}
       <CollapsibleSection
         id={SECTION_IDS.exportImport}
@@ -1173,6 +1344,7 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       </CollapsibleSection>
+      </CategoryBlock>
 
       {/* ═══════════ 설정 초기화 ═══════════ */}
       <div className="flex justify-end">

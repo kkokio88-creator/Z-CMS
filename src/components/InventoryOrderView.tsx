@@ -10,7 +10,7 @@ import { formatCurrency, formatAxisKRW, formatQty } from '../utils/format';
 import { InventorySafetyItem, StocktakeAnomalyItem } from '../types';
 import type { PurchaseData } from '../services/googleSheetService';
 import type { DashboardInsights, StatisticalOrderInsight, ABCXYZInsight, FreshnessInsight, FreshnessGrade, InventoryCostInsight } from '../services/insightService';
-import { computeStatisticalOrder } from '../services/insightService';
+import { computeStatisticalOrder, computeMaterialPrices } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
 import { useUI } from '../contexts/UIContext';
@@ -175,7 +175,11 @@ export const InventoryOrderView: React.FC<Props> = ({
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getDateRange(dateRange), [dateRange]);
   const filteredPurchases = useMemo(() => filterByDate(purchases, rangeStart, rangeEnd), [purchases, rangeStart, rangeEnd]);
 
-  const materialPrices = insights?.materialPrices;
+  // dateRange 기반 인사이트 로컬 재계산
+  const materialPrices = useMemo(
+    () => filteredPurchases.length > 0 ? computeMaterialPrices(filteredPurchases) : null,
+    [filteredPurchases]
+  );
   const [serviceLevel, setServiceLevel] = useState(95);
   const [orderDate, setOrderDate] = useState(formatDateStr(new Date()));
   const [orderModal, setOrderModal] = useState<{
@@ -185,16 +189,13 @@ export const InventoryOrderView: React.FC<Props> = ({
     deliveryDate: string;
   } | null>(null);
 
-  // 서비스 수준 변경 시 재계산
+  // 서비스 수준 변경 시 재계산 (filteredPurchases 기반)
   const statisticalOrder: StatisticalOrderInsight | null = useMemo(() => {
-    if (insights?.statisticalOrder && serviceLevel === config.defaultServiceLevel) {
-      return insights.statisticalOrder;
-    }
-    if (inventoryData.length > 0 && purchases.length > 0) {
-      return computeStatisticalOrder(inventoryData, purchases, config, serviceLevel);
+    if (inventoryData.length > 0 && filteredPurchases.length > 0) {
+      return computeStatisticalOrder(inventoryData, filteredPurchases, config, serviceLevel);
     }
     return null;
-  }, [inventoryData, purchases, serviceLevel, config, insights?.statisticalOrder]);
+  }, [inventoryData, filteredPurchases, serviceLevel, config]);
 
   const abcxyz = insights?.abcxyz || null;
   const freshness = insights?.freshness || null;
