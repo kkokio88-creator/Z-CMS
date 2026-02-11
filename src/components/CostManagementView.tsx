@@ -438,7 +438,7 @@ export const CostManagementView: React.FC<Props> = ({
                         </span>
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        월매출 {formatCurrency(sc.monthlyRevenue)} 추정 ({sc.calendarDays}일 기준)
+                        월 생산매출 {formatCurrency(sc.monthlyRevenue)} 추정 ({sc.calendarDays}일 기준)
                       </div>
                     </div>
 

@@ -1237,7 +1237,7 @@ export const SettingsView: React.FC = () => {
             </table>
           </div>
 
-          <div className="text-xs text-gray-400 px-2">만원 단위 입력 | 배수(&times;)는 금액에서 자동 계산 (읽기전용)</div>
+          <div className="text-xs text-gray-400 px-2">만원 단위 입력 | 배수(&times;)는 생산매출 ÷ 원가 금액으로 자동 계산 (읽기전용)</div>
 
           <button
             onClick={() => {

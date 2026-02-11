@@ -369,7 +369,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-medium">
                 {profitCenterScore.activeBracket.label} 구간
               </span>
-              <span>월매출 {formatCurrency(profitCenterScore.monthlyRevenue)} 추정 ({profitCenterScore.calendarDays}일 기준)</span>
+              <span>월 생산매출 {formatCurrency(profitCenterScore.monthlyRevenue)} 추정 ({profitCenterScore.calendarDays}일 기준)</span>
             </div>
           </div>
 

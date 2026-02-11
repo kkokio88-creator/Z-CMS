@@ -25,10 +25,11 @@ export interface ProfitCenterGoal {
   };
 }
 
-/** 절대 목표금액에서 배수를 자동 계산 */
+/** 절대 목표금액에서 배수를 자동 계산 (생산매출 기준) */
 export function deriveMultipliersFromTargets(goal: ProfitCenterGoal): ProfitCenterGoal {
   const t = goal.targets;
-  const rev = goal.revenueBracket;
+  // 배수 분자 = 생산매출 (targetProductionRevenue). 없으면 revenueBracket 폴백
+  const rev = t.targetProductionRevenue || goal.revenueBracket;
   if (!t.targetRawMaterialCost) return goal;
   return {
     ...goal,
