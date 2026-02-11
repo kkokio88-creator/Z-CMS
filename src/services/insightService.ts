@@ -129,11 +129,13 @@ export interface WasteAnalysisInsight {
     wasteFinishedPct: number;
     wasteSemiPct: number;
     wasteFinishedEa: number;
+    wasteSemiKg: number;
     productionQty: number;
+    productionKg: number;
     estimatedCost: number;
   }[];
   avgWasteRate: number;
-  highWasteDays: { date: string; rate: number; qty: number }[];
+  highWasteDays: { date: string; rate: number; qty: number; cost?: number; productionQty?: number }[];
   totalEstimatedCost: number;
 }
 
@@ -289,11 +291,12 @@ export interface BomVarianceItem {
   productName: string;
   standardPrice: number;     // 기준단가 (전체 평균)
   actualPrice: number;       // 실제단가 (최근 기간)
-  standardQty: number;       // 기준수량 (생산 비례 기대치)
-  actualQty: number;         // 실제수량 (최근 기간)
-  priceVariance: number;     // 가격차이 금액
-  qtyVariance: number;       // 수량차이 금액
+  standardQty: number;       // 기준 투입량 (생산 비례 기대치)
+  actualQty: number;         // 실제 투입량 (최근 기간)
+  priceVariance: number;     // 단가 차이 금액
+  qtyVariance: number;       // 투입량 차이 금액
   totalVariance: number;     // 총 차이 금액
+  unit: string;              // 단위 (kg, L, EA 등)
 }
 
 export interface BomVarianceInsight {
@@ -935,7 +938,9 @@ export function computeWasteAnalysis(
       wasteFinishedPct: p.wasteFinishedPct,
       wasteSemiPct: p.wasteSemiPct,
       wasteFinishedEa: p.wasteFinishedEa,
+      wasteSemiKg: p.wasteSemiKg,
       productionQty: p.prodQtyTotal,
+      productionKg: p.prodKgTotal || 0,
       estimatedCost,
     };
   });
@@ -948,7 +953,7 @@ export function computeWasteAnalysis(
   const highWasteDays = daily
     .filter(d => d.wasteFinishedPct > config.wasteThresholdPct)
     .sort((a, b) => b.wasteFinishedPct - a.wasteFinishedPct)
-    .map(d => ({ date: d.date, rate: d.wasteFinishedPct, qty: d.wasteFinishedEa, cost: d.estimatedCost }));
+    .map(d => ({ date: d.date, rate: d.wasteFinishedPct, qty: d.wasteFinishedEa, cost: d.estimatedCost, productionQty: d.productionQty }));
 
   return { daily, avgWasteRate, highWasteDays, totalEstimatedCost };
 }
@@ -1665,11 +1670,13 @@ export function computeBomVariance(
     return { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
   }
 
-  // materialMaster → 이름 매핑 (BOM 이름이 빈 문자열인 경우 보완)
+  // materialMaster → 이름/단위 매핑 (BOM 이름이 빈 문자열인 경우 보완)
   const masterNameMap = new Map<string, string>();
+  const masterUnitMap = new Map<string, string>();
   for (const mm of materialMaster) {
     const code = mm.materialCode?.trim();
     if (code && mm.materialName) masterNameMap.set(code, mm.materialName);
+    if (code && mm.unit) masterUnitMap.set(code, mm.unit);
   }
 
   // BOM에 포함된 자재코드 집합 (BOM 관련 자재만 표시하기 위해)
@@ -1761,6 +1768,7 @@ export function computeBomVariance(
       standardPrice, actualPrice,
       standardQty, actualQty,
       priceVariance, qtyVariance, totalVariance,
+      unit: masterUnitMap.get(code) || '개',
     });
   });
 

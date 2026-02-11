@@ -19,6 +19,8 @@ import { getChannelCostSummaries } from './ChannelCostAdmin';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate, getRangeLabel } from '../utils/dateRange';
+import FormulaTooltip from './FormulaTooltip';
+import { FORMULAS } from '../constants/formulaDescriptions';
 
 interface Props {
   dailySales: DailySalesData[];
@@ -199,7 +201,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
               {/* A1: 5단계 수익 분석 테이블 — 권장판매가 → 할인/수수료 → 정산매출 → 이익 */}
               {channelRevenue && totals && (
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널별 수익 구조 분석</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널별 수익 구조 분석 <FormulaTooltip {...FORMULAS.channelRevenue} /></h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -406,6 +408,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-icons-outlined text-green-500">trending_up</span>
                     매출 상위 품목
+                    <FormulaTooltip {...FORMULAS.productProfit} />
                   </h3>
                   {topItems.length > 0 ? (
                     <div className="h-64">
@@ -509,6 +512,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                       <span className="material-icons-outlined text-orange-500">balance</span>
                       품목별 손익분기점 (BEP)
+                      <FormulaTooltip {...FORMULAS.productBEP} />
                     </h3>
                     <p className="text-xs text-gray-500 mb-4">
                       고정비 {formatCurrency(productBEP.totalFixedCost)}을 매출비중으로 배분 | 여유비율 낮은 순 정렬

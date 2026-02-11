@@ -877,6 +877,8 @@ const App = () => {
               production={gsProduction}
               purchases={gsPurchases}
               insights={insights}
+              bomData={gsBom}
+              materialMaster={gsMaterialMaster}
               onItemClick={handleItemClick}
               onTabChange={setActiveSubTab}
             />

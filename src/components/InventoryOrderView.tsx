@@ -15,6 +15,8 @@ import { useBusinessConfig } from '../contexts/SettingsContext';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate } from '../utils/dateRange';
+import FormulaTooltip from './FormulaTooltip';
+import { FORMULAS } from '../constants/formulaDescriptions';
 
 interface Props {
   inventoryData: InventorySafetyItem[];
@@ -590,6 +592,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                       <span className="material-icons-outlined text-green-500">eco</span>
                       신선도 점수
+                      <FormulaTooltip {...FORMULAS.freshness} />
                     </h3>
                     <p className="text-xs text-gray-500 mb-4">
                       최근성(40%) + 재고회전(30%) + 수요안정성(30%) 기반 0~100점 평가
@@ -733,6 +736,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                       <span className="material-icons-outlined text-orange-500">search</span>
                       재고 실사 이상징후
+                      <FormulaTooltip {...FORMULAS.inventoryAnomaly} />
                     </h3>
                     <div className="flex gap-2">
                       {([
@@ -962,6 +966,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-icons-outlined text-blue-500">calculate</span>
                     ROP / 안전재고 / EOQ 분석
+                    <FormulaTooltip {...FORMULAS.statisticalOrder} />
                   </h3>
                   {items.length > 0 ? (
                     <div className="overflow-x-auto">

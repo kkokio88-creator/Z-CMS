@@ -16,6 +16,8 @@ import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/week
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate } from '../utils/dateRange';
 import { computeWeeklyCostScores } from '../utils/costScoring';
+import FormulaTooltip from './FormulaTooltip';
+import { FORMULAS } from '../constants/formulaDescriptions';
 
 interface Props {
   purchases: PurchaseData[];
@@ -484,7 +486,7 @@ export const CostManagementView: React.FC<Props> = ({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 주간 점수 추이 */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 점수 추이</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 점수 추이 <FormulaTooltip {...FORMULAS.costScore} /></h3>
                   {weeklyScores.length > 0 ? (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
@@ -508,7 +510,7 @@ export const CostManagementView: React.FC<Props> = ({
                 </div>
                 {/* 원가 구성비 Pie */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">원가 구성비</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">원가 구성비 <FormulaTooltip {...FORMULAS.costOverview} /></h3>
                   {composition.length > 0 && totalCost > 0 ? (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
@@ -559,7 +561,7 @@ export const CostManagementView: React.FC<Props> = ({
               <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '원재료')} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">총 원재료비</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">총 원재료비 <FormulaTooltip {...FORMULAS.rawMaterialTotal} /></p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(rawDetail?.total || 0)}</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -698,6 +700,7 @@ export const CostManagementView: React.FC<Props> = ({
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-icons-outlined text-red-500">price_change</span>
                     한계단가 분석
+                    <FormulaTooltip {...FORMULAS.limitPrice} />
                     {limitPrice.exceedCount > 0 && (
                       <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
                         {limitPrice.exceedCount}건 초과
@@ -771,7 +774,7 @@ export const CostManagementView: React.FC<Props> = ({
               <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '부재료')} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">총 부재료비</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">총 부재료비 <FormulaTooltip {...FORMULAS.subMaterialTotal} /></p>
                   <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(subDetail?.total || 0)}</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">

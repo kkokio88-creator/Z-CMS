@@ -6,17 +6,21 @@ import {
 import { SubTabLayout } from './SubTabLayout';
 import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
-import type { ProductionData, PurchaseData } from '../services/googleSheetService';
-import type { DashboardInsights, BomVarianceInsight, YieldTrackingInsight, BomConsumptionAnomalyInsight, BomConsumptionAnomalyItem } from '../services/insightService';
+import type { ProductionData, PurchaseData, BomItemData, MaterialMasterItem } from '../services/googleSheetService';
+import type { DashboardInsights, BomVarianceInsight, BomVarianceItem, YieldTrackingInsight, BomConsumptionAnomalyInsight, BomConsumptionAnomalyItem } from '../services/insightService';
 import { computeWasteAnalysis, computeProductionEfficiency, computeBomVariance, computeYieldTracking } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate } from '../utils/dateRange';
+import FormulaTooltip from './FormulaTooltip';
+import { FORMULAS } from '../constants/formulaDescriptions';
 
 interface Props {
   production: ProductionData[];
   purchases: PurchaseData[];
   insights: DashboardInsights | null;
+  bomData?: BomItemData[];
+  materialMaster?: MaterialMasterItem[];
   onItemClick: (item: any) => void;
   onTabChange?: (tab: string) => void;
 }
@@ -71,7 +75,7 @@ const FilterBar: React.FC<{
   </div>
 );
 
-export const ProductionBomView: React.FC<Props> = ({ production, purchases, insights, onItemClick, onTabChange }) => {
+export const ProductionBomView: React.FC<Props> = ({ production, purchases, insights, bomData = [], materialMaster = [], onItemClick, onTabChange }) => {
   const config = useBusinessConfig();
   const { dateRange } = useUI();
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getDateRange(dateRange), [dateRange]);
@@ -102,6 +106,71 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
   const [prodPage, setProdPage] = useState(1);
   const [effPage, setEffPage] = useState(1);
   const PROD_PAGE_SIZE = 20;
+
+  // BOM 오차 드릴다운 상태
+  const [selectedMaterial, setSelectedMaterial] = useState<BomVarianceItem | null>(null);
+
+  // 선택된 자재의 메뉴별 상세 데이터
+  const materialDrilldown = useMemo(() => {
+    if (!selectedMaterial || bomData.length === 0) return null;
+    const code = selectedMaterial.productCode;
+
+    // BOM에서 해당 자재를 사용하는 생산품목(메뉴) 목록
+    const relatedBom = bomData.filter(b => b.materialCode?.trim() === code);
+    if (relatedBom.length === 0) return null;
+
+    // 후반기 생산 데이터
+    const sortedProd = [...filteredProduction].sort((a, b) => a.date.localeCompare(b.date));
+    const prodMidIdx = Math.floor(sortedProd.length / 2);
+    const recentProd = sortedProd.slice(prodMidIdx);
+
+    // 후반기 구매량 (해당 자재)
+    const sortedPurch = [...filteredPurchases].sort((a, b) => a.date.localeCompare(b.date));
+    const purchMidIdx = Math.floor(sortedPurch.length / 2);
+    const recentPurch = sortedPurch.slice(purchMidIdx);
+    const actualPurchaseQty = recentPurch
+      .filter(p => p.productCode === code)
+      .reduce((s, p) => s + p.quantity, 0);
+
+    // 메뉴별 분석
+    const menuDetails = relatedBom.map(bom => {
+      const menuCode = bom.productCode?.trim();
+      const menuName = bom.productName || menuCode;
+      const recipeQty = bom.consumptionQty || 0; // 생산 1회당 기준 투입량
+
+      // 후반기 해당 메뉴 생산횟수 (prodQtyTotal에서 비례 추정은 어려우므로 일수 기반)
+      const prodDays = recentProd.length;
+
+      // 기준 소모량 = 레시피 기준 × 생산일수
+      const standardConsumption = recipeQty * prodDays;
+
+      return {
+        menuCode,
+        menuName,
+        recipeQty,
+        prodDays,
+        standardConsumption,
+      };
+    });
+
+    // 전체 기준 소모량 합계
+    const totalStandard = menuDetails.reduce((s, m) => s + m.standardConsumption, 0);
+
+    // 구매량 비례 배분
+    const menuWithAllocation = menuDetails.map(m => {
+      const ratio = totalStandard > 0 ? m.standardConsumption / totalStandard : 0;
+      const allocatedActual = Math.round(actualPurchaseQty * ratio);
+      const diff = allocatedActual - m.standardConsumption;
+      return { ...m, allocatedActual, diff };
+    });
+
+    return {
+      items: menuWithAllocation,
+      totalStandard,
+      totalActual: actualPurchaseQty,
+      unit: selectedMaterial.unit,
+    };
+  }, [selectedMaterial, bomData, filteredProduction, filteredPurchases]);
 
   const categoryFilters = [
     { key: 'all', label: '전체', color: CATEGORY_COLORS.all },
@@ -198,6 +267,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                     주간 생산 추이 {prodFilter !== 'all' && <span className="text-sm text-gray-400 font-normal">({CATEGORY_LABELS[prodFilter]})</span>}
+                    <FormulaTooltip {...FORMULAS.weeklyProduction} />
                   </h3>
                   {weeklyData.length > 0 ? (
                     <div className="h-72">
@@ -308,54 +378,98 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
           const highDays = wasteAnalysis?.highWasteDays || [];
           const totalCost = wasteAnalysis?.totalEstimatedCost || 0;
 
-          // 주간 폐기율 집계
+          // 반제품 폐기 통계
+          const validSemiDays = daily.filter(d => d.productionQty > 0);
+          const avgSemiRate = validSemiDays.length > 0
+            ? Math.round((validSemiDays.reduce((s, d) => s + d.wasteSemiPct, 0) / validSemiDays.length) * 10) / 10
+            : 0;
+          const totalWasteEa = daily.reduce((s, d) => s + d.wasteFinishedEa, 0);
+          const totalWasteKg = daily.reduce((s, d) => s + d.wasteSemiKg, 0);
+
+          // 주간 폐기율 집계 (반제품 포함)
           const weeklyWaste = (() => {
             if (daily.length === 0) return [];
-            const weeks: { weekLabel: string; avgWasteRate: number; totalProduction: number; totalWaste: number; days: number }[] = [];
-            let curr = { weekLabel: '', totalProd: 0, totalWaste: 0, totalRate: 0, days: 0 };
+            const weeks: { weekLabel: string; avgWasteRate: number; avgWasteSemiPct: number; totalProduction: number; totalWaste: number; totalWasteKg: number; days: number }[] = [];
+            let curr = { weekLabel: '', totalProd: 0, totalWaste: 0, totalWasteKg: 0, totalRate: 0, totalSemiRate: 0, days: 0 };
             daily.forEach((d, i) => {
               const date = new Date(d.date);
               if (i === 0 || date.getDay() === 1) {
                 if (curr.days > 0) weeks.push({
                   weekLabel: curr.weekLabel,
                   avgWasteRate: Math.round((curr.totalRate / curr.days) * 10) / 10,
+                  avgWasteSemiPct: Math.round((curr.totalSemiRate / curr.days) * 10) / 10,
                   totalProduction: curr.totalProd,
                   totalWaste: curr.totalWaste,
+                  totalWasteKg: curr.totalWasteKg,
                   days: curr.days,
                 });
-                curr = { weekLabel: formatDate(d.date), totalProd: 0, totalWaste: 0, totalRate: 0, days: 0 };
+                curr = { weekLabel: formatDate(d.date), totalProd: 0, totalWaste: 0, totalWasteKg: 0, totalRate: 0, totalSemiRate: 0, days: 0 };
               }
               curr.totalProd += d.productionQty;
               curr.totalWaste += d.wasteFinishedEa;
+              curr.totalWasteKg += d.wasteSemiKg;
               curr.totalRate += d.wasteFinishedPct;
+              curr.totalSemiRate += d.wasteSemiPct;
               curr.days++;
             });
             if (curr.days > 0) weeks.push({
               weekLabel: curr.weekLabel,
               avgWasteRate: Math.round((curr.totalRate / curr.days) * 10) / 10,
+              avgWasteSemiPct: Math.round((curr.totalSemiRate / curr.days) * 10) / 10,
               totalProduction: curr.totalProd,
               totalWaste: curr.totalWaste,
+              totalWasteKg: curr.totalWasteKg,
               days: curr.days,
             });
             return weeks;
           })();
 
+          // 일별 폐기 상세 (폐기 데이터 있는 행만)
+          const dailyWasteDetail = [...daily]
+            .filter(d => d.wasteFinishedEa > 0 || d.wasteSemiKg > 0)
+            .sort((a, b) => b.date.localeCompare(a.date));
+
+          // 카테고리별 생산량 집계
+          const categoryProduction = (() => {
+            const cats = [
+              { key: 'normal', label: '일반', eaField: 'prodQtyNormal' as const, kgField: 'prodKgNormal' as const, color: CATEGORY_COLORS.normal },
+              { key: 'preprocess', label: '전처리', eaField: 'prodQtyPreprocess' as const, kgField: 'prodKgPreprocess' as const, color: CATEGORY_COLORS.preprocess },
+              { key: 'frozen', label: '냉동', eaField: 'prodQtyFrozen' as const, kgField: 'prodKgFrozen' as const, color: CATEGORY_COLORS.frozen },
+              { key: 'sauce', label: '소스', eaField: 'prodQtySauce' as const, kgField: 'prodKgSauce' as const, color: CATEGORY_COLORS.sauce },
+              { key: 'bibimbap', label: '비빔밥', eaField: 'prodQtyBibimbap' as const, kgField: undefined as unknown as keyof ProductionData, color: CATEGORY_COLORS.bibimbap },
+            ];
+            return cats.map(c => ({
+              category: c.label,
+              totalEa: filteredProduction.reduce((s, p) => s + ((p[c.eaField] as number) || 0), 0),
+              totalKg: c.kgField ? filteredProduction.reduce((s, p) => s + ((p[c.kgField] as number) || 0), 0) : 0,
+              color: c.color,
+            })).filter(c => c.totalEa > 0 || c.totalKg > 0);
+          })();
+
           return (
             <div className="space-y-6">
-              {/* KPI */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* KPI — 5개 */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">평균 폐기율</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">평균 폐기율(완제품)</p>
                   <p className={`text-2xl font-bold mt-1 ${avgRate > config.wasteThresholdPct ? 'text-red-600' : 'text-green-600'}`}>
                     {formatPercent(avgRate)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">목표: {config.wasteThresholdPct}%</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{config.wasteThresholdPct}% 초과일</p>
-                  <p className={`text-2xl font-bold mt-1 ${highDays.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {highDays.length}일
+                  <p className="text-xs text-gray-500 dark:text-gray-400">평균 폐기율(반제품)</p>
+                  <p className={`text-2xl font-bold mt-1 ${avgSemiRate > config.wasteThresholdPct ? 'text-orange-600' : 'text-green-600'}`}>
+                    {formatPercent(avgSemiRate)}
                   </p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">총 폐기 수량(EA)</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{totalWasteEa.toLocaleString('ko-KR')}EA</p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">총 폐기 중량(kg)</p>
+                  <p className="text-2xl font-bold text-orange-600 mt-1">{totalWasteKg.toLocaleString('ko-KR')}kg</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">추정 폐기비용</p>
@@ -363,9 +477,9 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 </div>
               </div>
 
-              {/* C3: 주간 생산량(LineChart) + 폐기율(우축 Line) */}
+              {/* 주간 생산량 & 폐기율 추이 (완제품 + 반제품) */}
               <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 생산량 & 폐기율 추이</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 생산량 & 폐기율 추이 <FormulaTooltip {...FORMULAS.wasteRate} /></h3>
                 {weeklyWaste.length > 0 ? (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -374,10 +488,11 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                         <XAxis dataKey="weekLabel" tick={{ fontSize: 10 }} />
                         <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
                         <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                        <Tooltip formatter={(v: number, name: string) => name === '폐기율' ? `${v}%` : v.toLocaleString()} />
+                        <Tooltip formatter={(v: number, name: string) => name.includes('폐기율') ? `${v}%` : v.toLocaleString()} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
                         <Line yAxisId="left" type="monotone" dataKey="totalProduction" name="생산량" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
-                        <Line yAxisId="right" type="monotone" dataKey="avgWasteRate" name="폐기율" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line yAxisId="right" type="monotone" dataKey="avgWasteRate" name="완제품 폐기율" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line yAxisId="right" type="monotone" dataKey="avgWasteSemiPct" name="반제품 폐기율" stroke="#F59E0B" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -444,6 +559,27 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 </div>
               )}
 
+              {/* 카테고리별 생산량 비교 */}
+              {categoryProduction.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">카테고리별 생산량</h3>
+                  <div className="h-48">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={categoryProduction} layout="vertical" margin={{ left: 10, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => v.toLocaleString()} />
+                        <YAxis type="category" dataKey="category" width={60} tick={{ fontSize: 11 }} />
+                        <Tooltip formatter={(v: number, name: string) => [v.toLocaleString(), name]} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="totalEa" name="생산량(EA)" radius={[0, 4, 4, 0]}>
+                          {categoryProduction.map((c, i) => <Cell key={i} fill={c.color} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
               {/* 폐기율 초과일 테이블 */}
               {highDays.length > 0 && (
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
@@ -479,6 +615,60 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                         })}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 일별 폐기 상세 테이블 */}
+              {dailyWasteDetail.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span className="material-icons-outlined text-blue-500">table_chart</span>
+                    일별 폐기 상세
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 text-gray-500">날짜</th>
+                          <th className="text-left py-2 px-3 text-gray-500">요일</th>
+                          <th className="text-right py-2 px-3 text-gray-500">생산(EA)</th>
+                          <th className="text-right py-2 px-3 text-gray-500">생산(kg)</th>
+                          <th className="text-right py-2 px-3 text-gray-500">완제품 폐기(EA)</th>
+                          <th className="text-right py-2 px-3 text-gray-500">완제품 폐기율</th>
+                          <th className="text-right py-2 px-3 text-gray-500">반제품 폐기(kg)</th>
+                          <th className="text-right py-2 px-3 text-gray-500">반제품 폐기율</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dailyWasteDetail.slice(0, 30).map(d => {
+                          const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][new Date(d.date).getDay()];
+                          const isHighFinished = d.wasteFinishedPct > config.wasteThresholdPct;
+                          const isHighSemi = d.wasteSemiPct > config.wasteThresholdPct;
+                          return (
+                            <tr key={d.date} className={`border-b border-gray-100 dark:border-gray-800 ${
+                              isHighFinished || isHighSemi ? 'bg-red-50/30 dark:bg-red-900/5' : ''
+                            }`}>
+                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
+                              <td className="py-2 px-3 text-gray-500 text-xs">{dayOfWeek}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{d.productionQty.toLocaleString('ko-KR')}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{d.productionKg.toLocaleString('ko-KR')}</td>
+                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{d.wasteFinishedEa > 0 ? d.wasteFinishedEa.toLocaleString('ko-KR') : '-'}</td>
+                              <td className={`py-2 px-3 text-right font-medium ${isHighFinished ? 'text-red-600' : 'text-gray-500'}`}>
+                                {d.wasteFinishedPct > 0 ? formatPercent(d.wasteFinishedPct) : '-'}
+                              </td>
+                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{d.wasteSemiKg > 0 ? d.wasteSemiKg.toLocaleString('ko-KR') : '-'}</td>
+                              <td className={`py-2 px-3 text-right font-medium ${isHighSemi ? 'text-orange-600' : 'text-gray-500'}`}>
+                                {d.wasteSemiPct > 0 ? formatPercent(d.wasteSemiPct) : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {dailyWasteDetail.length > 30 && (
+                      <p className="text-xs text-gray-400 text-center mt-2">최근 30일만 표시 (전체 {dailyWasteDetail.length}일)</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -525,6 +715,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
             <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                 주간 생산 추이 {effFilter !== 'all' && <span className="text-sm text-gray-400 font-normal">({CATEGORY_LABELS[effFilter]})</span>}
+                <FormulaTooltip {...FORMULAS.productivity} />
               </h3>
               {weeklyData.length > 0 ? (
                 <div className="h-72">
@@ -701,6 +892,10 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
           return (
             <div className="space-y-6">
               {/* KPI */}
+              <div className="flex items-center gap-1 mb-2">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">BOM 소모량 이상 감지</h3>
+                <FormulaTooltip {...FORMULAS.bomAnomaly} />
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
                   { label: '이상 항목', value: summary.totalAnomalies, unit: '건', icon: 'warning', color: 'text-red-500' },
@@ -815,6 +1010,10 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
         if (activeTab === 'bomVariance') {
           return (
             <div className="space-y-6">
+              <div className="flex items-center gap-1 mb-2">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">BOM 투입 오차 분석</h3>
+                <FormulaTooltip {...FORMULAS.bomVariance} />
+              </div>
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -834,7 +1033,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   </p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">수량 차이</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">투입량 차이</p>
                   <p className={`text-2xl font-bold mt-1 ${
                     (bomVariance?.totalQtyVariance || 0) > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
@@ -935,42 +1134,120 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">품목</th>
+                          <th className="text-left py-2 px-3 text-gray-500">자재명</th>
                           <th className="text-right py-2 px-3 text-gray-500">기준단가</th>
                           <th className="text-right py-2 px-3 text-gray-500">실제단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">기준수량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">실제수량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">가격차이</th>
-                          <th className="text-right py-2 px-3 text-gray-500">수량차이</th>
+                          <th className="text-right py-2 px-3 text-gray-500">기준 투입량</th>
+                          <th className="text-right py-2 px-3 text-gray-500">실제 투입량</th>
+                          <th className="text-right py-2 px-3 text-gray-500">단가 차이</th>
+                          <th className="text-right py-2 px-3 text-gray-500">투입량 차이</th>
                           <th className="text-right py-2 px-3 text-gray-500">총 차이</th>
                         </tr>
                       </thead>
                       <tbody>
                         {bomVariance.items.slice(0, 20).map(item => (
-                          <tr key={item.productCode} className={`border-b border-gray-100 dark:border-gray-800 ${
-                            item.totalVariance > 0 ? 'bg-red-50/30 dark:bg-red-900/5' : ''
-                          }`}>
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
-                            <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.standardPrice)}</td>
-                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.actualPrice)}</td>
-                            <td className="py-2 px-3 text-right text-gray-500">{formatQty(item.standardQty)}</td>
-                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatQty(item.actualQty)}</td>
-                            <td className={`py-2 px-3 text-right font-medium ${
-                              item.priceVariance > 0 ? 'text-red-600' : item.priceVariance < 0 ? 'text-green-600' : 'text-gray-500'
-                            }`}>
-                              {item.priceVariance > 0 ? '+' : ''}{formatCurrency(item.priceVariance)}
-                            </td>
-                            <td className={`py-2 px-3 text-right font-medium ${
-                              item.qtyVariance > 0 ? 'text-red-600' : item.qtyVariance < 0 ? 'text-green-600' : 'text-gray-500'
-                            }`}>
-                              {item.qtyVariance > 0 ? '+' : ''}{formatCurrency(item.qtyVariance)}
-                            </td>
-                            <td className={`py-2 px-3 text-right font-bold ${
-                              item.totalVariance > 0 ? 'text-red-600' : item.totalVariance < 0 ? 'text-green-600' : 'text-gray-500'
-                            }`}>
-                              {item.totalVariance > 0 ? '+' : ''}{formatCurrency(item.totalVariance)}
-                            </td>
-                          </tr>
+                          <React.Fragment key={item.productCode}>
+                            <tr
+                              className={`border-b border-gray-100 dark:border-gray-800 ${
+                                item.totalVariance > 0 ? 'bg-red-50/30 dark:bg-red-900/5' : ''
+                              } ${bomData.length > 0 ? 'cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/10' : ''}`}
+                              onClick={() => bomData.length > 0 && setSelectedMaterial(selectedMaterial?.productCode === item.productCode ? null : item)}
+                            >
+                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">
+                                <div className="flex items-center gap-1">
+                                  {bomData.length > 0 && (
+                                    <span className={`material-icons-outlined text-xs transition-transform ${selectedMaterial?.productCode === item.productCode ? 'rotate-90' : ''}`}>
+                                      chevron_right
+                                    </span>
+                                  )}
+                                  {item.productName}
+                                </div>
+                              </td>
+                              <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.standardPrice)}</td>
+                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.actualPrice)}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">{formatQty(item.standardQty, item.unit)}</td>
+                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatQty(item.actualQty, item.unit)}</td>
+                              <td className={`py-2 px-3 text-right font-medium ${
+                                item.priceVariance > 0 ? 'text-red-600' : item.priceVariance < 0 ? 'text-green-600' : 'text-gray-500'
+                              }`}>
+                                {item.priceVariance > 0 ? '+' : ''}{formatCurrency(item.priceVariance)}
+                              </td>
+                              <td className={`py-2 px-3 text-right font-medium ${
+                                item.qtyVariance > 0 ? 'text-red-600' : item.qtyVariance < 0 ? 'text-green-600' : 'text-gray-500'
+                              }`}>
+                                {item.qtyVariance > 0 ? '+' : ''}{formatCurrency(item.qtyVariance)}
+                              </td>
+                              <td className={`py-2 px-3 text-right font-bold ${
+                                item.totalVariance > 0 ? 'text-red-600' : item.totalVariance < 0 ? 'text-green-600' : 'text-gray-500'
+                              }`}>
+                                {item.totalVariance > 0 ? '+' : ''}{formatCurrency(item.totalVariance)}
+                              </td>
+                            </tr>
+                            {/* 드릴다운 패널 */}
+                            {selectedMaterial?.productCode === item.productCode && (
+                              <tr>
+                                <td colSpan={8} className="p-0">
+                                  <div className="bg-gray-50 dark:bg-gray-800 border-l-4 border-blue-500 p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                                        <span className="material-icons-outlined text-blue-500 text-base align-middle mr-1">account_tree</span>
+                                        {item.productName} — 메뉴별 소모 상세
+                                      </h4>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setSelectedMaterial(null); }}
+                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                      >
+                                        <span className="material-icons-outlined text-sm">close</span>
+                                      </button>
+                                    </div>
+                                    {materialDrilldown && materialDrilldown.items.length > 0 ? (
+                                      <>
+                                        <table className="w-full text-xs">
+                                          <thead>
+                                            <tr className="border-b border-gray-300 dark:border-gray-600">
+                                              <th className="text-left py-1.5 px-2 text-gray-500">메뉴명</th>
+                                              <th className="text-right py-1.5 px-2 text-gray-500">생산일수</th>
+                                              <th className="text-right py-1.5 px-2 text-gray-500">레시피 기준({item.unit})</th>
+                                              <th className="text-right py-1.5 px-2 text-gray-500">기준 소모합({item.unit})</th>
+                                              <th className="text-right py-1.5 px-2 text-gray-500">구매 비례({item.unit})</th>
+                                              <th className="text-right py-1.5 px-2 text-gray-500">차이({item.unit})</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {materialDrilldown.items.map(m => (
+                                              <tr key={m.menuCode} className="border-b border-gray-200 dark:border-gray-700">
+                                                <td className="py-1.5 px-2 text-gray-700 dark:text-gray-300">{m.menuName}</td>
+                                                <td className="py-1.5 px-2 text-right text-gray-500">{m.prodDays}일</td>
+                                                <td className="py-1.5 px-2 text-right text-gray-500">{m.recipeQty.toLocaleString('ko-KR')}</td>
+                                                <td className="py-1.5 px-2 text-right text-gray-500">{m.standardConsumption.toLocaleString('ko-KR')}</td>
+                                                <td className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-300">{m.allocatedActual.toLocaleString('ko-KR')}</td>
+                                                <td className={`py-1.5 px-2 text-right font-medium ${m.diff > 0 ? 'text-red-600' : m.diff < 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                  {m.diff > 0 ? '+' : ''}{m.diff.toLocaleString('ko-KR')}
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                          <tfoot>
+                                            <tr className="border-t-2 border-gray-400 dark:border-gray-500 font-bold">
+                                              <td className="py-1.5 px-2 text-gray-700 dark:text-gray-200" colSpan={3}>합계</td>
+                                              <td className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-200">{materialDrilldown.totalStandard.toLocaleString('ko-KR')}</td>
+                                              <td className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-200">{materialDrilldown.totalActual.toLocaleString('ko-KR')}</td>
+                                              <td className={`py-1.5 px-2 text-right ${(materialDrilldown.totalActual - materialDrilldown.totalStandard) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                {(materialDrilldown.totalActual - materialDrilldown.totalStandard) > 0 ? '+' : ''}
+                                                {(materialDrilldown.totalActual - materialDrilldown.totalStandard).toLocaleString('ko-KR')}
+                                              </td>
+                                            </tr>
+                                          </tfoot>
+                                        </table>
+                                      </>
+                                    ) : (
+                                      <p className="text-xs text-gray-400 py-2">BOM 데이터가 없어 상세 분석을 표시할 수 없습니다.</p>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         ))}
                       </tbody>
                     </table>
@@ -1024,6 +1301,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-icons-outlined text-green-500">show_chart</span>
                     주간 수율 추이
+                    <FormulaTooltip {...FORMULAS.yieldRate} />
                   </h3>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1051,6 +1329,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-icons-outlined text-blue-500">show_chart</span>
                     주간 생산량 vs 폐기량 & 폐기율
+                    <FormulaTooltip {...FORMULAS.wasteRate} />
                   </h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1079,6 +1358,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                     <span className="material-icons-outlined text-orange-500">science</span>
                     일별 수율 상세
+                    <FormulaTooltip {...FORMULAS.adjustedCost} />
                   </h3>
                   <p className="text-xs text-gray-500 mb-4">
                     환산단가 = 단위원가 / 수율 | 수율 기준 미달일은 빨간 배경

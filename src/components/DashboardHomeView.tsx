@@ -7,6 +7,8 @@ import type { ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../servi
 import type { DailySalesData, ProductionData, PurchaseData } from '../services/googleSheetService';
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate, getRangeLabel } from '../utils/dateRange';
+import FormulaTooltip from './FormulaTooltip';
+import { FORMULAS } from '../constants/formulaDescriptions';
 
 interface DashboardHomeViewProps {
   onSync: () => void;
@@ -350,6 +352,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <span className="material-icons-outlined text-purple-500">emoji_events</span>
               독립채산제 성과
+              <FormulaTooltip {...FORMULAS.costScore} />
             </h3>
             <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
               <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-medium">
