@@ -8,6 +8,7 @@ import { ProfitAnalysisView } from '../components/ProfitAnalysisView.tsx';
 import { CostManagementView } from '../components/CostManagementView.tsx';
 import { ProductionBomView } from '../components/ProductionBomView.tsx';
 import { InventoryOrderView } from '../components/InventoryOrderView.tsx';
+import { SalesAnalysisView } from '../components/SalesAnalysisView.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { AIAssistButton } from '../components/AIAssistButton.tsx';
 import { AIAssistOverlay } from '../components/AIAssistOverlay.tsx';
@@ -853,6 +854,19 @@ const App = () => {
             />
           </ErrorBoundary>
         );
+      case 'sales':
+        return (
+          <ErrorBoundary fallbackTitle="매출 분석 로드 중 오류" key="sales">
+            <SalesAnalysisView
+              dailySales={gsDailySales}
+              salesDetail={gsSalesDetail}
+              purchases={gsPurchases}
+              insights={insights}
+              onItemClick={handleItemClick}
+              onTabChange={setActiveSubTab}
+            />
+          </ErrorBoundary>
+        );
       case 'cost':
         return (
           <ErrorBoundary fallbackTitle="원가 관리 로드 중 오류" key="cost">
@@ -929,6 +943,8 @@ const App = () => {
         return '통합 관제 대시보드';
       case 'profit':
         return '수익 분석';
+      case 'sales':
+        return '매출 분석';
       case 'cost':
         return '원가 관리';
       case 'production':

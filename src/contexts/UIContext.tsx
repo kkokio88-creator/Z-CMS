@@ -9,6 +9,7 @@ import type { DateRangeOption } from '../utils/dateRange';
 export type ViewType =
   | 'home'
   | 'profit'
+  | 'sales'
   | 'cost'
   | 'production'
   | 'inventory'

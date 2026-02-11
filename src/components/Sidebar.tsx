@@ -3,6 +3,7 @@ import React from 'react';
 type ViewType =
   | 'home'
   | 'profit'
+  | 'sales'
   | 'cost'
   | 'production'
   | 'inventory'
@@ -99,6 +100,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, dataAv
             label="수익 분석"
             isActive={activeView === 'profit'}
             onClick={() => onNavigate('profit')}
+            hasData={hasSalesData}
+            noDataMessage="판매 데이터 필요"
+          />
+          <NavItem
+            icon="analytics"
+            label="매출 분석"
+            isActive={activeView === 'sales'}
+            onClick={() => onNavigate('sales')}
             hasData={hasSalesData}
             noDataMessage="판매 데이터 필요"
           />
