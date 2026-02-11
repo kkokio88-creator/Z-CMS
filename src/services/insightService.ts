@@ -12,6 +12,7 @@ import type {
   LaborDailyData,
   BomItemData,
   MaterialMasterItem,
+  InventorySnapshotData,
 } from './googleSheetService';
 import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
@@ -1631,7 +1632,10 @@ export function computeLimitPrice(purchases: PurchaseData[]): LimitPriceInsight 
 
 export function computeBomVariance(
   purchases: PurchaseData[],
-  production: ProductionData[]
+  production: ProductionData[],
+  bomData: BomItemData[] = [],
+  materialMaster: MaterialMasterItem[] = [],
+  inventorySnapshots: InventorySnapshotData[] = []
 ): BomVarianceInsight {
   if (purchases.length === 0 || production.length === 0) {
     return { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
@@ -1641,6 +1645,28 @@ export function computeBomVariance(
   const totalProduction = production.reduce((s, p) => s + p.prodQtyTotal, 0);
   if (totalProduction === 0) {
     return { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
+  }
+
+  // materialMaster → 이름 매핑 (BOM 이름이 빈 문자열인 경우 보완)
+  const masterNameMap = new Map<string, string>();
+  for (const mm of materialMaster) {
+    const code = mm.materialCode?.trim();
+    if (code && mm.materialName) masterNameMap.set(code, mm.materialName);
+  }
+
+  // BOM에 포함된 자재코드 집합 (BOM 관련 자재만 표시하기 위해)
+  const bomMaterialCodes = new Set<string>();
+  for (const bom of bomData) {
+    const matCode = bom.materialCode?.trim();
+    if (matCode) bomMaterialCodes.add(matCode);
+  }
+
+  // 재고 잔량 (자재코드별)
+  const inventoryBalance = new Map<string, number>();
+  for (const inv of inventorySnapshots) {
+    const code = inv.productCode?.trim();
+    if (!code) continue;
+    inventoryBalance.set(code, (inventoryBalance.get(code) || 0) + inv.balanceQty);
   }
 
   // 기간 분할: 전반기(기준) vs 후반기(실제)
@@ -1685,13 +1711,19 @@ export function computeBomVariance(
     const recent = recentAgg.get(code);
     if (!base || !recent || base.qty === 0 || recent.qty === 0) return;
 
+    // BOM 자재만 필터 (BOM 데이터가 있을 때)
+    if (bomMaterialCodes.size > 0 && !bomMaterialCodes.has(code)) return;
+
     const standardPrice = Math.round(base.total / base.qty);
     const actualPrice = Math.round(recent.total / recent.qty);
 
     // 기준 수량 = (기준 기간 투입량 / 기준 기간 생산량) × 최근 기간 생산량
     const standardRatio = base.qty / baseProdTotal;
     const standardQty = Math.round(standardRatio * recentProdTotal);
-    const actualQty = recent.qty;
+
+    // 실제수량: 구매량 - 재고 잔량 보정 (후반기 구매 중 미소진분)
+    const balance = inventoryBalance.get(code) || 0;
+    const actualQty = balance > 0 ? Math.max(0, recent.qty - balance) : recent.qty;
 
     // 가격차이 = (실제단가 - 기준단가) × 실제수량
     const priceVariance = (actualPrice - standardPrice) * actualQty;
@@ -1702,9 +1734,12 @@ export function computeBomVariance(
     totalPriceVar += priceVariance;
     totalQtyVar += qtyVariance;
 
+    // 이름: materialMaster 우선 → 구매 데이터 이름
+    const name = masterNameMap.get(code) || base.name || recent.name;
+
     items.push({
       productCode: code,
-      productName: base.name || recent.name,
+      productName: name,
       standardPrice, actualPrice,
       standardQty, actualQty,
       priceVariance, qtyVariance, totalVariance,
@@ -2274,61 +2309,86 @@ function computeInventoryCost(
 // ==============================
 
 function computeBomConsumptionAnomaly(
-  salesDetail: SalesDetailData[],
   purchases: PurchaseData[],
+  production: ProductionData[],
   bomData: BomItemData[],
   materialMaster: MaterialMasterItem[],
+  inventorySnapshots: InventorySnapshotData[],
   config: BusinessConfig
 ): BomConsumptionAnomalyInsight | null {
   if (bomData.length === 0 || purchases.length === 0) return null;
 
-  // 1. salesDetail → 제품별 생산량 (판매량을 생산량 대리변수로 사용)
-  const productQtyMap = new Map<string, number>();
-  for (const sd of salesDetail) {
-    const code = sd.productCode?.trim();
-    if (!code) continue;
-    productQtyMap.set(code, (productQtyMap.get(code) || 0) + (sd.quantity || 0));
-  }
+  // 1. 총 생산량 (ProductionData.prodQtyTotal 합계)
+  const totalProduction = production.reduce((s, p) => s + p.prodQtyTotal, 0);
+  if (totalProduction === 0) return null;
 
-  // 2. materialMaster → 자재별 기준 단가
+  // 2. materialMaster → 자재별 기준 단가 + 이름
   const masterPriceMap = new Map<string, number>();
+  const masterNameMap = new Map<string, string>();
   for (const mm of materialMaster) {
     const code = mm.materialCode?.trim();
-    if (code && mm.unitPrice > 0) masterPriceMap.set(code, mm.unitPrice);
+    if (!code) continue;
+    if (mm.unitPrice > 0) masterPriceMap.set(code, mm.unitPrice);
+    if (mm.materialName) masterNameMap.set(code, mm.materialName);
   }
 
-  // 3. purchases → 자재코드별 구매량/금액 집계
+  // 3. purchases → 자재코드별 구매량/금액 집계 (ZIP_M_*, ZIP_H_* 등)
   const purchaseAgg = new Map<string, { totalQty: number; totalAmount: number; count: number; name: string }>();
   for (const p of purchases) {
     const code = p.productCode?.trim();
     if (!code) continue;
     const agg = purchaseAgg.get(code) || { totalQty: 0, totalAmount: 0, count: 0, name: p.productName || code };
     agg.totalQty += p.quantity || 0;
-    agg.totalAmount += p.amount || 0;
+    agg.totalAmount += p.total || 0;
     agg.count += 1;
     purchaseAgg.set(code, agg);
   }
 
-  // 4. bomData → 자재코드별 기대 소모량 합산 + 사용 제품명 수집
-  const expectedMap = new Map<string, { expected: number; productNames: Set<string>; materialName: string }>();
-  for (const bom of bomData) {
-    const matCode = bom.materialCode?.trim();
-    const prodCode = bom.productCode?.trim();
-    if (!matCode || !prodCode) continue;
-
-    const actualProdQty = productQtyMap.get(prodCode) || 0;
-    if (actualProdQty === 0) continue;
-
-    const bomProdQty = bom.productionQty || 1;
-    const expected = (actualProdQty / bomProdQty) * ((bom.consumptionQty || 0) + (bom.additionalQty || 0));
-
-    const entry = expectedMap.get(matCode) || { expected: 0, productNames: new Set<string>(), materialName: bom.materialName || matCode };
-    entry.expected += expected;
-    entry.productNames.add(bom.productName || prodCode);
-    expectedMap.set(matCode, entry);
+  // 4. 재고 스냅샷 → 자재코드별 현재 재고 잔량 (복수 창고 합산)
+  const inventoryBalance = new Map<string, number>();
+  for (const inv of inventorySnapshots) {
+    const code = inv.productCode?.trim();
+    if (!code) continue;
+    inventoryBalance.set(code, (inventoryBalance.get(code) || 0) + inv.balanceQty);
   }
 
-  // 5. 비교 및 이상 감지
+  // 5. BOM → 자재코드별 이론 소모량 (생산량 기반)
+  //    BOM: productCode(SAN_*) → materialCode(ZIP_M_*, ZIP_H_*)
+  //    이론 소모량 = totalProduction × (Σ consumptionQty / Σ productionQty)
+  //    (총 생산량 대비 자재별 평균 소모율)
+  const bomByMaterial = new Map<string, {
+    totalConsumption: number;  // Σ consumptionQty + additionalQty
+    totalProductionQty: number; // Σ productionQty
+    productNames: Set<string>;
+    materialName: string;
+  }>();
+
+  for (const bom of bomData) {
+    const matCode = bom.materialCode?.trim();
+    if (!matCode) continue;
+    const consumptionPerBatch = (bom.consumptionQty || 0) + (bom.additionalQty || 0);
+    const prodQty = bom.productionQty || 1;
+
+    const entry = bomByMaterial.get(matCode) || {
+      totalConsumption: 0,
+      totalProductionQty: 0,
+      productNames: new Set<string>(),
+      materialName: '',
+    };
+    entry.totalConsumption += consumptionPerBatch;
+    entry.totalProductionQty += prodQty;
+
+    // 이름: materialMaster 우선 → BOM materialName → 코드
+    if (!entry.materialName) {
+      entry.materialName = masterNameMap.get(matCode) || bom.materialName || matCode;
+    }
+    const prodName = bom.productName || masterNameMap.get(bom.productCode?.trim() || '') || bom.productCode;
+    if (prodName) entry.productNames.add(prodName);
+
+    bomByMaterial.set(matCode, entry);
+  }
+
+  // 6. 비교 및 이상 감지
   const items: BomConsumptionAnomalyItem[] = [];
   const overuseThresh = config.bomOveruseThreshold;
   const underuseThresh = config.bomUnderuseThreshold;
@@ -2337,16 +2397,23 @@ function computeBomConsumptionAnomaly(
   const medSev = config.bomMediumSeverity;
   const highSev = config.bomHighSeverity;
 
-  for (const [matCode, exp] of expectedMap) {
+  for (const [matCode, bomInfo] of bomByMaterial) {
     const pAgg = purchaseAgg.get(matCode);
-    if (!pAgg) continue;
+    if (!pAgg) continue; // BOM에는 있지만 구매 이력 없음 → 무시
 
     const totalSpend = pAgg.totalAmount;
     if (totalSpend < minSpend) continue;
 
-    const actualQty = pAgg.totalQty;
-    const expectedQty = exp.expected;
+    // 이론 소모량: 총 생산량 × (BOM 소모율 = totalConsumption / totalProductionQty)
+    const bomRate = bomInfo.totalProductionQty > 0
+      ? bomInfo.totalConsumption / bomInfo.totalProductionQty
+      : 0;
+    const expectedQty = totalProduction * bomRate;
     if (expectedQty === 0) continue;
+
+    // 실제 사용량 = 구매량 - 재고 잔량 보정 (재고 증가분은 미사용으로 간주)
+    const currentBalance = inventoryBalance.get(matCode) || 0;
+    const actualQty = pAgg.totalQty - currentBalance;
 
     const deviationPct = ((actualQty - expectedQty) / expectedQty) * 100;
     const bomUnitPrice = masterPriceMap.get(matCode) || 0;
@@ -2371,13 +2438,13 @@ function computeBomConsumptionAnomaly(
 
     // 비용 영향
     const costImpact = anomalyType === 'price_deviation'
-      ? (actualAvgPrice - bomUnitPrice) * actualQty
+      ? (actualAvgPrice - bomUnitPrice) * Math.abs(actualQty)
       : (actualQty - expectedQty) * (bomUnitPrice || actualAvgPrice);
 
     items.push({
       materialCode: matCode,
-      materialName: exp.materialName,
-      productNames: [...exp.productNames],
+      materialName: bomInfo.materialName,
+      productNames: [...bomInfo.productNames],
       expectedConsumption: Math.round(expectedQty * 100) / 100,
       actualConsumption: Math.round(actualQty * 100) / 100,
       deviationPct: Math.round(deviationPct * 10) / 10,
@@ -2431,7 +2498,8 @@ export function computeAllInsights(
   config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
   bomData: BomItemData[] = [],
   materialMaster: MaterialMasterItem[] = [],
-  labor: LaborDailyData[] = []
+  labor: LaborDailyData[] = [],
+  inventorySnapshots: InventorySnapshotData[] = []
 ): DashboardInsights {
   const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales, purchases, channelCosts, config) : null;
   const productProfit = salesDetail.length > 0 ? computeProductProfit(salesDetail, purchases) : null;
@@ -2458,7 +2526,7 @@ export function computeAllInsights(
   const limitPrice = purchases.length > 0 ? computeLimitPrice(purchases) : null;
 
   const bomVariance = (purchases.length > 0 && production.length > 0)
-    ? computeBomVariance(purchases, production)
+    ? computeBomVariance(purchases, production, bomData, materialMaster, inventorySnapshots)
     : null;
 
   const productBEP = productProfit
@@ -2507,7 +2575,7 @@ export function computeAllInsights(
   }
 
   const bomConsumptionAnomaly = (bomData.length > 0 && purchases.length > 0)
-    ? computeBomConsumptionAnomaly(salesDetail, purchases, bomData, materialMaster, config)
+    ? computeBomConsumptionAnomaly(purchases, production, bomData, materialMaster, inventorySnapshots, config)
     : null;
 
   return {
@@ -2557,15 +2625,19 @@ export function computeProfitCenterScore(
     ? Math.max(1, Math.round((new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000) + 1)
     : channelRevenue.dailyTrend.length || 1;
 
-  // 월매출 추정 (생산매출 기준)
-  const revenue = channelRevenue.totalProductionRevenue;
-  const monthlyRevenue = Math.round(revenue * 30 / calendarDays);
+  // 매출구간 결정: 정산매출(실결제 금액) 기준
+  const settlementRevenue = channelRevenue.totalRevenue;
+  const monthlySettlement = Math.round(settlementRevenue * 30 / calendarDays);
 
-  // 가장 가까운 하위 구간 선택
+  // 점수 계산용: 생산매출 (= 권장판매가 × 50%)
+  const revenue = channelRevenue.totalProductionRevenue;
+  const monthlyRevenue = monthlySettlement; // UI 표시용 = 정산매출 기준 월매출
+
+  // 가장 가까운 하위 구간 선택 (정산매출 기준)
   const sorted = [...goals].sort((a, b) => a.revenueBracket - b.revenueBracket);
   let activeBracket = sorted[0];
   for (const goal of sorted) {
-    if (monthlyRevenue >= goal.revenueBracket) {
+    if (monthlySettlement >= goal.revenueBracket) {
       activeBracket = goal;
     } else {
       break;

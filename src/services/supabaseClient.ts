@@ -167,6 +167,20 @@ export async function directFetchInventory(): Promise<Record<string, any>[]> {
   return data;
 }
 
+export async function directFetchInventorySnapshots(): Promise<import('./googleSheetService').InventorySnapshotData[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client.from('inventory').select('*').order('product_code', { ascending: true });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    productCode: row.product_code ?? '',
+    productName: row.product_name ?? '',
+    balanceQty: Number(row.balance_qty) || 0,
+    warehouseCode: row.warehouse_code ?? 'DEFAULT',
+    snapshotDate: row.snapshot_date ?? '',
+  }));
+}
+
 export async function directFetchUtilities(): Promise<UtilityData[]> {
   const client = getSupabaseClient();
   if (!client) return [];

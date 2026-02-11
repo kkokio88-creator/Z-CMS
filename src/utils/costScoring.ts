@@ -122,13 +122,13 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const fUtilities = filterByDate(utilities, rangeStart, rangeEnd);
   const fProduction = filterByDate(production, rangeStart, rangeEnd);
 
-  // 생산매출 = 권장판매가 × 50% (computeChannelRevenue 경유)
+  // 매출 계산 (computeChannelRevenue 경유)
   const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, config);
-  const filteredRevenue = cr.totalProductionRevenue;
+  const filteredRevenue = cr.totalProductionRevenue; // 점수 계산용 = 생산매출
   if (filteredRevenue === 0) return null;
 
-  // 월매출 추정
-  const monthlyRevenue = Math.round(filteredRevenue * 30 / rangeDays);
+  // 매출구간 결정: 정산매출(실결제 금액) 기준
+  const monthlyRevenue = Math.round(cr.totalRevenue * 30 / rangeDays);
   const activeBracket = findActiveBracket(goals, monthlyRevenue);
   const targets = activeBracket.targets;
 
@@ -180,13 +180,14 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
   const fProduction = filterByDate(production, rangeStart, rangeEnd);
   const fLabor = filterByDate(laborData, rangeStart, rangeEnd);
 
-  // 전체 기간 생산매출 (= 권장판매가 × 50%) → 구간 결정
+  // 매출 계산
   const overallCR = computeChannelRevenue(fSales, fPurchases, channelCosts, config);
-  const totalRev = overallCR.totalProductionRevenue;
+  const totalRev = overallCR.totalProductionRevenue; // 점수 계산용 = 생산매출
   // 주간 배분용 비율: 생산매출 / 채널정산매출
   const prodRatio = overallCR.totalRevenue > 0 ? overallCR.totalProductionRevenue / overallCR.totalRevenue : 0.5;
   const rangeDays = Math.max(1, fSales.length);
-  const monthlyRevenue = Math.round(totalRev * 30 / rangeDays);
+  // 매출구간 결정: 정산매출(실결제 금액) 기준
+  const monthlyRevenue = Math.round(overallCR.totalRevenue * 30 / rangeDays);
   const activeBracket = findActiveBracket(goals, monthlyRevenue);
   const targets = activeBracket.targets;
 

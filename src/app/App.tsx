@@ -51,6 +51,7 @@ import {
   LaborDailyData,
   BomItemData,
   MaterialMasterItem,
+  InventorySnapshotData,
 } from '../services/googleSheetService';
 import {
   computeAllInsights,
@@ -94,6 +95,7 @@ const App = () => {
   const [gsLabor, setGsLabor] = useState<LaborDailyData[]>([]);
   const [gsBom, setGsBom] = useState<BomItemData[]>([]);
   const [gsMaterialMaster, setGsMaterialMaster] = useState<MaterialMasterItem[]>([]);
+  const [gsInventorySnapshots, setGsInventorySnapshots] = useState<InventorySnapshotData[]>([]);
   const [gsChannelProfit, setGsChannelProfit] = useState<ChannelProfitItem[]>([]);
 
   // Insights State (insightService 기반)
@@ -238,6 +240,7 @@ const App = () => {
       const lab = cached.labor || [];
       const bom = cached.bom || [];
       const mm = cached.materialMaster || [];
+      const invSnap = cached.inventorySnapshots || [];
       setGsDailySales(ds);
       setGsSalesDetail(sd);
       setGsProduction(prod);
@@ -246,6 +249,7 @@ const App = () => {
       setGsLabor(lab);
       setGsBom(bom);
       setGsMaterialMaster(mm);
+      setGsInventorySnapshots(invSnap);
       setGsChannelProfit(cached.profitTrend || []);
       if (cached.profitTrend?.length > 0) {
         setProfitData(cached.profitTrend.map((p: any) => ({
@@ -256,7 +260,7 @@ const App = () => {
       try {
         const bizConfig = loadBusinessConfig();
         const channelCosts = getChannelCostSummaries();
-        const computed = computeAllInsights(ds, sd, prod, purch, util, inventoryData, channelCosts, bizConfig, bom, mm, lab);
+        const computed = computeAllInsights(ds, sd, prod, purch, util, inventoryData, channelCosts, bizConfig, bom, mm, lab, invSnap);
         setInsights(computed);
       } catch (e) { console.warn('캐시 insights 계산 실패:', e); }
       setInitialLoadDone(true);
@@ -354,6 +358,7 @@ const App = () => {
         setGsLabor(gsResult.labor || []);
         setGsBom(gsResult.bom || []);
         setGsMaterialMaster(gsResult.materialMaster || []);
+        setGsInventorySnapshots(gsResult.inventorySnapshots || []);
         setGsChannelProfit(gsResult.profitTrend);
 
         // 매출/수익 데이터는 Google Sheet 기준으로 설정
@@ -555,6 +560,7 @@ const App = () => {
             gsResult.bom || [],
             gsResult.materialMaster || [],
             gsResult.labor || [],
+            gsResult.inventorySnapshots || [],
           );
           setInsights(computed);
           console.log('[App] Insights 계산 완료:', {

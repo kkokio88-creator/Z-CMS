@@ -13,6 +13,7 @@ import {
   directFetchLabor,
   directFetchBom,
   directFetchMaterialMaster,
+  directFetchInventorySnapshots,
 } from './supabaseClient';
 import { loadBusinessConfig } from '../config/businessConfig';
 
@@ -282,6 +283,15 @@ export interface MaterialMasterItem {
   inUse: boolean;
 }
 
+// 재고 스냅샷 데이터 (Supabase inventory 테이블)
+export interface InventorySnapshotData {
+  productCode: string;
+  productName: string;
+  balanceQty: number;
+  warehouseCode: string;
+  snapshotDate: string;
+}
+
 export interface GoogleSheetSyncResult {
   dailySales: DailySalesData[];
   salesDetail: SalesDetailData[];
@@ -291,6 +301,7 @@ export interface GoogleSheetSyncResult {
   labor: LaborDailyData[];
   bom: BomItemData[];
   materialMaster: MaterialMasterItem[];
+  inventorySnapshots: InventorySnapshotData[];
   profitTrend: ChannelProfitItem[];
   topProfit: ProfitRankItem[];
   bottomProfit: ProfitRankItem[];
@@ -370,7 +381,7 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
 
   // 개별 fetch 함수 호출 (각각 3-Tier 폴백 내장: 백엔드→Supabase직접→Google Sheets)
   try {
-    const [dailySales, salesDetail, production, purchases, utilities, labor, bom, materialMaster] = await Promise.all([
+    const [dailySales, salesDetail, production, purchases, utilities, labor, bom, materialMaster, inventorySnapshots] = await Promise.all([
       fetchDailySales(),
       fetchSalesDetail(),
       fetchProduction(),
@@ -379,6 +390,7 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
       fetchLabor(),
       fetchBomData(),
       fetchMaterialMaster(),
+      fetchInventorySnapshots(),
     ]);
 
     // 데이터가 하나라도 있으면 성공
@@ -398,6 +410,7 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
         labor,
         bom,
         materialMaster,
+        inventorySnapshots,
         profitTrend,
         topProfit,
         bottomProfit,
@@ -448,6 +461,7 @@ const syncGoogleSheetDataLegacy = async (): Promise<GoogleSheetSyncResult> => {
       labor: [],
       bom: [],
       materialMaster: [],
+      inventorySnapshots: [],
       profitTrend: result.transformedData?.profitTrend || [],
       topProfit: result.transformedData?.topProfit || [],
       bottomProfit: result.transformedData?.bottomProfit || [],
@@ -811,6 +825,32 @@ export const fetchMaterialMaster = async (): Promise<MaterialMasterItem[]> => {
     const response = await fetch(`${BACKEND_URL}/data/material-master`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
     if (result.success && result.data?.length > 0) return result.data.map(mapMaterialMasterFromDb);
+  } catch { /* 백엔드 실패 */ }
+  return [];
+};
+
+/**
+ * 재고 스냅샷 가져오기 (3-Tier)
+ */
+export const fetchInventorySnapshots = async (): Promise<InventorySnapshotData[]> => {
+  if (isSupabaseDirectAvailable()) {
+    try {
+      const data = await directFetchInventorySnapshots();
+      if (data.length > 0) return data;
+    } catch { /* Supabase 직접 실패 */ }
+  }
+  try {
+    const response = await fetch(`${BACKEND_URL}/data/inventory`, { signal: AbortSignal.timeout(5000) });
+    const result = await response.json();
+    if (result.success && result.data?.length > 0) {
+      return result.data.map((row: any) => ({
+        productCode: row.product_code ?? '',
+        productName: row.product_name ?? '',
+        balanceQty: Number(row.balance_qty) || 0,
+        warehouseCode: row.warehouse_code ?? 'DEFAULT',
+        snapshotDate: row.snapshot_date ?? '',
+      }));
+    }
   } catch { /* 백엔드 실패 */ }
   return [];
 };
