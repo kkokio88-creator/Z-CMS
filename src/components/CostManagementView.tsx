@@ -556,7 +556,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
-              <ScoreHeader item={profitCenterScore?.scores.find(s => s.metric === '원재료')} />
+              <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '원재료')} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 원재료비</p>
@@ -768,7 +768,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
-              <ScoreHeader item={profitCenterScore?.scores.find(s => s.metric === '부재료')} />
+              <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '부재료')} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 부재료비</p>
@@ -891,7 +891,7 @@ export const CostManagementView: React.FC<Props> = ({
 
           return (
             <div className="space-y-6">
-              <ScoreHeader item={profitCenterScore?.scores.find(s => s.metric === '노무비')} />
+              <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '노무비')} />
 
               {/* KPI 카드 6개 */}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
@@ -1167,7 +1167,7 @@ export const CostManagementView: React.FC<Props> = ({
 
         return (
           <div className="space-y-6">
-            <ScoreHeader item={profitCenterScore?.scores.find(s => s.metric === '수도광열전력')} />
+            <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '수도광열전력')} />
             {/* KPI — B5: 생산매출/생산량 대비 추가 */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">

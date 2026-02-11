@@ -327,9 +327,9 @@ function generateCostInsights(subTab: string | null, ins: DashboardInsights): AI
         status: 'danger',
         title: '한계단가 초과 품목',
         explanation: `${lp.exceedCount}/${lp.totalItems}개 품목이 한계단가(평균+1σ)를 초과했습니다. 비정상적인 가격 상승이 감지되었으니 확인이 필요합니다.`,
-        keyMetrics: lp.items.filter(i => i.isExceeded).slice(0, 3).map(i => ({
+        keyMetrics: lp.items.filter(i => i.isExceeding).slice(0, 3).map(i => ({
           label: i.productName.slice(0, 8),
-          value: formatCurrency(i.latestUnitPrice),
+          value: formatCurrency(i.currentPrice),
           trend: 'down' as const,
         })),
         action: '한계단가 초과 품목의 구매 내역을 점검하세요',
@@ -350,7 +350,7 @@ function generateCostInsights(subTab: string | null, ins: DashboardInsights): AI
         explanation: `부재료 총 비용은 ${formatCurrency(subTotal)}입니다. 부재료(포장재, 용기 등)는 원재료 다음으로 관리가 중요한 항목입니다.`,
         keyMetrics: cb.subMaterialDetail.items.slice(0, 3).map(i => ({
           label: i.productName.slice(0, 8),
-          value: formatCurrency(i.totalCost),
+          value: formatCurrency(i.totalSpent),
         })),
         priority: 2,
       });

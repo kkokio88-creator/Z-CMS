@@ -227,7 +227,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
     const totalCost = filteredPurchases.reduce((s, d) => s + (d.total || 0), 0);
 
     // 영업이익 (금액)
-    const profitMetric = profitCenterScore?.scores.find(s => s.metric === '영업이익');
+    const profitMetric = profitCenterScore?.scores?.find(s => s.metric === '영업이익');
     const operatingProfit = profitMetric?.actual ?? (totalRevenue - totalCost);
     const prevCost = filterByDate(purchases, prevRange.start, prevRange.end)
       .reduce((s, d) => s + (d.total || 0), 0);

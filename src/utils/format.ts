@@ -4,6 +4,7 @@
  * @returns 포맷된 문자열 (예: "1.2억", "3,800만", "1,234")
  */
 export const formatCurrency = (value: number): string => {
+  if (value == null || isNaN(value)) return '0';
   const absValue = Math.abs(value);
   const sign = value < 0 ? '-' : '';
 
