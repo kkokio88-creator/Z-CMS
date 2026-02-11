@@ -9,7 +9,7 @@ import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
-import { getLaborMonthlySummaries, LaborMonthlySummary } from './LaborRecordAdmin';
+// getLaborMonthlySummaries 수동입력 대신 labor prop(Google Sheets 실데이터) 사용
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate } from '../utils/dateRange';
@@ -161,10 +161,48 @@ export const CostManagementView: React.FC<Props> = ({
     return production.reduce((s, p) => s + (p.prodQtyTotal || 0), 0) * 5000;
   }, [insights?.channelRevenue, production]);
 
-  // 노무비 반별 데이터
-  const laborSummaries = useMemo<LaborMonthlySummary[]>(() => {
-    return getLaborMonthlySummaries(config.avgHourlyWage, config.overtimeMultiplier);
-  }, [config.avgHourlyWage, config.overtimeMultiplier]);
+  // 노무비: Google Sheets labor 실데이터 기반 반별 분석
+  const filteredLabor = useMemo(() => {
+    if (!labor || labor.length === 0) return [];
+    return filterByDate(labor, rangeStart, rangeEnd);
+  }, [labor, rangeStart, rangeEnd]);
+
+  const laborByDept = useMemo(() => {
+    if (filteredLabor.length === 0) return [];
+    const deptMap = new Map<string, {
+      name: string; totalPay: number; headcountSum: number; dayCount: number;
+      weekdayRegular: number; weekdayOvertime: number; weekdayNight: number;
+      holidayRegular: number; holidayOvertime: number; holidayNight: number;
+      weekdayRegularPay: number; weekdayOvertimePay: number; weekdayNightPay: number;
+      holidayRegularPay: number; holidayOvertimePay: number; holidayNightPay: number;
+    }>();
+    filteredLabor.forEach(l => {
+      const d = deptMap.get(l.department) || {
+        name: l.department, totalPay: 0, headcountSum: 0, dayCount: 0,
+        weekdayRegular: 0, weekdayOvertime: 0, weekdayNight: 0,
+        holidayRegular: 0, holidayOvertime: 0, holidayNight: 0,
+        weekdayRegularPay: 0, weekdayOvertimePay: 0, weekdayNightPay: 0,
+        holidayRegularPay: 0, holidayOvertimePay: 0, holidayNightPay: 0,
+      };
+      d.totalPay += l.totalPay;
+      d.headcountSum += l.headcount;
+      d.dayCount += 1;
+      d.weekdayRegular += l.weekdayRegularHours;
+      d.weekdayOvertime += l.weekdayOvertimeHours;
+      d.weekdayNight += l.weekdayNightHours;
+      d.holidayRegular += l.holidayRegularHours;
+      d.holidayOvertime += l.holidayOvertimeHours;
+      d.holidayNight += l.holidayNightHours;
+      d.weekdayRegularPay += l.weekdayRegularPay;
+      d.weekdayOvertimePay += l.weekdayOvertimePay;
+      d.weekdayNightPay += l.weekdayNightPay;
+      d.holidayRegularPay += l.holidayRegularPay;
+      d.holidayOvertimePay += l.holidayOvertimePay;
+      d.holidayNightPay += l.holidayNightPay;
+      deptMap.set(l.department, d);
+    });
+    return Array.from(deptMap.values()).sort((a, b) => b.totalPay - a.totalPay);
+  }, [filteredLabor]);
 
   // =============================================
   // 주간 집계 데이터 (B1/B3: 모든 그래프 주간 단위)
@@ -179,10 +217,11 @@ export const CostManagementView: React.FC<Props> = ({
     const subWeeks = groupByWeek(subPurchases, 'date');
     const utilWeeks = groupByWeek(filteredUtilities, 'date');
     const prodWeeks = groupByWeek(filteredProduction, 'date');
+    const laborWeeks = groupByWeek(filteredLabor, 'date');
 
     // 모든 주간 키 수집
     const allWeekKeys = new Set<string>();
-    [rawWeeks, subWeeks, utilWeeks, prodWeeks].forEach(m => m.forEach((_, k) => allWeekKeys.add(k)));
+    [rawWeeks, subWeeks, utilWeeks, prodWeeks, laborWeeks].forEach(m => m.forEach((_, k) => allWeekKeys.add(k)));
     const sortedKeys = Array.from(allWeekKeys).sort();
 
     const weeklyEntries = sortedKeys.map(wk => {
@@ -200,8 +239,11 @@ export const CostManagementView: React.FC<Props> = ({
       const prodQty = prodItems.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
       const prodQuantity = prodItems.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
 
-      // 노무비 추정 (주간)
-      const labor = Math.round((rawTotal + subTotal + utilTotal) * config.laborCostRatio);
+      // 노무비: 실데이터 우선, 없으면 추정
+      const laborItems = laborWeeks.get(wk) || [];
+      const labor = laborItems.length > 0
+        ? laborItems.reduce((s, l) => s + l.totalPay, 0)
+        : Math.round((rawTotal + subTotal + utilTotal) * config.laborCostRatio);
       // 경비
       const hasFixed = config.monthlyFixedOverhead > 0 || config.variableOverheadPerUnit > 0;
       const weekFixedOverhead = hasFixed ? Math.round(config.monthlyFixedOverhead / 4.33) : 0;
@@ -234,7 +276,7 @@ export const CostManagementView: React.FC<Props> = ({
     });
 
     return weeklyEntries;
-  }, [filteredPurchases, filteredUtilities, filteredProduction, config]);
+  }, [filteredPurchases, filteredUtilities, filteredProduction, filteredLabor, config]);
 
   // 주간 원재료비/부재료비 차트 데이터
   const weeklyRaw = useMemo(() => weeklyData.map(w => ({
@@ -283,34 +325,41 @@ export const CostManagementView: React.FC<Props> = ({
     }
   })();
 
-  // 노무비 주간 데이터 (최상위에서 계산 — hooks 규칙 준수)
+  // 노무비 주간 데이터 — Google Sheets 실데이터 기반
   const weeklyLabor = useMemo(() => {
-    const laborDetail = costBreakdown?.laborDetail;
-    const hasLaborRecords = laborSummaries.length > 0;
-    const totalLaborCost = hasLaborRecords
-      ? laborSummaries.reduce((s, ls) => s + ls.totalCost, 0)
-      : (laborDetail?.estimated || 0);
-    const avgHc = laborSummaries.length > 0
-      ? Math.round(laborSummaries.reduce((s, ls) => s + ls.totalHeadcount, 0) / laborSummaries.length)
-      : 0;
-
-    const prodWeeks = groupByWeek(production, 'date');
-    const sorted = getSortedWeekEntries(prodWeeks);
-    const totalWeeks = sorted.length || 1;
-    const weeklyLaborCost = totalLaborCost / totalWeeks;
+    const laborWeeks = groupByWeek(filteredLabor, 'date');
+    const prodWeeks = groupByWeek(filteredProduction, 'date');
+    const allKeys = new Set<string>();
+    laborWeeks.forEach((_, k) => allKeys.add(k));
+    prodWeeks.forEach((_, k) => allKeys.add(k));
+    const sortedKeys = Array.from(allKeys).sort();
+    const totalWeeks = sortedKeys.length || 1;
     const weeklyRev = productionRevenue / totalWeeks;
 
-    return sorted.map(([wk, items]) => {
-      const prodQty = items.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
+    return sortedKeys.map(wk => {
+      const laborItems = laborWeeks.get(wk) || [];
+      const prodItems = prodWeeks.get(wk) || [];
+      const cost = laborItems.reduce((s, l) => s + l.totalPay, 0);
+      const prodQty = prodItems.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
+      // 해당 주 일별 인원 평균
+      const dailyHeadcounts = new Map<string, number>();
+      laborItems.forEach(l => {
+        const cur = dailyHeadcounts.get(l.date) || 0;
+        dailyHeadcounts.set(l.date, cur + l.headcount);
+      });
+      const avgHc = dailyHeadcounts.size > 0
+        ? Math.round(Array.from(dailyHeadcounts.values()).reduce((s, v) => s + v, 0) / dailyHeadcounts.size)
+        : 0;
       return {
         week: weekKeyToLabel(wk),
-        노무비: Math.round(weeklyLaborCost),
+        노무비: cost,
         생산량: prodQty,
+        인원: avgHc,
         인당생산성: avgHc > 0 ? Math.round(prodQty / avgHc) : 0,
-        노무비율: weeklyRev > 0 ? Math.round((weeklyLaborCost / weeklyRev) * 1000) / 10 : 0,
+        노무비율: weeklyRev > 0 ? Math.round((cost / weeklyRev) * 1000) / 10 : 0,
       };
     });
-  }, [production, costBreakdown, laborSummaries, productionRevenue]);
+  }, [filteredLabor, filteredProduction, productionRevenue]);
 
   // Filter recommendations by type
   const materialRecs = recommendations.filter(r => r.type === 'material');
@@ -783,61 +832,58 @@ export const CostManagementView: React.FC<Props> = ({
           );
         }
 
-        // ========== 노무비 (반별 분석) — 주간 단위 ==========
+        // ========== 노무비 (반별 분석) — Google Sheets 실데이터 기반 ==========
         if (activeTab === 'labor') {
-          const laborDetail = costBreakdown?.laborDetail;
-          const hasLaborRecords = laborSummaries.length > 0;
+          const hasLaborData = filteredLabor.length > 0;
+          const totalLaborCost = hasLaborData
+            ? filteredLabor.reduce((s, l) => s + l.totalPay, 0)
+            : (costBreakdown?.laborDetail?.estimated || 0);
 
-          const totalLaborCost = hasLaborRecords
-            ? laborSummaries.reduce((s, ls) => s + ls.totalCost, 0)
-            : (laborDetail?.estimated || 0);
-
-          const totalRegularHours = laborSummaries.reduce((s, ls) => s + ls.totalRegularHours, 0);
-          const totalOvertimeHours = laborSummaries.reduce((s, ls) => s + ls.totalOvertimeHours, 0);
-          const totalHeadcount = laborSummaries.length > 0 ? laborSummaries[laborSummaries.length - 1].totalHeadcount : 0;
+          // 근로시간 합산
+          const totalRegularHours = filteredLabor.reduce((s, l) => s + l.weekdayRegularHours + l.holidayRegularHours, 0);
+          const totalOvertimeHours = filteredLabor.reduce((s, l) => s + l.weekdayOvertimeHours + l.weekdayNightHours + l.holidayOvertimeHours + l.holidayNightHours, 0);
           const totalHours = totalRegularHours + totalOvertimeHours;
           const overtimeRate = totalHours > 0 ? Math.round((totalOvertimeHours / totalHours) * 1000) / 10 : 0;
 
-          const totalProdQty = production.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
-          const avgHeadcount = laborSummaries.length > 0
-            ? Math.round(laborSummaries.reduce((s, ls) => s + ls.totalHeadcount, 0) / laborSummaries.length)
-            : 0;
+          // 일별 인원 평균
+          const dailyHc = new Map<string, number>();
+          filteredLabor.forEach(l => dailyHc.set(l.date, (dailyHc.get(l.date) || 0) + l.headcount));
+          const avgHeadcount = dailyHc.size > 0 ? Math.round(Array.from(dailyHc.values()).reduce((s, v) => s + v, 0) / dailyHc.size) : 0;
+
+          const totalProdQty = filteredProduction.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
           const prodPerPerson = avgHeadcount > 0 ? Math.round(totalProdQty / avgHeadcount) : 0;
           const laborCostPerUnit = totalProdQty > 0 ? Math.round(totalLaborCost / totalProdQty) : 0;
           const laborRate = productionRevenue > 0 ? Math.round((totalLaborCost / productionRevenue) * 1000) / 10 : 0;
 
-          // 반별 비교
-          const latestShifts = hasLaborRecords
-            ? laborSummaries[laborSummaries.length - 1].shifts
-            : [];
-
-          const SHIFT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+          const DEPT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1'];
 
           return (
             <div className="space-y-6">
               <ScoreHeader item={scoringResult?.items.find(i => i.label === '노무비')} />
+
+              {/* KPI 카드 6개 */}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">총 노무비{hasLaborRecords ? '' : ' (추정)'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">총 노무비{hasLaborData ? '' : ' (추정)'}</p>
                   <p className="text-2xl font-bold text-yellow-600 mt-1">{formatCurrency(totalLaborCost)}</p>
                   <p className="text-xs text-gray-400 mt-1">노무비율 {laborRate}%</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 근로시간</p>
-                  <p className="text-2xl font-bold text-blue-600 mt-1">{totalHours.toLocaleString()}h</p>
-                  <p className="text-xs text-gray-400 mt-1">정규 {totalRegularHours.toLocaleString()}h</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{Math.round(totalHours).toLocaleString()}h</p>
+                  <p className="text-xs text-gray-400 mt-1">정규 {Math.round(totalRegularHours).toLocaleString()}h</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">초과근무 시간</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">초과근무</p>
                   <p className={`text-2xl font-bold mt-1 ${overtimeRate > 15 ? 'text-red-600' : 'text-orange-600'}`}>
-                    {totalOvertimeHours.toLocaleString()}h
+                    {Math.round(totalOvertimeHours).toLocaleString()}h
                   </p>
                   <p className="text-xs text-gray-400 mt-1">비율 {overtimeRate}%</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">인원</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{totalHeadcount}명</p>
-                  <p className="text-xs text-gray-400 mt-1">{latestShifts.length}개 반</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">평균 인원/일</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{avgHeadcount}명</p>
+                  <p className="text-xs text-gray-400 mt-1">{laborByDept.length}개 반</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400">인당 생산성</p>
@@ -852,6 +898,7 @@ export const CostManagementView: React.FC<Props> = ({
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 주간 노무비 & 노무비율 */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 노무비 & 노무비율</h3>
                   {weeklyLabor.length > 0 ? (
@@ -872,26 +919,24 @@ export const CostManagementView: React.FC<Props> = ({
                   ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
                 </div>
 
+                {/* 반별 노무비 비교 — Google Sheets 실데이터 */}
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                    반별 노무비 비교
-                    {hasLaborRecords && <span className="text-sm text-gray-400 font-normal ml-2">({laborSummaries[laborSummaries.length - 1].month})</span>}
-                  </h3>
-                  {latestShifts.length > 0 ? (
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">반별 노무비 비교</h3>
+                  {laborByDept.length > 0 ? (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={latestShifts.map(s => ({
-                          name: s.name,
-                          노무비: s.cost,
-                          인원: s.headcount,
-                        }))} layout="vertical" margin={{ left: 10, right: 20 }}>
+                        <BarChart data={laborByDept.map(d => ({
+                          name: d.name,
+                          노무비: d.totalPay,
+                          인원: d.dayCount > 0 ? Math.round(d.headcountSum / d.dayCount) : 0,
+                        }))} layout="vertical" margin={{ left: 20, right: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                           <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
-                          <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 11 }} />
-                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                          <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number, name: string) => name === '인원' ? `${v}명` : formatCurrency(v)} />
                           <Bar dataKey="노무비" radius={[0, 4, 4, 0]}>
-                            {latestShifts.map((_, i) => (
-                              <Cell key={i} fill={SHIFT_COLORS[i % SHIFT_COLORS.length]} />
+                            {laborByDept.map((_, i) => (
+                              <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
                             ))}
                           </Bar>
                         </BarChart>
@@ -900,8 +945,7 @@ export const CostManagementView: React.FC<Props> = ({
                   ) : (
                     <div className="flex flex-col items-center justify-center py-10">
                       <span className="material-icons-outlined text-4xl text-gray-300 mb-2">groups</span>
-                      <p className="text-gray-400 text-sm">반별 노무 기록이 없습니다</p>
-                      <p className="text-xs text-gray-400 mt-1">설정 &gt; 노무비 관리에서 반별 근무 기록을 입력하세요</p>
+                      <p className="text-gray-400 text-sm">노무비 데이터가 없습니다</p>
                     </div>
                   )}
                 </div>
@@ -928,15 +972,78 @@ export const CostManagementView: React.FC<Props> = ({
                 </div>
               )}
 
+              {/* 반별 상세 분석 테이블 */}
+              {laborByDept.length > 0 && (
+                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">반별 상세 분석</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 text-gray-500">반</th>
+                          <th className="text-right py-2 px-3 text-gray-500">평균인원</th>
+                          <th className="text-right py-2 px-3 text-gray-500">정규시간</th>
+                          <th className="text-right py-2 px-3 text-gray-500">초과시간</th>
+                          <th className="text-right py-2 px-3 text-gray-500">초과율</th>
+                          <th className="text-right py-2 px-3 text-gray-500">정규급여</th>
+                          <th className="text-right py-2 px-3 text-gray-500">초과급여</th>
+                          <th className="text-right py-2 px-3 text-gray-500">총 노무비</th>
+                          <th className="text-right py-2 px-3 text-gray-500">비율</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {laborByDept.map((dept, i) => {
+                          const avgHc = dept.dayCount > 0 ? Math.round(dept.headcountSum / dept.dayCount) : 0;
+                          const regHrs = Math.round(dept.weekdayRegular + dept.holidayRegular);
+                          const otHrs = Math.round(dept.weekdayOvertime + dept.weekdayNight + dept.holidayOvertime + dept.holidayNight);
+                          const otRate = (regHrs + otHrs) > 0 ? Math.round((otHrs / (regHrs + otHrs)) * 1000) / 10 : 0;
+                          const regPay = dept.weekdayRegularPay + dept.holidayRegularPay;
+                          const otPay = dept.weekdayOvertimePay + dept.weekdayNightPay + dept.holidayOvertimePay + dept.holidayNightPay;
+                          const share = totalLaborCost > 0 ? Math.round((dept.totalPay / totalLaborCost) * 1000) / 10 : 0;
+                          return (
+                            <tr key={dept.name} className="border-b border-gray-100 dark:border-gray-800">
+                              <td className="py-2 px-3">
+                                <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: DEPT_COLORS[i % DEPT_COLORS.length] }} />
+                                <span className="text-gray-800 dark:text-gray-200">{dept.name}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{avgHc}명</td>
+                              <td className="py-2 px-3 text-right text-blue-600">{regHrs.toLocaleString()}h</td>
+                              <td className="py-2 px-3 text-right text-orange-600">{otHrs.toLocaleString()}h</td>
+                              <td className={`py-2 px-3 text-right font-medium ${otRate > 15 ? 'text-red-600' : 'text-gray-600'}`}>{otRate}%</td>
+                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(regPay)}</td>
+                              <td className="py-2 px-3 text-right text-orange-600">{formatCurrency(otPay)}</td>
+                              <td className="py-2 px-3 text-right font-bold text-yellow-600">{formatCurrency(dept.totalPay)}</td>
+                              <td className="py-2 px-3 text-right text-gray-600">{share}%</td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="border-t-2 border-gray-300 dark:border-gray-600 font-bold">
+                          <td className="py-2 px-3 text-gray-900 dark:text-white">합계</td>
+                          <td className="py-2 px-3 text-right">{avgHeadcount}명</td>
+                          <td className="py-2 px-3 text-right text-blue-600">{Math.round(totalRegularHours).toLocaleString()}h</td>
+                          <td className="py-2 px-3 text-right text-orange-600">{Math.round(totalOvertimeHours).toLocaleString()}h</td>
+                          <td className={`py-2 px-3 text-right ${overtimeRate > 15 ? 'text-red-600' : 'text-gray-600'}`}>{overtimeRate}%</td>
+                          <td className="py-2 px-3 text-right">{formatCurrency(laborByDept.reduce((s, d) => s + d.weekdayRegularPay + d.holidayRegularPay, 0))}</td>
+                          <td className="py-2 px-3 text-right text-orange-600">{formatCurrency(laborByDept.reduce((s, d) => s + d.weekdayOvertimePay + d.weekdayNightPay + d.holidayOvertimePay + d.holidayNightPay, 0))}</td>
+                          <td className="py-2 px-3 text-right text-yellow-600">{formatCurrency(totalLaborCost)}</td>
+                          <td className="py-2 px-3 text-right">100%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {/* 주간 노무비 상세 테이블 */}
               <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 노무비 상세</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 노무비 추이</h3>
                 {weeklyLabor.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           <th className="text-left py-2 px-3 text-gray-500">주간</th>
+                          <th className="text-right py-2 px-3 text-gray-500">인원</th>
                           <th className="text-right py-2 px-3 text-gray-500">생산량</th>
                           <th className="text-right py-2 px-3 text-gray-500">인당생산성</th>
                           <th className="text-right py-2 px-3 text-gray-500">노무비</th>
@@ -947,6 +1054,7 @@ export const CostManagementView: React.FC<Props> = ({
                         {weeklyLabor.map(m => (
                           <tr key={m.week} className="border-b border-gray-100 dark:border-gray-800">
                             <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{m.week}</td>
+                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{m.인원}명</td>
                             <td className="py-2 px-3 text-right text-blue-600">{m.생산량.toLocaleString()}</td>
                             <td className="py-2 px-3 text-right text-green-600 font-medium">
                               {m.인당생산성 > 0 ? m.인당생산성.toLocaleString() : '-'}
@@ -961,11 +1069,11 @@ export const CostManagementView: React.FC<Props> = ({
                 ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
               </div>
 
-              {!hasLaborRecords && (
+              {!hasLaborData && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/10 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
                   <p className="text-sm text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
                     <span className="material-icons-outlined text-base">info</span>
-                    노무비는 현재 추정값입니다. 설정 &gt; 노무비 관리에서 반별 근무 기록을 입력하면 정확한 분석이 가능합니다.
+                    노무비는 현재 추정값입니다. 구글시트 '노무비' 시트에 근태 데이터를 입력하면 반별 상세 분석이 가능합니다.
                   </p>
                 </div>
               )}
