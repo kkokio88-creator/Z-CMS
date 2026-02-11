@@ -725,6 +725,7 @@ const App = () => {
               utilities={gsUtilities}
               production={gsProduction}
               dailySales={gsDailySales}
+              labor={gsLabor}
               insights={insights}
               onItemClick={handleItemClick}
               onTabChange={setActiveSubTab}

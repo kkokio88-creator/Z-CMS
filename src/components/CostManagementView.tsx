@@ -6,7 +6,7 @@ import {
 import { SubTabLayout } from './SubTabLayout';
 import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
-import type { PurchaseData, UtilityData, ProductionData, DailySalesData } from '../services/googleSheetService';
+import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 import { getLaborMonthlySummaries, LaborMonthlySummary } from './LaborRecordAdmin';
@@ -20,6 +20,7 @@ interface Props {
   utilities: UtilityData[];
   production: ProductionData[];
   dailySales: DailySalesData[];
+  labor?: LaborDailyData[];
   insights: DashboardInsights | null;
   onItemClick: (item: any) => void;
   onTabChange?: (tab: string) => void;
@@ -120,6 +121,7 @@ export const CostManagementView: React.FC<Props> = ({
   utilities,
   production,
   dailySales,
+  labor = [],
   insights,
   onItemClick,
   onTabChange,
@@ -135,8 +137,8 @@ export const CostManagementView: React.FC<Props> = ({
 
   // 원가 점수 계산
   const scoringParams = useMemo(() => ({
-    dailySales, purchases, utilities, production, config, rangeStart, rangeEnd, rangeDays,
-  }), [dailySales, purchases, utilities, production, config, rangeStart, rangeEnd, rangeDays]);
+    dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays,
+  }), [dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays]);
   const scoringResult = useMemo(() => computeCostScores(scoringParams), [scoringParams]);
   const weeklyScores = useMemo(() => computeWeeklyCostScores(scoringParams), [scoringParams]);
 

@@ -3,10 +3,9 @@
  * 매출/원가 배수 기반으로 4개 항목(원재료/부재료/노무비/수도광열전력)을 점수화
  */
 import type { ProfitCenterGoal, BusinessConfig } from '../config/businessConfig';
-import type { DailySalesData, PurchaseData, UtilityData, ProductionData } from '../services/googleSheetService';
+import type { DailySalesData, PurchaseData, UtilityData, ProductionData, LaborDailyData } from '../services/googleSheetService';
 import { filterByDate } from './dateRange';
 import { groupByWeek, weekKeyToLabel } from './weeklyAggregation';
-import { getLaborMonthlySummaries } from '../components/LaborRecordAdmin';
 
 export type ScoreStatus = 'excellent' | 'good' | 'warning' | 'danger';
 
@@ -95,6 +94,7 @@ interface ComputeParams {
   purchases: PurchaseData[];
   utilities: UtilityData[];
   production: ProductionData[];
+  labor?: LaborDailyData[];
   config: BusinessConfig;
   rangeStart: string;
   rangeEnd: string;
@@ -109,7 +109,7 @@ const COST_COLORS = {
 };
 
 export function computeCostScores(params: ComputeParams): CostScoringResult | null {
-  const { dailySales, purchases, utilities, production, config, rangeStart, rangeEnd, rangeDays } = params;
+  const { dailySales, purchases, utilities, production, labor = [], config, rangeStart, rangeEnd, rangeDays } = params;
 
   const goals = config.profitCenterGoals;
   if (!goals || goals.length === 0) return null;
@@ -133,25 +133,14 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const rawCost = fPurchases.filter(p => !isSubMaterial(p.productName)).reduce((s, p) => s + p.total, 0);
   const subCost = fPurchases.filter(p => isSubMaterial(p.productName)).reduce((s, p) => s + p.total, 0);
 
-  // 노무비
-  const laborSummaries = getLaborMonthlySummaries(config.avgHourlyWage, config.overtimeMultiplier);
-  const hasLaborRecords = laborSummaries.length > 0;
-  const totalLaborFromRecords = hasLaborRecords
-    ? laborSummaries.reduce((s, ls) => s + ls.totalCost, 0) : 0;
-  const laborCost = hasLaborRecords
-    ? Math.round(totalLaborFromRecords * rangeDays / 30)
+  // 노무비: Google Sheets labor 데이터 사용 (insightService와 동일)
+  const fLabor = filterByDate(labor, rangeStart, rangeEnd);
+  const laborCost = fLabor.length > 0
+    ? fLabor.reduce((s, l) => s + l.totalPay, 0)
     : Math.round((rawCost + subCost) * config.laborCostRatio);
 
-  // 경비
-  const utilCost = fUtilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
-  const prodQty = fProduction.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
-  const hasFixed = config.monthlyFixedOverhead > 0 || config.variableOverheadPerUnit > 0;
-  const fixedOverhead = hasFixed ? Math.round(config.monthlyFixedOverhead * rangeDays / 30) : 0;
-  const varOverhead = hasFixed ? Math.round(prodQty * config.variableOverheadPerUnit) : 0;
-  const otherOverhead = hasFixed
-    ? fixedOverhead + varOverhead
-    : Math.round((rawCost + subCost) * config.overheadRatio);
-  const overheadCost = utilCost + otherOverhead;
+  // 수도광열전력: 유틸리티(전기+수도+가스)만 (insightService와 동일)
+  const overheadCost = fUtilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
 
   // 4개 항목 점수 계산
   const items: CostItemScore[] = [
@@ -177,7 +166,7 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
 }
 
 export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[] {
-  const { dailySales, purchases, utilities, production, config, rangeStart, rangeEnd } = params;
+  const { dailySales, purchases, utilities, production, labor: laborData = [], config, rangeStart, rangeEnd } = params;
 
   const goals = config.profitCenterGoals;
   if (!goals || goals.length === 0) return [];
@@ -186,6 +175,7 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
   const fPurchases = filterByDate(purchases, rangeStart, rangeEnd);
   const fUtilities = filterByDate(utilities, rangeStart, rangeEnd);
   const fProduction = filterByDate(production, rangeStart, rangeEnd);
+  const fLabor = filterByDate(laborData, rangeStart, rangeEnd);
 
   // 전체 기간 월매출 → 구간 결정 (전 주간에 동일 적용)
   const totalRev = fSales.reduce((s, d) => s + d.totalRevenue, 0);
@@ -201,46 +191,32 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
   const rawWeeks = groupByWeek(rawPurchases, 'date');
   const subWeeks = groupByWeek(subPurchases, 'date');
   const utilWeeks = groupByWeek(fUtilities, 'date');
-  const prodWeeks = groupByWeek(fProduction, 'date');
-
-  // 노무비 (주간 균등 배분)
-  const laborSummaries = getLaborMonthlySummaries(config.avgHourlyWage, config.overtimeMultiplier);
-  const hasLaborRecords = laborSummaries.length > 0;
+  const laborWeeks = groupByWeek(fLabor, 'date');
 
   const allWeekKeys = new Set<string>();
-  [salesWeeks, rawWeeks, subWeeks, utilWeeks, prodWeeks].forEach(m => m.forEach((_, k) => allWeekKeys.add(k)));
+  [salesWeeks, rawWeeks, subWeeks, utilWeeks, laborWeeks].forEach(m => m.forEach((_, k) => allWeekKeys.add(k)));
   const sortedKeys = Array.from(allWeekKeys).sort();
 
-  // 전체 기간 노무비 주당 추정
-  const totalLaborAll = hasLaborRecords
-    ? laborSummaries.reduce((s, ls) => s + ls.totalCost, 0)
-    : 0;
-  const weeklyLaborCost = hasLaborRecords
-    ? Math.round(totalLaborAll / (sortedKeys.length || 1))
-    : 0;
+  const hasLaborData = fLabor.length > 0;
 
   return sortedKeys.map(wk => {
     const salesItems = salesWeeks.get(wk) || [];
     const rawItems = rawWeeks.get(wk) || [];
     const subItems = subWeeks.get(wk) || [];
     const utilItems = utilWeeks.get(wk) || [];
-    const prodItems = prodWeeks.get(wk) || [];
+    const laborItems = laborWeeks.get(wk) || [];
 
     const rev = salesItems.reduce((s, d) => s + d.totalRevenue, 0);
     const raw = rawItems.reduce((s, p) => s + p.total, 0);
     const sub = subItems.reduce((s, p) => s + p.total, 0);
     const util = utilItems.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
-    const prodQty = prodItems.reduce((s, p) => s + (p.prodQtyTotal || 0), 0);
 
-    const labor = hasLaborRecords
-      ? weeklyLaborCost
+    const laborCost = hasLaborData
+      ? laborItems.reduce((s, l) => s + l.totalPay, 0)
       : Math.round((raw + sub) * config.laborCostRatio);
 
-    const hasFixed = config.monthlyFixedOverhead > 0 || config.variableOverheadPerUnit > 0;
-    const otherOh = hasFixed
-      ? Math.round(config.monthlyFixedOverhead / 4.33) + Math.round(prodQty * config.variableOverheadPerUnit)
-      : Math.round((raw + sub) * config.overheadRatio);
-    const overhead = util + otherOh;
+    // 수도광열전력 = 유틸리티만
+    const overhead = util;
 
     const calcScore = (cost: number, target: number) => {
       if (rev === 0) return 0;
@@ -251,7 +227,7 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
 
     const rawScore = calcScore(raw, targets.revenueToRawMaterial);
     const subScore = calcScore(sub, targets.revenueToSubMaterial);
-    const laborScore = calcScore(labor, targets.productionToLabor);
+    const laborScore = calcScore(laborCost, targets.productionToLabor);
     const overheadScore = calcScore(overhead, targets.revenueToExpense);
     const overallScore = Math.round((rawScore + subScore + laborScore + overheadScore) / 4);
 
