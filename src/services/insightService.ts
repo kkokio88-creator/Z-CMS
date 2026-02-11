@@ -2479,7 +2479,7 @@ export function computeAllInsights(
   );
 
   const profitCenterScore = computeProfitCenterScore(
-    channelRevenue, costBreakdown, wasteAnalysis, production, config, purchases, labor
+    channelRevenue, costBreakdown, wasteAnalysis, production, config
   );
 
   const bomConsumptionAnomaly = (bomData.length > 0 && purchases.length > 0)
@@ -2513,7 +2513,7 @@ export function computeAllInsights(
 /**
  * 독립채산제 점수 계산
  * 현재 월매출에 해당하는 구간을 찾아 6개 지표를 목표 대비 100점 만점 점수화
- * @param allPurchases 전체 구매 데이터 (원재료 일평균 소비 추정용, 구매 시점 편차 보정)
+ * costBreakdown의 필터된 값을 그대로 사용 (원가관리 페이지와 동일 기준)
  */
 export function computeProfitCenterScore(
   channelRevenue: ChannelRevenueInsight | null,
@@ -2521,8 +2521,6 @@ export function computeProfitCenterScore(
   wasteAnalysis: WasteAnalysisInsight | null,
   production: ProductionData[],
   config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
-  allPurchases?: PurchaseData[],
-  labor: LaborDailyData[] = []
 ): ProfitCenterScoreInsight | null {
   if (!channelRevenue || !costBreakdown) return null;
 
@@ -2551,33 +2549,10 @@ export function computeProfitCenterScore(
 
   const targets = activeBracket.targets;
   const comp = costBreakdown.composition;
-  const periodRaw = comp.find(c => c.name === '원재료')?.value || 0;
-  const periodSub = comp.find(c => c.name === '부재료')?.value || 0;
+  const rawMaterial = comp.find(c => c.name === '원재료')?.value || 0;
+  const subMaterial = comp.find(c => c.name === '부재료')?.value || 0;
   const laborCost = comp.find(c => c.name === '노무비')?.value || 0;
   const overheadCost = comp.find(c => c.name === '수도광열전력')?.value || 0;
-
-  // === 원재료 소비액 추정 (기초재고 + 구매 - 기말재고 근사) ===
-  // 전체 구매 데이터의 일평균 소비율로 기간 소비액 산출 (구매 시점 편차 보정)
-  let rawMaterial = periodRaw;
-  let subMaterial = periodSub;
-  if (allPurchases && allPurchases.length > 0) {
-    const allDates = allPurchases.map(p => p.date).sort();
-    const allSpan = allDates.length >= 2
-      ? Math.max(1, Math.round((new Date(allDates[allDates.length - 1]).getTime() - new Date(allDates[0]).getTime()) / 86400000) + 1)
-      : allPurchases.length;
-
-    let allRawTotal = 0, allSubTotal = 0;
-    allPurchases.forEach(p => {
-      if (isSubMaterial(p.productName)) { allSubTotal += p.total; }
-      else { allRawTotal += p.total; }
-    });
-
-    // 일평균 × 조회 기간 일수 = 기간 소비 추정액
-    if (allSpan > 0) {
-      rawMaterial = Math.round((allRawTotal / allSpan) * calendarDays);
-      subMaterial = Math.round((allSubTotal / allSpan) * calendarDays);
-    }
-  }
 
   const totalExpense = overheadCost;
   const productionValue = channelRevenue.totalRevenue;

@@ -644,7 +644,7 @@ const App = () => {
       const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, bizConfig);
       const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, bizConfig, fLabor);
       const wa = computeWasteAnalysis(fProduction, bizConfig, fPurchases);
-      return computeProfitCenterScore(cr, cb, wa, fProduction, bizConfig, gsPurchases, fLabor);
+      return computeProfitCenterScore(cr, cb, wa, fProduction, bizConfig);
     } catch {
       return insights?.profitCenterScore ?? null;
     }
