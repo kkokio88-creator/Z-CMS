@@ -608,7 +608,8 @@ export function computeChannelRevenue(
     };
   });
 
-  const totalProductionRevenue = dailySales.reduce((s, d) => s + d.productionRevenue, 0);
+  // 생산매출 = 권장판매가 매출의 50%
+  const totalProductionRevenue = Math.round(sumRecommended * 0.5);
 
   return {
     channels, dailyTrend, totalRevenue,

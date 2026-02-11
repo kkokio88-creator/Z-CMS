@@ -4,7 +4,8 @@
  */
 import type { ProfitCenterGoal, BusinessConfig } from '../config/businessConfig';
 import type { DailySalesData, PurchaseData, UtilityData, ProductionData, LaborDailyData } from '../services/googleSheetService';
-import { isSubMaterial } from '../services/insightService';
+import type { ChannelCostSummary } from '../components/ChannelCostAdmin';
+import { isSubMaterial, computeChannelRevenue } from '../services/insightService';
 import { filterByDate } from './dateRange';
 import { groupByWeek, weekKeyToLabel } from './weeklyAggregation';
 
@@ -99,6 +100,7 @@ interface ComputeParams {
   rangeStart: string;
   rangeEnd: string;
   rangeDays: number;
+  channelCosts?: ChannelCostSummary[];
 }
 
 const COST_COLORS = {
@@ -109,7 +111,7 @@ const COST_COLORS = {
 };
 
 export function computeCostScores(params: ComputeParams): CostScoringResult | null {
-  const { dailySales, purchases, utilities, production, labor = [], config, rangeStart, rangeEnd, rangeDays } = params;
+  const { dailySales, purchases, utilities, production, labor = [], config, rangeStart, rangeEnd, rangeDays, channelCosts = [] } = params;
 
   const goals = config.profitCenterGoals;
   if (!goals || goals.length === 0) return null;
@@ -120,8 +122,9 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const fUtilities = filterByDate(utilities, rangeStart, rangeEnd);
   const fProduction = filterByDate(production, rangeStart, rangeEnd);
 
-  // 매출 계산
-  const filteredRevenue = fSales.reduce((s, d) => s + d.productionRevenue, 0);
+  // 생산매출 = 권장판매가 × 50% (computeChannelRevenue 경유)
+  const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, config);
+  const filteredRevenue = cr.totalProductionRevenue;
   if (filteredRevenue === 0) return null;
 
   // 월매출 추정
@@ -166,7 +169,7 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
 }
 
 export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[] {
-  const { dailySales, purchases, utilities, production, labor: laborData = [], config, rangeStart, rangeEnd } = params;
+  const { dailySales, purchases, utilities, production, labor: laborData = [], config, rangeStart, rangeEnd, channelCosts = [] } = params;
 
   const goals = config.profitCenterGoals;
   if (!goals || goals.length === 0) return [];
@@ -177,8 +180,11 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
   const fProduction = filterByDate(production, rangeStart, rangeEnd);
   const fLabor = filterByDate(laborData, rangeStart, rangeEnd);
 
-  // 전체 기간 월매출 → 구간 결정 (전 주간에 동일 적용)
-  const totalRev = fSales.reduce((s, d) => s + d.productionRevenue, 0);
+  // 전체 기간 생산매출 (= 권장판매가 × 50%) → 구간 결정
+  const overallCR = computeChannelRevenue(fSales, fPurchases, channelCosts, config);
+  const totalRev = overallCR.totalProductionRevenue;
+  // 주간 배분용 비율: 생산매출 / 채널정산매출
+  const prodRatio = overallCR.totalRevenue > 0 ? overallCR.totalProductionRevenue / overallCR.totalRevenue : 0.5;
   const rangeDays = Math.max(1, fSales.length);
   const monthlyRevenue = Math.round(totalRev * 30 / rangeDays);
   const activeBracket = findActiveBracket(goals, monthlyRevenue);
@@ -206,7 +212,9 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
     const utilItems = utilWeeks.get(wk) || [];
     const laborItems = laborWeeks.get(wk) || [];
 
-    const rev = salesItems.reduce((s, d) => s + d.productionRevenue, 0);
+    // 주간 생산매출 = 주간 채널정산매출 × 비율
+    const weekSettlement = salesItems.reduce((s, d) => s + d.jasaPrice + d.coupangPrice + d.kurlyPrice, 0);
+    const rev = Math.round(weekSettlement * prodRatio);
     const raw = rawItems.reduce((s, p) => s + p.total, 0);
     const sub = subItems.reduce((s, p) => s + p.total, 0);
     const util = utilItems.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);

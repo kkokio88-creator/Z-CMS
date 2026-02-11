@@ -8,7 +8,8 @@ import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation, ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../services/insightService';
-import { isSubMaterial, computeCostBreakdown, computeMaterialPrices, computeUtilityCosts, computeLimitPrice } from '../services/insightService';
+import { isSubMaterial, computeCostBreakdown, computeMaterialPrices, computeUtilityCosts, computeLimitPrice, computeChannelRevenue } from '../services/insightService';
+import { getChannelCostSummaries } from './ChannelCostAdmin';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 // getLaborMonthlySummaries 수동입력 대신 labor prop(Google Sheets 실데이터) 사용
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
@@ -147,20 +148,19 @@ export const CostManagementView: React.FC<Props> = ({
     return filterByDate(labor, rangeStart, rangeEnd);
   }, [labor, rangeStart, rangeEnd]);
 
-  // 생산매출 계산 (원가율의 분모 — 필터된 dailySales의 productionRevenue 합산)
+  // 생산매출 = 권장판매가 매출 × 50% (computeChannelRevenue에서 계산)
   const filteredDailySales = useMemo(() => filterByDate(dailySales, rangeStart, rangeEnd), [dailySales, rangeStart, rangeEnd]);
   const productionRevenue = useMemo(() => {
-    const filtered = filteredDailySales.reduce((s, d) => s + d.productionRevenue, 0);
-    if (filtered > 0) return filtered;
-    // 폴백: 전역 insights의 totalProductionRevenue
-    const globalProdRev = insights?.channelRevenue?.totalProductionRevenue;
-    if (globalProdRev && globalProdRev > 0) return globalProdRev;
-    return 0;
-  }, [filteredDailySales, insights?.channelRevenue]);
+    if (filteredDailySales.length === 0) return 0;
+    const channelCosts = getChannelCostSummaries();
+    const cr = computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config);
+    return cr.totalProductionRevenue;
+  }, [filteredDailySales, filteredPurchases, config]);
 
   // 주간 점수 (기존 costScoring 유지 — 주간 추세 그래프용)
   const scoringParams = useMemo(() => ({
     dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays,
+    channelCosts: getChannelCostSummaries(),
   }), [dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd, rangeDays]);
   const weeklyScores = useMemo(() => computeWeeklyCostScores(scoringParams), [scoringParams]);
 

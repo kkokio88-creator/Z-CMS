@@ -25,11 +25,12 @@ export interface ProfitCenterGoal {
   };
 }
 
-/** 절대 목표금액에서 배수를 자동 계산 (생산매출 기준) */
+/** 절대 목표금액에서 배수를 자동 계산 (생산매출 = 권장판매가 × 50%) */
 export function deriveMultipliersFromTargets(goal: ProfitCenterGoal): ProfitCenterGoal {
   const t = goal.targets;
-  // 배수 분자 = 생산매출 (targetProductionRevenue). 없으면 revenueBracket 폴백
-  const rev = t.targetProductionRevenue || goal.revenueBracket;
+  // 배수 분자 = 생산매출. 우선순위: targetProductionRevenue > targetRecommendedRevenue×0.5 > revenueBracket
+  const rev = t.targetProductionRevenue
+    || (t.targetRecommendedRevenue ? Math.round(t.targetRecommendedRevenue * 0.5) : goal.revenueBracket);
   if (!t.targetRawMaterialCost) return goal;
   return {
     ...goal,
@@ -269,8 +270,8 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
     {
       revenueBracket: 900000000, label: '9억',
       targets: {
-        productionToLabor: 4.15, revenueToMaterial: 3.61, revenueToRawMaterial: 3.97, revenueToSubMaterial: 39.69,
-        revenueToExpense: 72.58, profitMarginTarget: 5.6, wasteRateTarget: 3,
+        productionToLabor: 2.99, revenueToMaterial: 2.6, revenueToRawMaterial: 2.86, revenueToSubMaterial: 28.57,
+        revenueToExpense: 52.25, profitMarginTarget: 5.6, wasteRateTarget: 3,
         targetRecommendedRevenue: 1295849907, targetProductionRevenue: 647924953,
         targetRawMaterialCost: 226773734, targetSubMaterialCost: 22677373,
         targetLaborCost: 217000000, targetOverheadCost: 12400000,
@@ -279,8 +280,8 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
     {
       revenueBracket: 1000000000, label: '10억',
       targets: {
-        productionToLabor: 4.38, revenueToMaterial: 3.64, revenueToRawMaterial: 4.00, revenueToSubMaterial: 39.79,
-        revenueToExpense: 77.52, profitMarginTarget: 9.5, wasteRateTarget: 2.5,
+        productionToLabor: 3.15, revenueToMaterial: 2.61, revenueToRawMaterial: 2.87, revenueToSubMaterial: 28.57,
+        revenueToExpense: 55.67, profitMarginTarget: 9.5, wasteRateTarget: 2.5,
         targetRecommendedRevenue: 1436277552, targetProductionRevenue: 718138776,
         targetRawMaterialCost: 249912294, targetSubMaterialCost: 25134857,
         targetLaborCost: 228300000, targetOverheadCost: 12900000,
@@ -289,8 +290,8 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
     {
       revenueBracket: 1100000000, label: '11억',
       targets: {
-        productionToLabor: 4.59, revenueToMaterial: 3.66, revenueToRawMaterial: 4.03, revenueToSubMaterial: 39.87,
-        revenueToExpense: 82.09, profitMarginTarget: 12.7, wasteRateTarget: 2.5,
+        productionToLabor: 3.29, revenueToMaterial: 2.63, revenueToRawMaterial: 2.89, revenueToSubMaterial: 28.57,
+        revenueToExpense: 58.83, profitMarginTarget: 12.7, wasteRateTarget: 2.5,
         targetRecommendedRevenue: 1576705197, targetProductionRevenue: 788352598,
         targetRawMaterialCost: 272769999, targetSubMaterialCost: 27592341,
         targetLaborCost: 239600000, targetOverheadCost: 13400000,
@@ -299,8 +300,8 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
     {
       revenueBracket: 1200000000, label: '12억',
       targets: {
-        productionToLabor: 4.78, revenueToMaterial: 3.69, revenueToRawMaterial: 4.06, revenueToSubMaterial: 39.93,
-        revenueToExpense: 86.33, profitMarginTarget: 15.4, wasteRateTarget: 2,
+        productionToLabor: 3.42, revenueToMaterial: 2.64, revenueToRawMaterial: 2.91, revenueToSubMaterial: 28.57,
+        revenueToExpense: 61.77, profitMarginTarget: 15.4, wasteRateTarget: 2,
         targetRecommendedRevenue: 1717132842, targetProductionRevenue: 858566421,
         targetRawMaterialCost: 295346849, targetSubMaterialCost: 30049825,
         targetLaborCost: 250900000, targetOverheadCost: 13900000,
@@ -309,8 +310,8 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
     {
       revenueBracket: 1300000000, label: '13억',
       targets: {
-        productionToLabor: 4.96, revenueToMaterial: 3.71, revenueToRawMaterial: 4.09, revenueToSubMaterial: 39.99,
-        revenueToExpense: 90.91, profitMarginTarget: 17.7, wasteRateTarget: 2,
+        productionToLabor: 3.54, revenueToMaterial: 2.65, revenueToRawMaterial: 2.92, revenueToSubMaterial: 28.57,
+        revenueToExpense: 64.95, profitMarginTarget: 17.7, wasteRateTarget: 2,
         targetRecommendedRevenue: 1857560487, targetProductionRevenue: 928780243,
         targetRawMaterialCost: 317642843, targetSubMaterialCost: 32507309,
         targetLaborCost: 262200000, targetOverheadCost: 14300000,
@@ -319,8 +320,8 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
     {
       revenueBracket: 1400000000, label: '14억',
       targets: {
-        productionToLabor: 5.12, revenueToMaterial: 3.73, revenueToRawMaterial: 4.12, revenueToSubMaterial: 40.04,
-        revenueToExpense: 94.59, profitMarginTarget: 19.6, wasteRateTarget: 2,
+        productionToLabor: 3.65, revenueToMaterial: 2.67, revenueToRawMaterial: 2.94, revenueToSubMaterial: 28.57,
+        revenueToExpense: 67.5, profitMarginTarget: 19.6, wasteRateTarget: 2,
         targetRecommendedRevenue: 1997988132, targetProductionRevenue: 998994066,
         targetRawMaterialCost: 339657982, targetSubMaterialCost: 34964792,
         targetLaborCost: 273500000, targetOverheadCost: 14800000,
@@ -329,8 +330,8 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
     {
       revenueBracket: 1500000000, label: '15억',
       targets: {
-        productionToLabor: 5.27, revenueToMaterial: 3.76, revenueToRawMaterial: 4.15, revenueToSubMaterial: 40.08,
-        revenueToExpense: 98.04, profitMarginTarget: 21.4, wasteRateTarget: 2,
+        productionToLabor: 3.75, revenueToMaterial: 2.68, revenueToRawMaterial: 2.96, revenueToSubMaterial: 28.57,
+        revenueToExpense: 69.88, profitMarginTarget: 21.4, wasteRateTarget: 2,
         targetRecommendedRevenue: 2138415777, targetProductionRevenue: 1069207889,
         targetRawMaterialCost: 361392266, targetSubMaterialCost: 37422276,
         targetLaborCost: 284800000, targetOverheadCost: 15300000,
@@ -369,6 +370,8 @@ export function loadBusinessConfig(): BusinessConfig {
       const parsed = { ...DEFAULT_BUSINESS_CONFIG, ...JSON.parse(saved) };
       if (parsed.profitCenterGoals) {
         parsed.profitCenterGoals = migrateProfitCenterGoals(parsed.profitCenterGoals);
+        // 배수를 생산매출(targetProductionRevenue) 기준으로 재계산
+        parsed.profitCenterGoals = parsed.profitCenterGoals.map((g: ProfitCenterGoal) => deriveMultipliersFromTargets(g));
       }
       return parsed;
     }
