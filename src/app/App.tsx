@@ -711,7 +711,7 @@ const App = () => {
       const fProduction = filterByDate(gsProduction, start, end);
       const fUtilities = filterByDate(gsUtilities, start, end);
       const fLabor = filterByDate(gsLabor, start, end);
-      if (!fSales.length) return null;
+      if (!fSales.length || !fPurchases.length) return insights?.profitCenterScore ?? null;
       const bizConfig = loadBusinessConfig();
       const channelCosts = getChannelCostSummaries();
       const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, bizConfig);
@@ -800,6 +800,7 @@ const App = () => {
               dailySales={gsDailySales}
               labor={gsLabor}
               insights={insights}
+              profitCenterScore={filteredProfitCenterScore}
               onItemClick={handleItemClick}
               onTabChange={setActiveSubTab}
             />

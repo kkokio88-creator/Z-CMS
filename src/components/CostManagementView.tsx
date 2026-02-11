@@ -8,8 +8,7 @@ import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation, ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../services/insightService';
-import { computeChannelRevenue, computeCostBreakdown, computeWasteAnalysis, computeProfitCenterScore, isSubMaterial } from '../services/insightService';
-import { getChannelCostSummaries } from './ChannelCostAdmin';
+import { isSubMaterial } from '../services/insightService';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 // getLaborMonthlySummaries 수동입력 대신 labor prop(Google Sheets 실데이터) 사용
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
@@ -24,6 +23,7 @@ interface Props {
   dailySales: DailySalesData[];
   labor?: LaborDailyData[];
   insights: DashboardInsights | null;
+  profitCenterScore?: ProfitCenterScoreInsight | null;
   onItemClick: (item: any) => void;
   onTabChange?: (tab: string) => void;
 }
@@ -126,6 +126,7 @@ export const CostManagementView: React.FC<Props> = ({
   dailySales,
   labor = [],
   insights,
+  profitCenterScore = null,
   onItemClick,
   onTabChange,
 }) => {
@@ -138,22 +139,7 @@ export const CostManagementView: React.FC<Props> = ({
   const filteredUtilities = useMemo(() => filterByDate(utilities, rangeStart, rangeEnd), [utilities, rangeStart, rangeEnd]);
   const filteredProduction = useMemo(() => filterByDate(production, rangeStart, rangeEnd), [production, rangeStart, rangeEnd]);
 
-  // 원가 점수 계산 — 대시보드와 동일한 computeProfitCenterScore 사용
-  const profitCenterScore: ProfitCenterScoreInsight | null = useMemo(() => {
-    const fSales = filterByDate(dailySales, rangeStart, rangeEnd);
-    const fPurchases = filterByDate(purchases, rangeStart, rangeEnd);
-    const fProduction = filterByDate(production, rangeStart, rangeEnd);
-    const fUtilities = filterByDate(utilities, rangeStart, rangeEnd);
-    const fLabor = filterByDate(labor, rangeStart, rangeEnd);
-    if (!fSales.length || !fPurchases.length) return null;
-    try {
-      const channelCosts = getChannelCostSummaries();
-      const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, config);
-      const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, config, fLabor);
-      const wa = computeWasteAnalysis(fProduction, config, fPurchases);
-      return computeProfitCenterScore(cr, cb, wa, fProduction, config);
-    } catch { return null; }
-  }, [dailySales, purchases, utilities, production, labor, config, rangeStart, rangeEnd]);
+  // profitCenterScore는 App.tsx에서 prop으로 전달받음 (대시보드와 동일한 값 보장)
 
   // 주간 점수 (기존 costScoring 유지 — 주간 추세 그래프용)
   const scoringParams = useMemo(() => ({
@@ -397,6 +383,7 @@ export const CostManagementView: React.FC<Props> = ({
   return (
     <SubTabLayout title="원가 관리" tabs={tabs} onTabChange={onTabChange}>
       {(activeTab) => {
+        try {
         // ========== 원가 총괄 ==========
         if (activeTab === 'overview') {
           const composition = costBreakdown?.composition || [];
@@ -1308,6 +1295,16 @@ export const CostManagementView: React.FC<Props> = ({
             <InsightCards items={utilityRecs} />
           </div>
         );
+        } catch (err) {
+          console.error('[CostManagementView] 렌더링 오류:', err);
+          return (
+            <div className="flex flex-col items-center justify-center p-10 text-center min-h-[300px]">
+              <span className="material-icons-outlined text-5xl text-red-400 mb-4">error_outline</span>
+              <h3 className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">화면 로드 중 오류가 발생했습니다</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{err instanceof Error ? err.message : '알 수 없는 오류'}</p>
+            </div>
+          );
+        }
       }}
     </SubTabLayout>
   );
