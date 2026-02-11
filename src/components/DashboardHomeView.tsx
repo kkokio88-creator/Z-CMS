@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { KPICardProps } from '../types';
 import { LineChart, Line, ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
 import type { SyncStatusInfo } from '../services/supabaseClient';
 import { formatCurrency } from '../utils/format';
-import type { ProfitCenterScoreInsight } from '../services/insightService';
+import type { ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../services/insightService';
 import type { DailySalesData, ProductionData, PurchaseData } from '../services/googleSheetService';
 import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate, getRangeLabel } from '../utils/dateRange';
@@ -80,6 +80,74 @@ const KPICard: React.FC<
     )}
   </div>
 );
+
+/** 지표 카드 — 호버 시 공식+세부점수 툴팁 */
+const ScoreCard: React.FC<{ s: ProfitCenterScoreMetric }> = ({ s }) => {
+  const [hover, setHover] = useState(false);
+  const statusStyle = s.status === 'excellent'
+    ? { border: 'border-green-200 dark:border-green-800', bg: 'bg-green-50 dark:bg-green-900/10', text: 'text-green-600 dark:text-green-400' }
+    : s.status === 'good'
+    ? { border: 'border-blue-200 dark:border-blue-800', bg: 'bg-blue-50 dark:bg-blue-900/10', text: 'text-blue-600 dark:text-blue-400' }
+    : s.status === 'warning'
+    ? { border: 'border-orange-200 dark:border-orange-800', bg: 'bg-orange-50 dark:bg-orange-900/10', text: 'text-orange-600 dark:text-orange-400' }
+    : { border: 'border-red-200 dark:border-red-800', bg: 'bg-red-50 dark:bg-red-900/10', text: 'text-red-600 dark:text-red-400' };
+
+  const formatDetail = (val: number, unit: string) => {
+    if (unit === '원') return `₩${formatCurrency(val)}`;
+    if (unit === '%') return `${val}%`;
+    return `×${val}`;
+  };
+
+  return (
+    <div
+      className={`relative text-center p-2 rounded-lg border cursor-default ${statusStyle.border} ${statusStyle.bg}`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <div className="text-[10px] text-gray-500 dark:text-gray-400">{s.metric}</div>
+      <div className={`text-xl font-black mt-0.5 ${statusStyle.text}`}>
+        {s.score}<span className="text-xs font-normal">점</span>
+      </div>
+
+      {/* 호버 툴팁 */}
+      {hover && (
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-gray-900 dark:bg-gray-700 text-white rounded-lg shadow-xl p-3 text-left text-xs pointer-events-none">
+          <div className="font-bold mb-1.5">{s.formula}</div>
+          <div className="space-y-1">
+            <div className="flex justify-between">
+              <span className="text-gray-300">실적</span>
+              <span className="font-medium">{formatDetail(s.actual, s.unit)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-300">목표</span>
+              <span className="font-medium">{formatDetail(s.target, s.unit)}</span>
+            </div>
+            {s.actualAmount != null && s.targetAmount != null && s.unit !== '원' && (
+              <>
+                <div className="border-t border-gray-600 my-1" />
+                <div className="flex justify-between">
+                  <span className="text-gray-300">실적액</span>
+                  <span>₩{formatCurrency(s.actualAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">목표액</span>
+                  <span>₩{formatCurrency(s.targetAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">{s.actualAmount <= s.targetAmount ? '절감' : '초과'}</span>
+                  <span className={s.actualAmount <= s.targetAmount ? 'text-green-400' : 'text-red-400'}>
+                    ₩{formatCurrency(Math.abs(s.targetAmount - s.actualAmount))}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700" />
+        </div>
+      )}
+    </div>
+  );
+};
 
 /** 테이블명 → 한글 라벨 */
 const TABLE_LABELS: Record<string, string> = {
@@ -158,14 +226,14 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
     // 총 구매 원가
     const totalCost = filteredPurchases.reduce((s, d) => s + (d.total || 0), 0);
 
-    // 영업 이익률: profitCenterScore가 있으면 정확한 값 사용, 아니면 매출총이익률
-    const margin = profitCenterScore
-      ? (profitCenterScore.scores.find(s => s.metric === '영업이익률')?.actual ?? 0)
-      : totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0;
+    // 영업이익 (금액)
+    const profitMetric = profitCenterScore?.scores.find(s => s.metric === '영업이익');
+    const operatingProfit = profitMetric?.actual ?? (totalRevenue - totalCost);
     const prevCost = filterByDate(purchases, prevRange.start, prevRange.end)
       .reduce((s, d) => s + (d.total || 0), 0);
-    const prevMargin = prevRevenue > 0 ? ((prevRevenue - prevCost) / prevRevenue * 100) : 0;
-    const marginChange = profitCenterScore ? 0 : margin - prevMargin;
+    const prevOperatingProfit = prevRevenue - prevCost;
+    const profitChange = prevOperatingProfit !== 0
+      ? ((operatingProfit - prevOperatingProfit) / Math.abs(prevOperatingProfit) * 100) : 0;
 
     // 폐기율: 폐기수량 / 총생산수량
     const totalProdQty = filteredProduction.reduce((s, d) => s + (d.prodQtyTotal || 0), 0);
@@ -179,8 +247,8 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
     return {
       totalRevenue,
       revenueChange: parseFloat(revenueChange.toFixed(1)),
-      margin: parseFloat(margin.toFixed(1)),
-      marginChange: parseFloat(marginChange.toFixed(1)),
+      operatingProfit,
+      profitChange: parseFloat(profitChange.toFixed(1)),
       wasteRate: parseFloat(wasteRate.toFixed(1)),
       wasteRateChange: parseFloat(wasteRateChange.toFixed(1)),
     };
@@ -262,10 +330,10 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           color="#10B981"
         />
         <KPICard
-          title="영업 이익률"
-          value={`${kpis.margin}%`}
-          change={`${kpis.marginChange >= 0 ? '+' : ''}${kpis.marginChange}%p`}
-          isPositive={kpis.marginChange >= 0}
+          title="영업이익"
+          value={`₩${formatCurrency(kpis.operatingProfit)}`}
+          change={`${kpis.profitChange >= 0 ? '+' : ''}${kpis.profitChange}%`}
+          isPositive={kpis.operatingProfit >= 0}
           icon="trending_up"
           chartData={revenueTrend}
           color="#3B82F6"
@@ -368,26 +436,10 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             </div>
           </div>
 
-          {/* 지표 상세 — 달성률 100점 만점 */}
+          {/* 지표 상세 — 호버 시 공식+세부점수 */}
           <div className="mt-4 grid grid-cols-3 md:grid-cols-6 gap-2">
             {profitCenterScore.scores.map(s => (
-              <div key={s.metric} className={`text-center p-2 rounded-lg border ${
-                s.status === 'excellent' ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/10' :
-                s.status === 'good' ? 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/10' :
-                s.status === 'warning' ? 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/10' :
-                'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/10'
-              }`}>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400">{s.metric}</div>
-                <div className={`text-xl font-black mt-0.5 ${
-                  s.status === 'excellent' ? 'text-green-600 dark:text-green-400' :
-                  s.status === 'good' ? 'text-blue-600 dark:text-blue-400' :
-                  s.status === 'warning' ? 'text-orange-600 dark:text-orange-400' :
-                  'text-red-600 dark:text-red-400'
-                }`}>{s.score}<span className="text-xs font-normal">점</span></div>
-                <div className="text-[10px] text-gray-400 mt-0.5">
-                  {s.actual} / {s.target}
-                </div>
-              </div>
+              <ScoreCard key={s.metric} s={s} />
             ))}
           </div>
         </div>
