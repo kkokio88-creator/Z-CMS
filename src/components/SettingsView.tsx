@@ -23,6 +23,25 @@ import { generateDataSourceMd, saveMdToStorage } from '../utils/generateDataSour
 // ─── 구글시트 연결 테스트 상태 타입 ───
 type SheetTestStatus = { status: 'idle' | 'testing' | 'ok' | 'error'; message?: string; rowCount?: number };
 
+const SHEET_TEST_CACHE_KEY = 'Z_CMS_SHEET_TEST_CACHE';
+const SHEET_TEST_TTL = 5 * 60 * 1000; // 5분
+
+function loadCachedSheetTests(): Record<string, SheetTestStatus> {
+  try {
+    const raw = sessionStorage.getItem(SHEET_TEST_CACHE_KEY);
+    if (!raw) return {};
+    const { ts, results } = JSON.parse(raw);
+    if (Date.now() - ts > SHEET_TEST_TTL) return {};
+    return results;
+  } catch { return {}; }
+}
+
+function saveCachedSheetTests(results: Record<string, SheetTestStatus>) {
+  try {
+    sessionStorage.setItem(SHEET_TEST_CACHE_KEY, JSON.stringify({ ts: Date.now(), results }));
+  } catch { /* ignore */ }
+}
+
 // ─── 접이식 섹션 헬퍼 ───
 const SECTION_IDS = {
   ecount: 'ecount',
@@ -278,34 +297,55 @@ export const SettingsView: React.FC = () => {
   const [dsMdPreview, setDsMdPreview] = useState(false);
 
   // ─── 구글시트 연결 테스트 ───
-  const [sheetTestResults, setSheetTestResults] = useState<Record<string, SheetTestStatus>>({});
+  const [sheetTestResults, setSheetTestResults] = useState<Record<string, SheetTestStatus>>(loadCachedSheetTests);
   const sheetTestRanRef = useRef(false);
+
+  // 결과 변경 시 sessionStorage 캐싱
+  useEffect(() => {
+    const hasResults = Object.values(sheetTestResults).some(r => r.status === 'ok' || r.status === 'error');
+    if (hasResults) saveCachedSheetTests(sheetTestResults);
+  }, [sheetTestResults]);
 
   const testSheetConnection = useCallback(async (sheet: DataSourceSheet) => {
     setSheetTestResults(prev => ({ ...prev, [sheet.id]: { status: 'testing' } }));
+
+    // Tier 1: 백엔드 API
     try {
       const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/api$/, '');
       const response = await fetch(`${apiUrl}/api/sheets/test-connection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spreadsheetId: sheet.spreadsheetId,
-          sheetName: sheet.sheetName,
-        }),
+        body: JSON.stringify({ spreadsheetId: sheet.spreadsheetId, sheetName: sheet.sheetName }),
+        signal: AbortSignal.timeout(5000),
       });
       const result = await response.json();
-      setSheetTestResults(prev => ({
-        ...prev,
-        [sheet.id]: result.success
-          ? { status: 'ok', rowCount: result.rowCount }
-          : { status: 'error', message: result.message || '연결 실패' },
-      }));
-    } catch {
-      setSheetTestResults(prev => ({
-        ...prev,
-        [sheet.id]: { status: 'error', message: '서버 연결 실패' },
-      }));
-    }
+      if (result.success) {
+        setSheetTestResults(prev => ({ ...prev, [sheet.id]: { status: 'ok', rowCount: result.rowCount } }));
+        return;
+      }
+    } catch { /* 백엔드 실패 → Supabase 폴백 */ }
+
+    // Tier 2: Supabase 직접 카운트 (시트별 대응 테이블)
+    try {
+      const { getSupabaseClient } = await import('../services/supabaseClient');
+      const client = getSupabaseClient();
+      if (client) {
+        const tableMap: Record<string, string> = {
+          daily_sales: 'daily_sales', sales_detail: 'sales_detail',
+          purchases: 'purchases', production_daily: 'production_daily',
+          utilities: 'utilities', inventory: 'inventory',
+          labor_daily: 'labor_daily', bom_san: 'bom', bom_zip: 'bom',
+        };
+        const table = tableMap[sheet.id] || sheet.id;
+        const { count, error } = await client.from(table).select('*', { count: 'exact', head: true });
+        if (!error && count !== null) {
+          setSheetTestResults(prev => ({ ...prev, [sheet.id]: { status: 'ok', rowCount: count, message: 'Supabase' } }));
+          return;
+        }
+      }
+    } catch { /* Supabase 실패 */ }
+
+    setSheetTestResults(prev => ({ ...prev, [sheet.id]: { status: 'error', message: '서버/Supabase 연결 실패' } }));
   }, []);
 
   const testAllSheets = useCallback(async () => {
@@ -315,11 +355,13 @@ export const SettingsView: React.FC = () => {
     }
   }, [normalizedDSConfig.sheets, testSheetConnection]);
 
-  // 구글시트 섹션 열릴 때 자동 1회 테스트
+  // 구글시트 섹션 열릴 때 자동 1회 테스트 (캐시가 있으면 스킵)
   useEffect(() => {
     if (openSections.has(SECTION_IDS.googleSheets) && !sheetTestRanRef.current) {
       sheetTestRanRef.current = true;
-      testAllSheets();
+      const cached = loadCachedSheetTests();
+      const hasValidCache = Object.keys(cached).length > 0;
+      if (!hasValidCache) testAllSheets();
     }
   }, [openSections, testAllSheets]);
 

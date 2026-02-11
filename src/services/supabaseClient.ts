@@ -37,6 +37,37 @@ export function getSupabaseClient(): SupabaseClient | null {
   return supabaseClient;
 }
 
+// === 페이지네이션 헬퍼 (Supabase 기본 1000행 제한 극복) ===
+
+const PAGE_SIZE = 1000;
+
+async function fetchAllRows<T>(
+  table: string,
+  orderCol: string = 'date',
+  ascending: boolean = true,
+): Promise<T[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  const all: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await client
+      .from(table)
+      .select('*')
+      .order(orderCol, { ascending })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error || !data || data.length === 0) break;
+    all.push(...(data as T[]));
+    if (data.length < PAGE_SIZE) break; // 마지막 페이지
+    from += PAGE_SIZE;
+  }
+
+  return all;
+}
+
 // === 테이블별 직접 조회 함수 ===
 
 function mapDailySalesFromDb(row: Record<string, any>): DailySalesData {
@@ -136,11 +167,8 @@ export async function directFetchDailySales(): Promise<DailySalesData[]> {
 }
 
 export async function directFetchSalesDetail(): Promise<SalesDetailData[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data, error } = await client.from('sales_detail').select('*').order('date', { ascending: true });
-  if (error || !data) return [];
-  return data.map(mapSalesDetailFromDb);
+  const rows = await fetchAllRows<Record<string, any>>('sales_detail', 'date', true);
+  return rows.map(mapSalesDetailFromDb);
 }
 
 export async function directFetchProduction(): Promise<ProductionData[]> {
@@ -152,27 +180,17 @@ export async function directFetchProduction(): Promise<ProductionData[]> {
 }
 
 export async function directFetchPurchases(): Promise<PurchaseData[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data, error } = await client.from('purchases').select('*').order('date', { ascending: true });
-  if (error || !data) return [];
-  return data.map(mapPurchaseFromDb);
+  const rows = await fetchAllRows<Record<string, any>>('purchases', 'date', true);
+  return rows.map(mapPurchaseFromDb);
 }
 
 export async function directFetchInventory(): Promise<Record<string, any>[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data, error } = await client.from('inventory').select('*');
-  if (error || !data) return [];
-  return data;
+  return fetchAllRows<Record<string, any>>('inventory', 'product_code', true);
 }
 
 export async function directFetchInventorySnapshots(): Promise<import('./googleSheetService').InventorySnapshotData[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data, error } = await client.from('inventory').select('*').order('product_code', { ascending: true });
-  if (error || !data) return [];
-  return data.map((row: any) => ({
+  const rows = await fetchAllRows<Record<string, any>>('inventory', 'product_code', true);
+  return rows.map((row: any) => ({
     productCode: row.product_code ?? '',
     productName: row.product_name ?? '',
     balanceQty: Number(row.balance_qty) || 0,
@@ -261,19 +279,13 @@ export async function directFetchLabor(): Promise<LaborDailyData[]> {
 }
 
 export async function directFetchBom(): Promise<BomItemData[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data, error } = await client.from('bom').select('*').order('product_code', { ascending: true });
-  if (error || !data) return [];
-  return data.map(mapBomFromDb);
+  const rows = await fetchAllRows<Record<string, any>>('bom', 'product_code', true);
+  return rows.map(mapBomFromDb);
 }
 
 export async function directFetchMaterialMaster(): Promise<MaterialMasterItem[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data, error } = await client.from('material_master').select('*').order('no', { ascending: true });
-  if (error || !data) return [];
-  return data.map(mapMaterialMasterFromDb);
+  const rows = await fetchAllRows<Record<string, any>>('material_master', 'no', true);
+  return rows.map(mapMaterialMasterFromDb);
 }
 
 export interface SyncStatusInfo {
