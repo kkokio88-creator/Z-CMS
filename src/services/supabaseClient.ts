@@ -40,6 +40,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 // === 페이지네이션 헬퍼 (Supabase 기본 1000행 제한 극복) ===
 
 const PAGE_SIZE = 1000;
+const PARALLEL_BATCH = 5; // 동시 요청 수
 
 async function fetchAllRows<T>(
   table: string,
@@ -49,29 +50,51 @@ async function fetchAllRows<T>(
   const client = getSupabaseClient();
   if (!client) return [];
 
-  // 총 건수를 먼저 조회하여 정확한 페이지네이션 종료 시점 결정
+  // 총 건수를 먼저 조회 (head: true → 데이터 전송 없음)
   const { count: totalCount, error: countError } = await client
     .from(table)
     .select('*', { count: 'exact', head: true });
 
   if (countError || !totalCount) return [];
 
-  const all: T[] = [];
-  let from = 0;
-
-  while (all.length < totalCount) {
-    const { data, error } = await client
+  // 1000건 이하면 단일 요청
+  if (totalCount <= PAGE_SIZE) {
+    const { data } = await client
       .from(table)
       .select('*')
       .order(orderCol, { ascending })
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error || !data || data.length === 0) break;
-    all.push(...(data as T[]));
-    from += PAGE_SIZE;
+      .range(0, totalCount - 1);
+    return (data ?? []) as T[];
   }
 
-  return all;
+  // 병렬 페이지네이션: 고정 범위로 5개씩 동시 요청
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const pages: (T[])[] = new Array(totalPages);
+
+  for (let batch = 0; batch < totalPages; batch += PARALLEL_BATCH) {
+    const batchEnd = Math.min(batch + PARALLEL_BATCH, totalPages);
+    const promises = [];
+
+    for (let page = batch; page < batchEnd; page++) {
+      const from = page * PAGE_SIZE;
+      const to = Math.min(from + PAGE_SIZE - 1, totalCount - 1);
+      promises.push(
+        client
+          .from(table)
+          .select('*')
+          .order(orderCol, { ascending })
+          .range(from, to)
+          .then(({ data }) => ({ page, data: (data ?? []) as T[] }))
+      );
+    }
+
+    const results = await Promise.all(promises);
+    for (const r of results) {
+      pages[r.page] = r.data;
+    }
+  }
+
+  return pages.flat();
 }
 
 // === 테이블별 직접 조회 함수 ===
