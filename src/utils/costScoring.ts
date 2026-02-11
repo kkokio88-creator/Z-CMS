@@ -5,7 +5,7 @@
 import type { ProfitCenterGoal, BusinessConfig } from '../config/businessConfig';
 import type { DailySalesData, PurchaseData, UtilityData, ProductionData, LaborDailyData } from '../services/googleSheetService';
 import type { ChannelCostSummary } from '../components/ChannelCostAdmin';
-import { isSubMaterial, computeChannelRevenue } from '../services/insightService';
+import { isSubMaterial, computeChannelRevenue, type InventoryAdjustment } from '../services/insightService';
 import { filterByDate } from './dateRange';
 import { groupByWeek, weekKeyToLabel } from './weeklyAggregation';
 
@@ -70,12 +70,14 @@ function computeItem(
   cost: number,
   targetMultiplier: number,
   color: string,
+  absoluteTargetAmount?: number,
 ): CostItemScore {
   const actualMultiplier = cost > 0 ? revenue / cost : (revenue > 0 ? 150 : 0);
   const score = targetMultiplier > 0
     ? Math.round((actualMultiplier / targetMultiplier) * 100)
     : (cost === 0 ? 150 : 0);
-  const targetCost = targetMultiplier > 0 ? Math.round(revenue / targetMultiplier) : 0;
+  // 절대 목표금액 우선, 없으면 기존 방식 (매출/목표배수)
+  const targetCost = absoluteTargetAmount ?? (targetMultiplier > 0 ? Math.round(revenue / targetMultiplier) : 0);
   const surplus = targetCost - cost;
   return {
     label,
@@ -101,6 +103,7 @@ interface ComputeParams {
   rangeEnd: string;
   rangeDays: number;
   channelCosts?: ChannelCostSummary[];
+  inventoryAdjustment?: InventoryAdjustment | null;
 }
 
 const COST_COLORS = {
@@ -111,7 +114,7 @@ const COST_COLORS = {
 };
 
 export function computeCostScores(params: ComputeParams): CostScoringResult | null {
-  const { dailySales, purchases, utilities, production, labor = [], config, rangeStart, rangeEnd, rangeDays, channelCosts = [] } = params;
+  const { dailySales, purchases, utilities, production, labor = [], config, rangeStart, rangeEnd, rangeDays, channelCosts = [], inventoryAdjustment } = params;
 
   const goals = config.profitCenterGoals;
   if (!goals || goals.length === 0) return null;
@@ -132,9 +135,17 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const activeBracket = findActiveBracket(goals, monthlyRevenue);
   const targets = activeBracket.targets;
 
-  // 원가 계산
-  const rawCost = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
-  const subCost = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
+  // 원가 계산: 매입액
+  const purchaseRaw = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
+  const purchaseSub = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
+
+  // 실제 사용액 = 기초재고 + 당기매입 - 기말재고 (재고 조정 있을 때)
+  const rawCost = inventoryAdjustment
+    ? inventoryAdjustment.beginningRawInventoryValue + purchaseRaw - inventoryAdjustment.endingRawInventoryValue
+    : purchaseRaw;
+  const subCost = inventoryAdjustment
+    ? inventoryAdjustment.beginningSubInventoryValue + purchaseSub - inventoryAdjustment.endingSubInventoryValue
+    : purchaseSub;
 
   // 노무비: Google Sheets labor 데이터 사용 (insightService와 동일)
   const fLabor = filterByDate(labor, rangeStart, rangeEnd);
@@ -145,12 +156,16 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   // 수도광열전력: 유틸리티(전기+수도+가스)만 (insightService와 동일)
   const overheadCost = fUtilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
 
+  // 절대 목표금액: config에서 가져와서 기간 비례 조정
+  const prorationFactor = rangeDays / 30;
+  const proratedTarget = (t?: number) => t ? Math.round(t * prorationFactor) : undefined;
+
   // 4개 항목 점수 계산
   const items: CostItemScore[] = [
-    computeItem('원재료', filteredRevenue, rawCost, targets.revenueToRawMaterial, COST_COLORS.rawMaterial),
-    computeItem('부재료', filteredRevenue, subCost, targets.revenueToSubMaterial, COST_COLORS.subMaterial),
-    computeItem('노무비', filteredRevenue, laborCost, targets.productionToLabor, COST_COLORS.labor),
-    computeItem('수도광열전력', filteredRevenue, overheadCost, targets.revenueToExpense, COST_COLORS.overhead),
+    computeItem('원재료', filteredRevenue, rawCost, targets.revenueToRawMaterial, COST_COLORS.rawMaterial, proratedTarget(targets.targetRawMaterialCost)),
+    computeItem('부재료', filteredRevenue, subCost, targets.revenueToSubMaterial, COST_COLORS.subMaterial, proratedTarget(targets.targetSubMaterialCost)),
+    computeItem('노무비', filteredRevenue, laborCost, targets.productionToLabor, COST_COLORS.labor, proratedTarget(targets.targetLaborCost)),
+    computeItem('수도광열전력', filteredRevenue, overheadCost, targets.revenueToExpense, COST_COLORS.overhead, proratedTarget(targets.targetOverheadCost)),
   ];
 
   const overallScore = Math.round(items.reduce((s, it) => s + it.score, 0) / items.length);

@@ -178,6 +178,14 @@ export interface MaterialDetailItem {
   avgUnitPrice: number;
 }
 
+/** 재고 조정 데이터: 기초재고 + 당기매입 - 기말재고 방식 원가 계산용 */
+export interface InventoryAdjustment {
+  beginningRawInventoryValue: number;   // 기초 원재료 재고 금액
+  endingRawInventoryValue: number;      // 기말 원재료 재고 금액
+  beginningSubInventoryValue: number;   // 기초 부재료 재고 금액
+  endingSubInventoryValue: number;      // 기말 부재료 재고 금액
+}
+
 export interface CostBreakdownInsight {
   monthly: {
     month: string;
@@ -1017,7 +1025,8 @@ export function computeCostBreakdown(
   utilities: UtilityData[],
   production: ProductionData[],
   config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
-  labor: LaborDailyData[] = []
+  labor: LaborDailyData[] = [],
+  inventoryAdjustment?: InventoryAdjustment | null
 ): CostBreakdownInsight {
   // 원재료 / 부재료 분류
   const rawItems: PurchaseData[] = [];
@@ -1030,8 +1039,17 @@ export function computeCostBreakdown(
     }
   });
 
-  const totalRaw = rawItems.reduce((s, p) => s + p.total, 0);
-  const totalSub = subItems.reduce((s, p) => s + p.total, 0);
+  const purchaseRaw = rawItems.reduce((s, p) => s + p.total, 0);
+  const purchaseSub = subItems.reduce((s, p) => s + p.total, 0);
+
+  // 실제 사용액 = 기초재고 + 당기매입 - 기말재고 (ECOUNT 재고 연동 시)
+  const totalRaw = inventoryAdjustment
+    ? inventoryAdjustment.beginningRawInventoryValue + purchaseRaw - inventoryAdjustment.endingRawInventoryValue
+    : purchaseRaw;  // ECOUNT 불가 시 기존 매입액 방식 폴백
+
+  const totalSub = inventoryAdjustment
+    ? inventoryAdjustment.beginningSubInventoryValue + purchaseSub - inventoryAdjustment.endingSubInventoryValue
+    : purchaseSub;
   // 경비 = 수도광열비 + 전력비 (유틸리티만, 고정비/변동비 제외)
   const totalUtility = utilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
 
@@ -2689,11 +2707,18 @@ export function computeProfitCenterScore(
   const scoreWaste = actualWasteRate > 0 && targets.wasteRateTarget > 0
     ? Math.round(targets.wasteRateTarget / actualWasteRate * 100) : 100;
 
+  // 절대 목표금액: config에서 가져와서 기간 비례 조정
+  const prorationFactor = calendarDays / 30;
+  const proratedTarget = (t?: number) => t ? Math.round(t * prorationFactor) : undefined;
+
+  // 폴백: 절대금액 미설정 시 기존 방식 (매출/목표배수)
+  const fallbackTarget = (multiplier: number) => multiplier > 0 ? Math.round(revenue / multiplier) : 0;
+
   const scores: ProfitCenterScoreMetric[] = [
-    { metric: '원재료', formula: '생산매출 ÷ 원재료비', target: Math.round(targetRevToRaw * 100) / 100, actual: Math.round(actualRevToRaw * 100) / 100, score: safeScore(actualRevToRaw, targetRevToRaw), status: getStatus(safeScore(actualRevToRaw, targetRevToRaw)), unit: '배', targetAmount: Math.round(revenue / targetRevToRaw), actualAmount: rawMaterial },
-    { metric: '부재료', formula: '생산매출 ÷ 부재료비', target: Math.round(targetRevToSub * 100) / 100, actual: Math.round(actualRevToSub * 100) / 100, score: safeScore(actualRevToSub, targetRevToSub), status: getStatus(safeScore(actualRevToSub, targetRevToSub)), unit: '배', targetAmount: Math.round(revenue / targetRevToSub), actualAmount: subMaterial },
-    { metric: '노무비', formula: '생산매출 ÷ 노무비', target: Math.round(targets.productionToLabor * 100) / 100, actual: Math.round(actualProdToLabor * 100) / 100, score: safeScore(actualProdToLabor, targets.productionToLabor), status: getStatus(safeScore(actualProdToLabor, targets.productionToLabor)), unit: '배', targetAmount: Math.round(revenue / targets.productionToLabor), actualAmount: laborCost },
-    { metric: '수도광열전력', formula: '생산매출 ÷ 수도광열전력비', target: Math.round(targets.revenueToExpense * 100) / 100, actual: Math.round(actualRevToExpense * 100) / 100, score: safeScore(actualRevToExpense, targets.revenueToExpense), status: getStatus(safeScore(actualRevToExpense, targets.revenueToExpense)), unit: '배', targetAmount: Math.round(revenue / targets.revenueToExpense), actualAmount: overheadCost },
+    { metric: '원재료', formula: '생산매출 ÷ 원재료비', target: Math.round(targetRevToRaw * 100) / 100, actual: Math.round(actualRevToRaw * 100) / 100, score: safeScore(actualRevToRaw, targetRevToRaw), status: getStatus(safeScore(actualRevToRaw, targetRevToRaw)), unit: '배', targetAmount: proratedTarget(targets.targetRawMaterialCost) ?? fallbackTarget(targetRevToRaw), actualAmount: rawMaterial },
+    { metric: '부재료', formula: '생산매출 ÷ 부재료비', target: Math.round(targetRevToSub * 100) / 100, actual: Math.round(actualRevToSub * 100) / 100, score: safeScore(actualRevToSub, targetRevToSub), status: getStatus(safeScore(actualRevToSub, targetRevToSub)), unit: '배', targetAmount: proratedTarget(targets.targetSubMaterialCost) ?? fallbackTarget(targetRevToSub), actualAmount: subMaterial },
+    { metric: '노무비', formula: '생산매출 ÷ 노무비', target: Math.round(targets.productionToLabor * 100) / 100, actual: Math.round(actualProdToLabor * 100) / 100, score: safeScore(actualProdToLabor, targets.productionToLabor), status: getStatus(safeScore(actualProdToLabor, targets.productionToLabor)), unit: '배', targetAmount: proratedTarget(targets.targetLaborCost) ?? fallbackTarget(targets.productionToLabor), actualAmount: laborCost },
+    { metric: '수도광열전력', formula: '생산매출 ÷ 수도광열전력비', target: Math.round(targets.revenueToExpense * 100) / 100, actual: Math.round(actualRevToExpense * 100) / 100, score: safeScore(actualRevToExpense, targets.revenueToExpense), status: getStatus(safeScore(actualRevToExpense, targets.revenueToExpense)), unit: '배', targetAmount: proratedTarget(targets.targetOverheadCost) ?? fallbackTarget(targets.revenueToExpense), actualAmount: overheadCost },
     { metric: '폐기율', formula: '폐기수량 ÷ 생산수량', target: Math.round(targets.wasteRateTarget * 10) / 10, actual: Math.round(actualWasteRate * 10) / 10, score: scoreWaste, status: getStatus(scoreWaste), unit: '%' },
   ];
 

@@ -8,7 +8,7 @@ import { Pagination } from './Pagination';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../utils/format';
 import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData } from '../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation, ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../services/insightService';
-import { isSubMaterial, computeCostBreakdown, computeMaterialPrices, computeUtilityCosts, computeLimitPrice, computeChannelRevenue } from '../services/insightService';
+import { isSubMaterial, computeCostBreakdown, computeMaterialPrices, computeUtilityCosts, computeLimitPrice, computeChannelRevenue, type InventoryAdjustment } from '../services/insightService';
 import { getChannelCostSummaries } from './ChannelCostAdmin';
 import { useBusinessConfig } from '../contexts/SettingsContext';
 // getLaborMonthlySummaries 수동입력 대신 labor prop(Google Sheets 실데이터) 사용
@@ -25,6 +25,7 @@ interface Props {
   labor?: LaborDailyData[];
   insights: DashboardInsights | null;
   profitCenterScore?: ProfitCenterScoreInsight | null;
+  inventoryAdjustment?: InventoryAdjustment | null;
   onItemClick: (item: any) => void;
   onTabChange?: (tab: string) => void;
 }
@@ -128,6 +129,7 @@ export const CostManagementView: React.FC<Props> = ({
   labor = [],
   insights,
   profitCenterScore = null,
+  inventoryAdjustment = null,
   onItemClick,
   onTabChange,
 }) => {
@@ -167,9 +169,9 @@ export const CostManagementView: React.FC<Props> = ({
   // 날짜 필터된 데이터로 로컬 계산 (기간 변경 시 반응)
   const costBreakdown = useMemo(() =>
     filteredPurchases.length > 0
-      ? computeCostBreakdown(filteredPurchases, filteredUtilities, filteredProduction, config, filteredLabor)
+      ? computeCostBreakdown(filteredPurchases, filteredUtilities, filteredProduction, config, filteredLabor, inventoryAdjustment)
       : insights?.costBreakdown ?? null,
-    [filteredPurchases, filteredUtilities, filteredProduction, config, filteredLabor, insights?.costBreakdown]);
+    [filteredPurchases, filteredUtilities, filteredProduction, config, filteredLabor, inventoryAdjustment, insights?.costBreakdown]);
   const materialPrices = useMemo(() =>
     filteredPurchases.length > 0
       ? computeMaterialPrices(filteredPurchases)

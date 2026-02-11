@@ -49,10 +49,17 @@ async function fetchAllRows<T>(
   const client = getSupabaseClient();
   if (!client) return [];
 
+  // 총 건수를 먼저 조회하여 정확한 페이지네이션 종료 시점 결정
+  const { count: totalCount, error: countError } = await client
+    .from(table)
+    .select('*', { count: 'exact', head: true });
+
+  if (countError || !totalCount) return [];
+
   const all: T[] = [];
   let from = 0;
 
-  while (true) {
+  while (all.length < totalCount) {
     const { data, error } = await client
       .from(table)
       .select('*')
@@ -61,7 +68,6 @@ async function fetchAllRows<T>(
 
     if (error || !data || data.length === 0) break;
     all.push(...(data as T[]));
-    if (data.length < PAGE_SIZE) break; // 마지막 페이지
     from += PAGE_SIZE;
   }
 

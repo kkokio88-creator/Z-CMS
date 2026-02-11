@@ -60,7 +60,10 @@ import {
   computeCostBreakdown,
   computeWasteAnalysis,
   computeProfitCenterScore,
+  isSubMaterial,
+  type InventoryAdjustment,
 } from '../services/insightService';
+import { fetchInventoryByLocation } from '../services/costManagementService';
 import { getChannelCostSummaries } from '../components/ChannelCostAdmin';
 import { checkDataSource, directFetchSyncStatus, SyncStatusInfo } from '../services/supabaseClient';
 import { loadBusinessConfig } from '../config/businessConfig';
@@ -97,6 +100,7 @@ const App = () => {
   const [gsMaterialMaster, setGsMaterialMaster] = useState<MaterialMasterItem[]>([]);
   const [gsInventorySnapshots, setGsInventorySnapshots] = useState<InventorySnapshotData[]>([]);
   const [gsChannelProfit, setGsChannelProfit] = useState<ChannelProfitItem[]>([]);
+  const [inventoryAdjustment, setInventoryAdjustment] = useState<InventoryAdjustment | null>(null);
 
   // Insights State (insightService 기반)
   const [insights, setInsights] = useState<DashboardInsights | null>(null);
@@ -311,7 +315,6 @@ const App = () => {
       // 데이터 소스 확인
       const source = await checkDataSource();
       setDataSource(source);
-      console.log('[App] 데이터 소스:', source || '연결 없음');
 
       // Supabase 동기화 상태 조회 (직접 연결 가능 시)
       if (source === 'direct' || source === 'backend') {
@@ -500,11 +503,6 @@ const App = () => {
 
           setStocktakeAnomalies(anomalies);
 
-          console.log('[App] Google Sheet 구매 데이터로 재고 데이터 생성:', {
-            inventory: inventoryFromPurchases.length,
-            suggestions: suggestions.length,
-            anomalies: anomalies.length,
-          });
         }
 
         // 캐시 저장
@@ -539,7 +537,6 @@ const App = () => {
             });
 
           setBomItems(bomFromProduction);
-          console.log('[App] Google Sheet 생산 데이터로 BOM 항목 생성:', bomFromProduction.length);
         }
       }
 
@@ -563,11 +560,6 @@ const App = () => {
             gsResult.inventorySnapshots || [],
           );
           setInsights(computed);
-          console.log('[App] Insights 계산 완료:', {
-            channelRevenue: !!computed.channelRevenue,
-            productProfit: computed.productProfit?.items.length || 0,
-            recommendations: computed.recommendations.length,
-          });
         } catch (insightErr) {
           console.warn('Insights 계산 실패:', insightErr);
         }
@@ -707,6 +699,57 @@ const App = () => {
     document.body.removeChild(link);
   };
 
+  // 날짜 범위 변경 시 기초/기말 재고 fetch → 재고 조정 원가 계산용
+  useEffect(() => {
+    const fetchInventoryAdjustment = async () => {
+      try {
+        const { start, end } = getDateRange(dateRange);
+        // 기초재고일 = rangeStart - 1일
+        const beginDate = new Date(start);
+        beginDate.setDate(beginDate.getDate() - 1);
+        const beginDateStr = beginDate.toISOString().slice(0, 10).replace(/-/g, '');
+        const endDateStr = end.replace(/-/g, '');
+
+        const [beginInventory, endInventory] = await Promise.all([
+          fetchInventoryByLocation(beginDateStr),
+          fetchInventoryByLocation(endDateStr),
+        ]);
+
+        if (beginInventory.length === 0 && endInventory.length === 0) {
+          setInventoryAdjustment(null);
+          return;
+        }
+
+        // materialMaster 단가 lookup (있으면 사용, 없으면 ECOUNT 응답의 unitPrice)
+        const masterPriceMap = new Map<string, number>();
+        gsMaterialMaster.forEach(m => {
+          if (m.unitPrice > 0) masterPriceMap.set(m.productCode, m.unitPrice);
+        });
+
+        const calcValue = (items: typeof beginInventory, type: 'raw' | 'sub') => {
+          return items
+            .filter(inv => type === 'sub' ? isSubMaterial(inv.productName, inv.productCode) : !isSubMaterial(inv.productName, inv.productCode))
+            .reduce((sum, inv) => {
+              const price = masterPriceMap.get(inv.productCode) || inv.unitPrice || 0;
+              return sum + inv.quantity * price;
+            }, 0);
+        };
+
+        setInventoryAdjustment({
+          beginningRawInventoryValue: calcValue(beginInventory, 'raw'),
+          endingRawInventoryValue: calcValue(endInventory, 'raw'),
+          beginningSubInventoryValue: calcValue(beginInventory, 'sub'),
+          endingSubInventoryValue: calcValue(endInventory, 'sub'),
+        });
+      } catch (err) {
+        console.warn('[App] 재고 조정 데이터 fetch 실패 (매입액 기반 폴백):', err);
+        setInventoryAdjustment(null);
+      }
+    };
+
+    fetchInventoryAdjustment();
+  }, [dateRange, gsMaterialMaster]);
+
   // 날짜 범위에 따른 독립채산제 점수 재계산
   // 핵심: 매출과 구매 데이터의 공통 기간만 사용해야 정확한 배수 계산 가능
   const filteredProfitCenterScore = useMemo(() => {
@@ -735,13 +778,13 @@ const App = () => {
 
       if (!fSales.length || !fPurchases.length) return null;
       const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, bizConfig);
-      const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, bizConfig, fLabor);
+      const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, bizConfig, fLabor, inventoryAdjustment);
       const wa = computeWasteAnalysis(fProduction, bizConfig, fPurchases);
       return computeProfitCenterScore(cr, cb, wa, fProduction, bizConfig);
     } catch {
       return null;
     }
-  }, [dateRange, gsDailySales, gsPurchases, gsProduction, gsUtilities, gsLabor]);
+  }, [dateRange, gsDailySales, gsPurchases, gsProduction, gsUtilities, gsLabor, inventoryAdjustment]);
 
   const renderActiveView = () => {
     // Show loading skeleton if fetching
@@ -821,6 +864,7 @@ const App = () => {
               labor={gsLabor}
               insights={insights}
               profitCenterScore={filteredProfitCenterScore}
+              inventoryAdjustment={inventoryAdjustment}
               onItemClick={handleItemClick}
               onTabChange={setActiveSubTab}
             />
