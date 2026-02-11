@@ -18,6 +18,7 @@ import { useBusinessConfig } from '../contexts/SettingsContext';
 import { getChannelCostSummaries } from './ChannelCostAdmin';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../utils/weeklyAggregation';
 import { useUI } from '../contexts/UIContext';
+import { InsightSection } from './InsightSection';
 import { getDateRange, filterByDate, getRangeLabel } from '../utils/dateRange';
 import FormulaTooltip from './FormulaTooltip';
 import { FORMULAS } from '../constants/formulaDescriptions';
@@ -167,6 +168,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
           } : null;
 
           return (
+            <InsightSection id="profit-ch">
             <div className="space-y-6">
               {/* KPI: 채널별 매출 + 3단계 이익 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -371,6 +373,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                 )}
               </div>
             </div>
+            </InsightSection>
           );
         }
 
@@ -378,6 +381,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
           const topItems = productProfit?.items.slice(0, 10) || [];
           const bottomItems = [...(productProfit?.items || [])].reverse().slice(0, 10);
           return (
+            <InsightSection id={["profit-product-top", "profit-product-loss", "profit-bep"]}>
             <div className="space-y-6">
               {/* A3: 최근 30일 기반 표시 */}
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2">
@@ -553,6 +557,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                 </>
               )}
             </div>
+            </InsightSection>
           );
         }
 
@@ -563,6 +568,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
           }
 
           return (
+            <InsightSection id="profit-budget">
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -677,6 +683,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                 </p>
               </div>
             </div>
+            </InsightSection>
           );
         }
 
@@ -684,6 +691,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
         if (activeTab === 'cashflow') {
           const cf = insights?.cashFlow;
           return (
+            <InsightSection id="profit-cashflow">
             <div className="space-y-6">
               {/* 안내 배너 */}
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2">
@@ -813,6 +821,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                 ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
               </div>
             </div>
+            </InsightSection>
           );
         }
 
@@ -820,6 +829,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
         const weekly = revenueTrend?.weekly || [];
         const lastWeek = weekly[weekly.length - 1];
         return (
+          <InsightSection id="profit-trend">
           <div className="space-y-6">
             {/* KPI */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -898,6 +908,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
               ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
             </div>
           </div>
+          </InsightSection>
         );
       }}
     </SubTabLayout>

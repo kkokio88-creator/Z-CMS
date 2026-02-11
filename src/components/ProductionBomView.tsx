@@ -14,6 +14,7 @@ import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate } from '../utils/dateRange';
 import FormulaTooltip from './FormulaTooltip';
 import { FORMULAS } from '../constants/formulaDescriptions';
+import { InsightSection } from './InsightSection';
 
 interface Props {
   production: ProductionData[];
@@ -241,6 +242,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
             : dailyData.filter(d => d[prodFilter as keyof typeof d] as number > 0);
 
           return (
+            <InsightSection id="prod-status">
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -368,6 +370,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 </div>
               )}
             </div>
+            </InsightSection>
           );
         }
 
@@ -447,6 +450,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
           })();
 
           return (
+            <InsightSection id="prod-waste">
             <div className="space-y-6">
               {/* KPI — 5개 */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -673,6 +677,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 </div>
               )}
             </div>
+            </InsightSection>
           );
         }
 
@@ -690,6 +695,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
           : dailyData.filter(d => d[effFilter as keyof typeof d] as number > 0);
 
         return (
+          <InsightSection id="prod-efficiency">
           <div className="space-y-6">
             {/* KPI */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -828,6 +834,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
               </div>
             )}
           </div>
+          </InsightSection>
         );
         }
 
@@ -1009,6 +1016,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
         // ========== BOM 오차 분석 ==========
         if (activeTab === 'bomVariance') {
           return (
+            <InsightSection id="prod-bom">
             <div className="space-y-6">
               <div className="flex items-center gap-1 mb-2">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">BOM 투입 오차 분석</h3>
@@ -1255,12 +1263,14 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 ) : <p className="text-gray-400 text-center py-10">구매/생산 데이터가 충분하지 않습니다.</p>}
               </div>
             </div>
+            </InsightSection>
           );
         }
 
         // ========== 수율 추적 ==========
         if (activeTab === 'yield') {
           return (
+            <InsightSection id="prod-yield">
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -1412,6 +1422,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 <p className="text-gray-400 text-center py-10">생산 데이터가 없습니다.</p>
               )}
             </div>
+            </InsightSection>
           );
         }
 

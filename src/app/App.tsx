@@ -11,8 +11,8 @@ import { InventoryOrderView } from '../components/InventoryOrderView.tsx';
 import { SalesAnalysisView } from '../components/SalesAnalysisView.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { AIAssistButton } from '../components/AIAssistButton.tsx';
-import { AIAssistOverlay } from '../components/AIAssistOverlay.tsx';
-import { countDangerInsights } from '../utils/pageInsightGenerator';
+import { InsightCardsProvider, InsightStatusBar } from '../components/InsightSection.tsx';
+import { countDangerInsights, generatePageInsights } from '../utils/pageInsightGenerator';
 import { SettingsProvider } from '../contexts/SettingsContext.tsx';
 import { DataProvider, DataContextType } from '../contexts/DataContext.tsx';
 import { UIProvider, UIContextType, ViewType as UIViewType } from '../contexts/UIContext.tsx';
@@ -183,8 +183,8 @@ const App = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
 
-  // AI Overlay State
-  const [isAIOverlayOpen, setIsAIOverlayOpen] = useState(false);
+  // AI Insight Mode
+  const [insightMode, setInsightMode] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<string | null>(null);
 
   // Settings dirty state + navigation guard
@@ -1245,6 +1245,11 @@ const App = () => {
     handleSync: handleEcountSync,
   }), [gsDailySales, gsSalesDetail, gsProduction, gsPurchases, gsUtilities, gsLabor, gsBom, gsMaterialMaster, inventoryData, stocktakeAnomalies, insights, isSyncing, lastSyncTime, syncMessage, dataAvailability, dataSource, syncStatus]);
 
+  const insightCards = useMemo(() =>
+    insightMode ? generatePageInsights(activeView, activeSubTab, insights) : [],
+    [insightMode, activeView, activeSubTab, insights]
+  );
+
   const uiContextValue = useMemo<UIContextType>(() => ({
     activeView,
     setActiveView: handleSetActiveView,
@@ -1256,7 +1261,9 @@ const App = () => {
     toggleDarkMode,
     settingsDirty,
     setSettingsDirty,
-  }), [activeView, activeSubTab, dateRange, isDarkMode, settingsDirty]);
+    insightMode,
+    setInsightMode,
+  }), [activeView, activeSubTab, dateRange, isDarkMode, settingsDirty, insightMode]);
 
   return (
     <SettingsProvider>
@@ -1288,17 +1295,21 @@ const App = () => {
             onNotificationClick={handleNotificationClick}
           />
 
-          <div className="flex-1 overflow-auto p-6 scroll-smooth">{renderActiveView()}</div>
+          <div className={`flex-1 overflow-auto p-6 scroll-smooth transition-all duration-300 ${insightMode ? 'bg-gray-100/50 dark:bg-gray-950/50' : ''}`}>
+            <InsightCardsProvider value={insightCards}>
+              {renderActiveView()}
+            </InsightCardsProvider>
+          </div>
+          {insightMode && (
+            <InsightStatusBar onClose={() => setInsightMode(false)} />
+          )}
         </main>
 
-        {/* AI Assist Overlay */}
+        {/* AI Assist Button */}
         <AIAssistButton
-          onClick={() => setIsAIOverlayOpen(true)}
+          onClick={() => setInsightMode(!insightMode)}
           dangerCount={countDangerInsights(activeView, activeSubTab, insights)}
-        />
-        <AIAssistOverlay
-          isOpen={isAIOverlayOpen}
-          onClose={() => setIsAIOverlayOpen(false)}
+          isActive={insightMode}
         />
 
         <Modal

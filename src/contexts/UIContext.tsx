@@ -26,6 +26,8 @@ export interface UIContextType {
   toggleDarkMode: () => void;
   settingsDirty: boolean;
   setSettingsDirty: (dirty: boolean) => void;
+  insightMode: boolean;
+  setInsightMode: (mode: boolean) => void;
 }
 
 const UIContext = createContext<UIContextType | null>(null);

@@ -18,6 +18,7 @@ import { getDateRange, filterByDate } from '../utils/dateRange';
 import { computeWeeklyCostScores } from '../utils/costScoring';
 import FormulaTooltip from './FormulaTooltip';
 import { FORMULAS } from '../constants/formulaDescriptions';
+import { InsightSection } from './InsightSection';
 
 interface Props {
   purchases: PurchaseData[];
@@ -417,6 +418,7 @@ export const CostManagementView: React.FC<Props> = ({
           const METRIC_COLORS: Record<string, string> = { '원재료': '#3B82F6', '부재료': '#10B981', '노무비': '#F59E0B', '수도광열전력': '#EF4444', '폐기율': '#6B7280' };
 
           return (
+            <InsightSection id="cost-overview">
             <div className="space-y-6">
               {/* 점수 카드 섹션 — 대시보드와 동일한 computeProfitCenterScore 기반 */}
               {sc ? (
@@ -541,6 +543,7 @@ export const CostManagementView: React.FC<Props> = ({
                 <InsightCards items={recommendations.slice(0, 3)} />
               )}
             </div>
+            </InsightSection>
           );
         }
 
@@ -557,6 +560,7 @@ export const CostManagementView: React.FC<Props> = ({
           }));
 
           return (
+            <InsightSection id={["cost-raw-trend", "cost-raw-limit"]}>
             <div className="space-y-6">
               <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '원재료')} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -757,6 +761,7 @@ export const CostManagementView: React.FC<Props> = ({
 
               <InsightCards items={materialRecs} />
             </div>
+            </InsightSection>
           );
         }
 
@@ -770,6 +775,7 @@ export const CostManagementView: React.FC<Props> = ({
           }));
 
           return (
+            <InsightSection id="cost-sub">
             <div className="space-y-6">
               <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '부재료')} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -864,6 +870,7 @@ export const CostManagementView: React.FC<Props> = ({
 
               <InsightCards items={materialRecs} />
             </div>
+            </InsightSection>
           );
         }
 
@@ -893,6 +900,7 @@ export const CostManagementView: React.FC<Props> = ({
           const DEPT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1'];
 
           return (
+            <InsightSection id="cost-labor">
             <div className="space-y-6">
               <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '노무비')} />
 
@@ -1115,6 +1123,7 @@ export const CostManagementView: React.FC<Props> = ({
 
               <InsightCards items={marginRecs} />
             </div>
+            </InsightSection>
           );
         }
 
@@ -1169,6 +1178,7 @@ export const CostManagementView: React.FC<Props> = ({
           : 0;
 
         return (
+          <InsightSection id="cost-overhead">
           <div className="space-y-6">
             <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '수도광열전력')} />
             {/* KPI — B5: 생산매출/생산량 대비 추가 */}
@@ -1318,6 +1328,7 @@ export const CostManagementView: React.FC<Props> = ({
 
             <InsightCards items={utilityRecs} />
           </div>
+          </InsightSection>
         );
         } catch (err) {
           console.error('[CostManagementView] 렌더링 오류:', err);

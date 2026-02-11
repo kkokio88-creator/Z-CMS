@@ -9,6 +9,7 @@ import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate, getRangeLabel } from '../utils/dateRange';
 import FormulaTooltip from './FormulaTooltip';
 import { FORMULAS } from '../constants/formulaDescriptions';
+import { InsightSection } from './InsightSection';
 
 interface DashboardHomeViewProps {
   onSync: () => void;
@@ -306,6 +307,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       )}
 
       {/* KPI Grid */}
+      <InsightSection id={["home-revenue", "home-waste"]}>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           title={`총 매출 (${rangeLabel})`}
@@ -344,9 +346,11 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           color="#EF4444"
         />
       </div>
+      </InsightSection>
 
       {/* 독립채산제 성과 */}
       {profitCenterScore && (
+      <InsightSection id="home-score">
         <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -432,9 +436,11 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             ))}
           </div>
         </div>
+      </InsightSection>
       )}
 
       {/* Quick Actions */}
+      <InsightSection id="home-rec">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { view: 'inventory', icon: 'inventory', label: '재고 발주', desc: '부족 재고 처리', iconClass: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' },
@@ -457,6 +463,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           </button>
         ))}
       </div>
+      </InsightSection>
     </div>
   );
 };

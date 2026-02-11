@@ -17,6 +17,7 @@ import { useUI } from '../contexts/UIContext';
 import { getDateRange, filterByDate } from '../utils/dateRange';
 import FormulaTooltip from './FormulaTooltip';
 import { FORMULAS } from '../constants/formulaDescriptions';
+import { InsightSection } from './InsightSection';
 
 interface Props {
   inventoryData: InventorySafetyItem[];
@@ -341,6 +342,7 @@ export const InventoryOrderView: React.FC<Props> = ({
             ].filter(d => d.value > 0);
 
             return (
+              <InsightSection id={["inv-freshness", "inv-order-summary"]}>
               <div className="space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -670,6 +672,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                   </div>
                 )}
               </div>
+              </InsightSection>
             );
           }
 
@@ -685,6 +688,7 @@ export const InventoryOrderView: React.FC<Props> = ({
               : 0;
 
             return (
+              <InsightSection id={["inv-anomaly-price", "inv-anomaly-az"]}>
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -803,6 +807,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                   )}
                 </div>
               </div>
+              </InsightSection>
             );
           }
 
@@ -834,6 +839,7 @@ export const InventoryOrderView: React.FC<Props> = ({
               }));
 
             return (
+              <InsightSection id="inv-stat-order">
               <div className="space-y-6">
                 {/* 서비스 수준 + 발주일 선택 + KPI */}
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -1093,6 +1099,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                   <p className="text-xs text-gray-400 mt-2">* 리드타임: {config.defaultLeadTime}일(±{config.leadTimeStdDev}), 주문비용: {config.orderCost.toLocaleString()}원, 유지비율: 단가의 {Math.round(config.holdingCostRate * 100)}%/년</p>
                 </div>
               </div>
+              </InsightSection>
             );
           }
 
@@ -1115,6 +1122,7 @@ export const InventoryOrderView: React.FC<Props> = ({
               }));
 
             return (
+              <InsightSection id={["inv-abc", "inv-cost"]}>
               <div className="space-y-6">
                 {/* KPI 카드 4개 */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1331,6 +1339,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                   </div>
                 </div>
               </div>
+              </InsightSection>
             );
           }
 
@@ -1384,6 +1393,7 @@ export const InventoryOrderView: React.FC<Props> = ({
             .sort((a, b) => a.turnoverRate - b.turnoverRate);
 
           return (
+            <InsightSection id="inv-abc">
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -1571,6 +1581,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                 ) : <p className="text-gray-400 text-center py-6">구매 데이터 없음</p>}
               </div>
             </div>
+            </InsightSection>
           );
         }}
       </SubTabLayout>
