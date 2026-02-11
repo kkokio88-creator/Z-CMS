@@ -194,9 +194,79 @@ const App = () => {
     }
   }, [isDarkMode]);
 
+  // --- 데이터 캐시 (sessionStorage) ---
+  const CACHE_KEY = 'ZCMS_DATA_CACHE';
+  const CACHE_TTL = 30 * 60 * 1000; // 30분
+
+  const loadCache = () => {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const cached = JSON.parse(raw);
+      if (Date.now() - cached.timestamp > CACHE_TTL) return null;
+      return cached;
+    } catch { return null; }
+  };
+
+  const saveCache = (gsResult: any) => {
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        dailySales: gsResult.dailySales,
+        salesDetail: gsResult.salesDetail,
+        production: gsResult.production,
+        purchases: gsResult.purchases,
+        utilities: gsResult.utilities,
+        labor: gsResult.labor || [],
+        bom: gsResult.bom || [],
+        materialMaster: gsResult.materialMaster || [],
+        profitTrend: gsResult.profitTrend,
+      }));
+    } catch { /* sessionStorage full — ignore */ }
+  };
+
   // --- Initial Fetch on Mount ---
   useEffect(() => {
-    handleEcountSync();
+    const cached = loadCache();
+    if (cached) {
+      // 캐시에서 즉시 로드 → 화면 즉시 표시
+      const ds = cached.dailySales || [];
+      const sd = cached.salesDetail || [];
+      const prod = cached.production || [];
+      const purch = cached.purchases || [];
+      const util = cached.utilities || [];
+      const lab = cached.labor || [];
+      const bom = cached.bom || [];
+      const mm = cached.materialMaster || [];
+      setGsDailySales(ds);
+      setGsSalesDetail(sd);
+      setGsProduction(prod);
+      setGsPurchases(purch);
+      setGsUtilities(util);
+      setGsLabor(lab);
+      setGsBom(bom);
+      setGsMaterialMaster(mm);
+      setGsChannelProfit(cached.profitTrend || []);
+      if (cached.profitTrend?.length > 0) {
+        setProfitData(cached.profitTrend.map((p: any) => ({
+          date: p.date, revenue: p.revenue, profit: p.profit, marginRate: p.marginRate,
+        })));
+      }
+      // 캐시 데이터로 insights 계산
+      try {
+        const bizConfig = loadBusinessConfig();
+        const channelCosts = getChannelCostSummaries();
+        const computed = computeAllInsights(ds, sd, prod, purch, util, inventoryData, channelCosts, bizConfig, bom, mm, lab);
+        setInsights(computed);
+      } catch (e) { console.warn('캐시 insights 계산 실패:', e); }
+      setInitialLoadDone(true);
+      setSyncMessage('캐시 데이터 로드됨');
+      setLastSyncTime(new Date(cached.timestamp).toLocaleTimeString());
+      // 백그라운드에서 최신 데이터 동기화
+      handleEcountSync(true);
+    } else {
+      handleEcountSync(false);
+    }
   }, []);
 
   const handleSetActiveView = (view: ViewType) => {
@@ -231,8 +301,8 @@ const App = () => {
   };
 
   // --- ECOUNT ERP & Google Sheet Sync Logic ---
-  const handleEcountSync = async () => {
-    setIsSyncing(true);
+  const handleEcountSync = async (background = false) => {
+    if (!background) setIsSyncing(true);
     try {
       // 데이터 소스 확인
       const source = await checkDataSource();
@@ -431,6 +501,9 @@ const App = () => {
             anomalies: anomalies.length,
           });
         }
+
+        // 캐시 저장
+        saveCache(gsResult);
 
         // ECOUNT BOM 데이터가 없으면 Google Sheet 생산 데이터로 BOM 항목 생성
         if (!ecountResult?.bomItems?.length && gsResult.production?.length > 0) {

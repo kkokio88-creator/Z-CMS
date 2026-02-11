@@ -4,6 +4,7 @@
  */
 import type { ProfitCenterGoal, BusinessConfig } from '../config/businessConfig';
 import type { DailySalesData, PurchaseData, UtilityData, ProductionData, LaborDailyData } from '../services/googleSheetService';
+import { isSubMaterial } from '../services/insightService';
 import { filterByDate } from './dateRange';
 import { groupByWeek, weekKeyToLabel } from './weeklyAggregation';
 
@@ -40,8 +41,7 @@ export interface WeeklyCostScore {
   overallScore: number;
 }
 
-const SUB_MATERIAL_KEYWORDS = ['포장', '박스', '비닐', '라벨', '테이프', '봉투', '스티커', '밴드', '용기', '캡', '뚜껑'];
-function isSubMaterial(name: string) { return SUB_MATERIAL_KEYWORDS.some(kw => name.includes(kw)); }
+// isSubMaterial은 insightService에서 import (품목코드 ZIP_S_ 기반 + 키워드 폴백)
 
 function getStatus(score: number): ScoreStatus {
   if (score >= 110) return 'excellent';
@@ -130,8 +130,8 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const targets = activeBracket.targets;
 
   // 원가 계산
-  const rawCost = fPurchases.filter(p => !isSubMaterial(p.productName)).reduce((s, p) => s + p.total, 0);
-  const subCost = fPurchases.filter(p => isSubMaterial(p.productName)).reduce((s, p) => s + p.total, 0);
+  const rawCost = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
+  const subCost = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
 
   // 노무비: Google Sheets labor 데이터 사용 (insightService와 동일)
   const fLabor = filterByDate(labor, rangeStart, rangeEnd);
@@ -186,8 +186,8 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
 
   // 주간 그룹핑
   const salesWeeks = groupByWeek(fSales, 'date');
-  const rawPurchases = fPurchases.filter(p => !isSubMaterial(p.productName));
-  const subPurchases = fPurchases.filter(p => isSubMaterial(p.productName));
+  const rawPurchases = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode));
+  const subPurchases = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode));
   const rawWeeks = groupByWeek(rawPurchases, 'date');
   const subWeeks = groupByWeek(subPurchases, 'date');
   const utilWeeks = groupByWeek(fUtilities, 'date');

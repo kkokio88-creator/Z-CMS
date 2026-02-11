@@ -1000,7 +1000,9 @@ export function computeProductionEfficiency(production: ProductionData[]): Produ
 
 const SUB_MATERIAL_KEYWORDS = ['포장', '박스', '비닐', '라벨', '테이프', '봉투', '스티커', '밴드', '용기', '캡', '뚜껑'];
 
-export function isSubMaterial(productName: string): boolean {
+/** 부재료 판별: 품목코드 ZIP_S_ 우선, 없으면 키워드 폴백 */
+export function isSubMaterial(productName: string, productCode?: string): boolean {
+  if (productCode) return productCode.startsWith('ZIP_S_');
   return SUB_MATERIAL_KEYWORDS.some(kw => productName.includes(kw));
 }
 
@@ -1015,7 +1017,7 @@ export function computeCostBreakdown(
   const rawItems: PurchaseData[] = [];
   const subItems: PurchaseData[] = [];
   purchases.forEach(p => {
-    if (isSubMaterial(p.productName)) {
+    if (isSubMaterial(p.productName, p.productCode)) {
       subItems.push(p);
     } else {
       rawItems.push(p);

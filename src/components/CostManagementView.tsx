@@ -29,8 +29,7 @@ interface Props {
 const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 const COST_COLORS = { rawMaterial: '#3B82F6', subMaterial: '#10B981', labor: '#F59E0B', overhead: '#EF4444' };
 
-const SUB_MATERIAL_KEYWORDS = ['포장', '박스', '비닐', '라벨', '테이프', '봉투', '스티커', '밴드', '용기', '캡', '뚜껑'];
-function isSubMaterial(name: string) { return SUB_MATERIAL_KEYWORDS.some(kw => name.includes(kw)); }
+import { isSubMaterial } from '../services/insightService';
 
 const InsightCards: React.FC<{ items: CostRecommendation[] }> = ({ items }) => {
   if (items.length === 0) return null;
@@ -172,8 +171,8 @@ export const CostManagementView: React.FC<Props> = ({
   // =============================================
   const weeklyData = useMemo(() => {
     // purchases를 원재료/부재료로 분류
-    const rawPurchases = filteredPurchases.filter(p => !isSubMaterial(p.productName));
-    const subPurchases = filteredPurchases.filter(p => isSubMaterial(p.productName));
+    const rawPurchases = filteredPurchases.filter(p => !isSubMaterial(p.productName, p.productCode));
+    const subPurchases = filteredPurchases.filter(p => isSubMaterial(p.productName, p.productCode));
 
     // 주간별 그룹핑
     const rawWeeks = groupByWeek(rawPurchases, 'date');
