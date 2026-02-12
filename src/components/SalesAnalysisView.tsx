@@ -92,7 +92,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
     return Array.from(set);
   }, [filteredSalesDetail]);
 
-  // 채널별 품목별 집계
+  // 채널별 품목별 집계 (정산매출 = 공급가액 기준)
   const channelProductAgg = useMemo(() => {
     const map = new Map<string, Map<string, { name: string; revenue: number; quantity: number }>>();
     filteredSalesDetail.forEach(s => {
@@ -100,7 +100,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
       const chMap = map.get(s.customer)!;
       const key = s.productCode || s.productName;
       const ex = chMap.get(key) || { name: s.productName, revenue: 0, quantity: 0 };
-      ex.revenue += s.total;
+      ex.revenue += s.supplyAmount;
       ex.quantity += s.quantity;
       chMap.set(key, ex);
     });
@@ -146,19 +146,19 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
     return { items: classified, stats, medianQty, medianMargin };
   }, [productProfit]);
 
-  // 채널 심층분석 데이터
+  // 채널 심층분석 데이터 (정산매출 = 공급가액 기준)
   const channelMetrics = useMemo(() => {
     return channelList.map(ch => {
       const chItems = filteredSalesDetail.filter(s => s.customer === ch);
-      const totalRevenue = chItems.reduce((s, d) => s + d.total, 0);
+      const totalRevenue = chItems.reduce((s, d) => s + d.supplyAmount, 0);
       const totalQuantity = chItems.reduce((s, d) => s + d.quantity, 0);
       const uniqueProducts = new Set(chItems.map(s => s.productCode || s.productName)).size;
       const avgOrderValue = chItems.length > 0 ? Math.round(totalRevenue / chItems.length) : 0;
 
       const sorted = [...chItems].sort((a, b) => a.date.localeCompare(b.date));
       const mid = Math.floor(sorted.length / 2);
-      const firstRev = sorted.slice(0, mid).reduce((s, d) => s + d.total, 0);
-      const secondRev = sorted.slice(mid).reduce((s, d) => s + d.total, 0);
+      const firstRev = sorted.slice(0, mid).reduce((s, d) => s + d.supplyAmount, 0);
+      const secondRev = sorted.slice(mid).reduce((s, d) => s + d.supplyAmount, 0);
       const growthRate = firstRev > 0 ? Math.round(((secondRev - firstRev) / firstRev) * 1000) / 10 : 0;
 
       const chMap = channelProductAgg.get(ch);
@@ -170,6 +170,20 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
   }, [channelList, filteredSalesDetail, channelProductAgg]);
 
+  // salesDetail에서 채널/일자별 정산매출(공급가액) 집계 (settlement 유형용)
+  const settlementByDateChannel = useMemo(() => {
+    const map = new Map<string, { jasa: number; coupang: number; kurly: number }>();
+    filteredSalesDetail.forEach(s => {
+      const existing = map.get(s.date) || { jasa: 0, coupang: 0, kurly: 0 };
+      const ch = (s.customer || '').toLowerCase();
+      if (ch.includes('자사') || ch.includes('jasa') || ch.includes('고도몰')) existing.jasa += (s.supplyAmount || 0);
+      else if (ch.includes('쿠팡')) existing.coupang += (s.supplyAmount || 0);
+      else if (ch.includes('컬리')) existing.kurly += (s.supplyAmount || 0);
+      map.set(s.date, existing);
+    });
+    return map;
+  }, [filteredSalesDetail]);
+
   // salesDetail에서 채널/일자별 권장판매매출 집계 (recommended 유형용)
   const recommendedByDateChannel = useMemo(() => {
     const map = new Map<string, { jasa: number; coupang: number; kurly: number }>();
@@ -177,7 +191,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
       if (!s.recommendedRevenue || s.recommendedRevenue <= 0) return;
       const existing = map.get(s.date) || { jasa: 0, coupang: 0, kurly: 0 };
       const ch = (s.customer || '').toLowerCase();
-      if (ch.includes('자사') || ch.includes('jasa')) existing.jasa += s.recommendedRevenue;
+      if (ch.includes('자사') || ch.includes('jasa') || ch.includes('고도몰')) existing.jasa += s.recommendedRevenue;
       else if (ch.includes('쿠팡')) existing.coupang += s.recommendedRevenue;
       else if (ch.includes('컬리')) existing.kurly += s.recommendedRevenue;
       map.set(s.date, existing);
@@ -209,9 +223,17 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
           coupang = d.coupangHalf;
           kurly = d.kurlyHalf;
         } else {
-          jasa = d.jasaPrice;
-          coupang = d.coupangPrice;
-          kurly = d.kurlyPrice;
+          // 정산매출: salesDetail 공급가액 우선, 없으면 dailySales 폴백
+          const stl = settlementByDateChannel.get(d.date);
+          if (stl && (stl.jasa + stl.coupang + stl.kurly) > 0) {
+            jasa = stl.jasa;
+            coupang = stl.coupang;
+            kurly = stl.kurly;
+          } else {
+            jasa = d.jasaPrice;
+            coupang = d.coupangPrice;
+            kurly = d.kurlyPrice;
+          }
         }
         return {
           date: d.date.slice(5),
@@ -222,7 +244,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
           합계: jasa + coupang + kurly,
         };
       });
-  }, [filteredDailySales, revenueType, recommendedByDateChannel]);
+  }, [filteredDailySales, revenueType, recommendedByDateChannel, settlementByDateChannel]);
 
   // 채널별 매출 유형별 합계
   const channelRevenueSummary = useMemo(() => {
