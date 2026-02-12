@@ -544,25 +544,27 @@ export function computeChannelRevenue(
   // 조회 기간 일수 (고정비 일할계산용)
   const periodDays = dailySales.length || 1;
 
-  // salesDetail에서 채널별 권장판매매출 직접 집계 (있으면 역산 대신 사용)
+  // salesDetail에서 채널별 정산매출(공급가액) + 권장판매매출 직접 집계
+  const channelSettlementMap = new Map<string, number>();
   const channelRecommendedMap = new Map<string, number>();
   if (salesDetail.length > 0) {
     salesDetail.forEach(s => {
+      const ch = s.customer || '';
+      channelSettlementMap.set(ch, (channelSettlementMap.get(ch) || 0) + (s.supplyAmount || 0));
       if (s.recommendedRevenue > 0) {
-        const ch = s.customer || '';
         channelRecommendedMap.set(ch, (channelRecommendedMap.get(ch) || 0) + s.recommendedRevenue);
       }
     });
   }
 
   // 채널명 매핑 (거래처명 → 채널명)
-  const resolveChannelRecommended = (channelName: string): number => {
+  const resolveChannelMap = (channelName: string, map: Map<string, number>): number => {
     // 직접 매치
-    if (channelRecommendedMap.has(channelName)) return channelRecommendedMap.get(channelName)!;
+    if (map.has(channelName)) return map.get(channelName)!;
     // 부분 매치 시도
-    for (const [key, val] of channelRecommendedMap) {
+    for (const [key, val] of map) {
       const lower = key.toLowerCase();
-      if (channelName === '자사몰' && (lower.includes('자사') || lower.includes('jasa'))) return val;
+      if (channelName === '자사몰' && (lower.includes('자사') || lower.includes('jasa') || lower.includes('고도몰'))) return val;
       if (channelName === '쿠팡' && lower.includes('쿠팡')) return val;
       if (channelName === '컬리' && lower.includes('컬리')) return val;
     }
@@ -582,21 +584,29 @@ export function computeChannelRevenue(
   let sumProfit1 = 0, sumProfit2 = 0, sumProfit3 = 0;
   let sumRecommended = 0, sumDiscount = 0, sumCommission = 0, sumMaterial = 0, sumDirectCost = 0;
 
-  const hasDetailRecommended = channelRecommendedMap.size > 0;
+  const hasDetailData = channelSettlementMap.size > 0 || channelRecommendedMap.size > 0;
 
   const channels: ChannelProfitDetail[] = channelData.map(ch => {
     const share = totalRevenue > 0 ? (ch.revenue / totalRevenue) * 100 : 0;
     const cc = costMap.get(ch.name);
 
     // === 5단계 수익 구조 ===
-    const settlementRevenue = ch.revenue;
     const discountRate = (cc?.discountRate ?? 0) / 100;
     const commissionRate = (cc?.commissionRate ?? 0) / 100;
 
+    // 정산매출: salesDetail 공급가액 합계 우선, 없으면 dailySales 폴백
+    let settlementRevenue: number;
+    if (hasDetailData && channelSettlementMap.size > 0) {
+      const directSettlement = resolveChannelMap(ch.name, channelSettlementMap);
+      settlementRevenue = directSettlement > 0 ? directSettlement : ch.revenue;
+    } else {
+      settlementRevenue = ch.revenue;
+    }
+
     // 권장판매매출: salesDetail 실측값 우선, 없으면 역산 폴백
     let recommendedRevenue: number;
-    if (hasDetailRecommended) {
-      const directRecommended = resolveChannelRecommended(ch.name);
+    if (hasDetailData && channelRecommendedMap.size > 0) {
+      const directRecommended = resolveChannelMap(ch.name, channelRecommendedMap);
       recommendedRevenue = directRecommended > 0 ? directRecommended : settlementRevenue;
     } else {
       const denominator = 1 - discountRate - commissionRate;
@@ -675,11 +685,11 @@ export function computeProductProfit(
   salesDetail: SalesDetailData[],
   purchases: PurchaseData[]
 ): ProductProfitInsight {
-  // 품목별 매출 집계 (정산매출 + 권장판매매출)
+  // 품목별 매출 집계 (정산매출=공급가액, 권장판매매출)
   const revenueMap = new Map<string, { name: string; revenue: number; recommendedRevenue: number; qty: number }>();
   salesDetail.forEach(s => {
     const existing = revenueMap.get(s.productCode) || { name: s.productName, revenue: 0, recommendedRevenue: 0, qty: 0 };
-    existing.revenue += s.total;
+    existing.revenue += s.supplyAmount;
     existing.recommendedRevenue += (s.recommendedRevenue || 0);
     existing.qty += s.quantity;
     revenueMap.set(s.productCode, existing);

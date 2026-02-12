@@ -16,7 +16,7 @@ CI/CD, 배포, 인프라 운영 전문가 스킬입니다.
 
 ```
 [GitHub Repo]
-    └── master branch (기본 브랜치, 프로덕션)
+    └── main branch (기본 브랜치, 프로덕션)
         ├── Frontend → Vercel (자동 배포)
         └── Backend  → Railway (자동 배포)
 ```
@@ -60,5 +60,5 @@ CI/CD, 배포, 인프라 운영 전문가 스킬입니다.
 
 - GitHub 리포지토리: kkokio88-creator/Z-CMS
 - 현재 CI/CD 없음 (수동 배포)
-- master: 유일한 프로덕션 브랜치 (company_pc 브랜치 삭제 완료)
+- main: 유일한 프로덕션 브랜치 (master/company_pc 브랜치 삭제 완료)
 - `gh` CLI 사용 가능 (GitHub CLI 설치 완료)
