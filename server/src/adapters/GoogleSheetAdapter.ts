@@ -39,16 +39,15 @@ export interface DailySalesData {
 }
 
 export interface SalesDetailData {
-  productCode: string;
-  productName: string;
   date: string;
   customer: string;
-  productDesc: string;
-  spec: string;
+  productName: string;
+  productCode: string;
   quantity: number;
   supplyAmount: number;
   vat: number;
   total: number;
+  recommendedRevenue: number;
 }
 
 export interface ProductionData {
@@ -386,22 +385,22 @@ export class GoogleSheetAdapter {
     const rows = await this.fetchSheet(SHEET_GIDS.salesDetail);
     const results: SalesDetailData[] = [];
 
-    // 헤더: 품목코드, 품목명, 일별, 거래처별, 품목별, 규격, 수량, 공급가액, 부가세, 합계
+    // 헤더: 일별, 거래처, 품목별, 품목코드, 수량, 공급가액(정산), 부가세, 합계, 권장판매매출
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      if (!row[0] || row[0].trim() === '') continue;
+      const date = this.parseDate(row[0]);
+      if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
 
       results.push({
-        productCode: row[0] || '',
-        productName: row[1] || '',
-        date: this.parseDate(row[2]),
-        customer: row[3] || '',
-        productDesc: row[4] || '',
-        spec: row[5] || '',
-        quantity: this.parseNumber(row[6]),
-        supplyAmount: this.parseNumber(row[7]),
-        vat: this.parseNumber(row[8]),
-        total: this.parseNumber(row[9]),
+        date,
+        customer: row[1] || '',
+        productName: row[2] || '',
+        productCode: row[3] || '',
+        quantity: this.parseNumber(row[4]),
+        supplyAmount: this.parseNumber(row[5]),
+        vat: this.parseNumber(row[6]),
+        total: this.parseNumber(row[7]),
+        recommendedRevenue: this.parseNumber(row[8]),
       });
     }
 

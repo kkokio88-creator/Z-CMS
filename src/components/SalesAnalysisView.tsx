@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, Legend, ComposedChart, Line, ScatterChart, Scatter,
-  PieChart, Pie,
+  PieChart, Pie, AreaChart, Area,
 } from 'recharts';
 import { SubTabLayout } from './SubTabLayout';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../utils/format';
@@ -109,6 +109,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
 
   const [channelFilter, setChannelFilter] = useState('all');
   const [matrixView, setMatrixView] = useState<'chart' | 'table'>('chart');
+  const [revenueType, setRevenueType] = useState<'settlement' | 'recommended' | 'independent'>('settlement');
 
   // 수익성 매트릭스 데이터 (탭과 무관하게 최상위에서 계산)
   const matrixData = useMemo(() => {
@@ -168,6 +169,72 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
       return { channel: ch, totalRevenue, totalQuantity, uniqueProducts, avgOrderValue, growthRate, topProduct, txCount: chItems.length };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
   }, [channelList, filteredSalesDetail, channelProductAgg]);
+
+  // salesDetail에서 채널/일자별 권장판매매출 집계 (recommended 유형용)
+  const recommendedByDateChannel = useMemo(() => {
+    const map = new Map<string, { jasa: number; coupang: number; kurly: number }>();
+    filteredSalesDetail.forEach(s => {
+      if (!s.recommendedRevenue || s.recommendedRevenue <= 0) return;
+      const existing = map.get(s.date) || { jasa: 0, coupang: 0, kurly: 0 };
+      const ch = (s.customer || '').toLowerCase();
+      if (ch.includes('자사') || ch.includes('jasa')) existing.jasa += s.recommendedRevenue;
+      else if (ch.includes('쿠팡')) existing.coupang += s.recommendedRevenue;
+      else if (ch.includes('컬리')) existing.kurly += s.recommendedRevenue;
+      map.set(s.date, existing);
+    });
+    return map;
+  }, [filteredSalesDetail]);
+
+  // 채널별 일자별 매출 데이터 (매출 유형별)
+  const channelDailyData = useMemo(() => {
+    return filteredDailySales
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(d => {
+        let jasa: number, coupang: number, kurly: number;
+        if (revenueType === 'recommended') {
+          // salesDetail에서 직접 집계된 권장판매매출 우선, 없으면 역산 폴백
+          const rec = recommendedByDateChannel.get(d.date);
+          if (rec && (rec.jasa + rec.coupang + rec.kurly) > 0) {
+            jasa = rec.jasa;
+            coupang = rec.coupang;
+            kurly = rec.kurly;
+          } else {
+            jasa = d.jasaHalf * 2;
+            coupang = d.coupangHalf * 2;
+            kurly = d.kurlyHalf * 2;
+          }
+        } else if (revenueType === 'independent') {
+          jasa = d.jasaHalf;
+          coupang = d.coupangHalf;
+          kurly = d.kurlyHalf;
+        } else {
+          jasa = d.jasaPrice;
+          coupang = d.coupangPrice;
+          kurly = d.kurlyPrice;
+        }
+        return {
+          date: d.date.slice(5),
+          fullDate: d.date,
+          자사몰: jasa,
+          쿠팡: coupang,
+          컬리: kurly,
+          합계: jasa + coupang + kurly,
+        };
+      });
+  }, [filteredDailySales, revenueType, recommendedByDateChannel]);
+
+  // 채널별 매출 유형별 합계
+  const channelRevenueSummary = useMemo(() => {
+    const sum = { 자사몰: 0, 쿠팡: 0, 컬리: 0, 합계: 0 };
+    channelDailyData.forEach(d => {
+      sum['자사몰'] += d['자사몰'];
+      sum['쿠팡'] += d['쿠팡'];
+      sum['컬리'] += d['컬리'];
+      sum['합계'] += d['합계'];
+    });
+    return sum;
+  }, [channelDailyData]);
 
   // 채널별 품목 교차 분석
   const channelProductComparison = useMemo(() => {
@@ -803,7 +870,9 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                               <tr className="border-b border-gray-200 dark:border-gray-700">
                                 <th className="text-left py-2 px-3 text-gray-500">품목명</th>
                                 <th className="text-right py-2 px-3 text-gray-500">판매량</th>
-                                <th className="text-right py-2 px-3 text-gray-500">매출</th>
+                                <th className="text-right py-2 px-3 text-gray-500">권장판매매출</th>
+                                <th className="text-right py-2 px-3 text-gray-500">정산매출</th>
+                                <th className="text-right py-2 px-3 text-gray-500">수수료율</th>
                                 <th className="text-right py-2 px-3 text-gray-500">원가</th>
                                 <th className="text-right py-2 px-3 text-gray-500">마진</th>
                                 <th className="text-right py-2 px-3 text-gray-500">마진율</th>
@@ -814,7 +883,9 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                                 <tr key={item.productCode} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                   <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
                                   <td className="py-2 px-3 text-right text-gray-500">{item.quantity.toLocaleString()}</td>
+                                  <td className="py-2 px-3 text-right text-blue-600">{item.recommendedRevenue > 0 ? formatCurrency(item.recommendedRevenue) : '-'}</td>
                                   <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.revenue)}</td>
+                                  <td className="py-2 px-3 text-right text-orange-600">{item.commissionRate > 0 ? `${item.commissionRate}%` : '-'}</td>
                                   <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.cost)}</td>
                                   <td className={`py-2 px-3 text-right font-medium ${item.margin > 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {formatCurrency(item.margin)}
@@ -875,8 +946,91 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
           const hhi = channelPie.reduce((s, c) => s + (c.share * c.share), 0);
           const diversification = hhi > 0 ? Math.round((10000 / hhi) * 10) / 10 : 0;
 
+          const REVENUE_TYPE_LABELS = {
+            settlement: '정산매출',
+            recommended: '권장판매매출',
+            independent: '독립채산제 매출',
+          } as const;
+          const REVENUE_TYPE_DESC = {
+            settlement: '할인 + 플랫폼 수수료 차감 후 실수령액',
+            recommended: '권장판매가 기준 매출 (정가)',
+            independent: '권장판매가의 50% (독립채산제 기준)',
+          } as const;
+
+          // 일평균 계산
+          const days = channelDailyData.length || 1;
+          const dailyAvg = channelRevenueSummary['합계'] / days;
+
           return (
             <div className="space-y-6">
+              {/* 매출 유형 선택 + KPI 요약 */}
+              <div className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">채널별 일자별 매출</h3>
+                  <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    {(['settlement', 'recommended', 'independent'] as const).map(type => (
+                      <button
+                        key={type}
+                        onClick={() => setRevenueType(type)}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          revenueType === type
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {REVENUE_TYPE_LABELS[type]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  <span className="material-icons-outlined text-xs align-middle mr-1">info</span>
+                  {REVENUE_TYPE_DESC[revenueType]}
+                </p>
+
+                {/* 합계 KPI 카드 */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+                  {(['자사몰', '쿠팡', '컬리'] as const).map(ch => (
+                    <div key={ch} className="rounded-lg p-3 border border-gray-100 dark:border-gray-700">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CHANNEL_COLORS[ch] || '#6B7280' }} />
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{ch}</p>
+                      </div>
+                      <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{formatCurrency(channelRevenueSummary[ch])}</p>
+                    </div>
+                  ))}
+                  <div className="rounded-lg p-3 border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">합계</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(channelRevenueSummary['합계'])}</p>
+                  </div>
+                  <div className="rounded-lg p-3 border border-gray-100 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">일평균</p>
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{formatCurrency(dailyAvg)}</p>
+                  </div>
+                </div>
+
+                {/* 채널별 일자별 매출 스택 차트 */}
+                {channelDailyData.length > 0 ? (
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={channelDailyData}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={Math.max(0, Math.floor(channelDailyData.length / 15))} />
+                        <YAxis tickFormatter={formatAxisKRW} tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          formatter={(v: number, name: string) => [formatCurrency(v), name]}
+                          labelFormatter={(label: string) => `${label}`}
+                        />
+                        <Legend />
+                        <Area type="monotone" dataKey="자사몰" stackId="1" fill={CHANNEL_COLORS['자사몰']} stroke={CHANNEL_COLORS['자사몰']} fillOpacity={0.6} />
+                        <Area type="monotone" dataKey="쿠팡" stackId="1" fill={CHANNEL_COLORS['쿠팡']} stroke={CHANNEL_COLORS['쿠팡']} fillOpacity={0.6} />
+                        <Area type="monotone" dataKey="컬리" stackId="1" fill={CHANNEL_COLORS['컬리']} stroke={CHANNEL_COLORS['컬리']} fillOpacity={0.6} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : <p className="text-gray-400 text-center py-6">일별 매출 데이터가 없습니다.</p>}
+              </div>
+
               {/* 채널별 KPI 카드 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {channelMetrics.map(c => (

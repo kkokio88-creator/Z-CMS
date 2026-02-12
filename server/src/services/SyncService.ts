@@ -85,12 +85,11 @@ export class SyncService {
         product_name: d.productName,
         date: d.date,
         customer: d.customer,
-        product_desc: d.productDesc,
-        spec: d.spec,
         quantity: d.quantity,
         supply_amount: d.supplyAmount,
         vat: d.vat,
         total: d.total,
+        recommended_revenue: d.recommendedRevenue,
       }));
 
       const productionRows: ProductionDailyRow[] = sheetData.production.map(d => ({

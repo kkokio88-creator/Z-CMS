@@ -121,16 +121,15 @@ function mapDailySalesFromDb(row: Record<string, any>): DailySalesData {
 
 function mapSalesDetailFromDb(row: Record<string, any>): SalesDetailData {
   return {
-    productCode: row.product_code ?? '',
-    productName: row.product_name ?? '',
     date: row.date ?? '',
     customer: row.customer ?? '',
-    productDesc: row.product_desc ?? '',
-    spec: row.spec ?? '',
+    productName: row.product_name ?? '',
+    productCode: row.product_code ?? '',
     quantity: row.quantity ?? 0,
     supplyAmount: row.supply_amount ?? 0,
     vat: row.vat ?? 0,
     total: row.total ?? 0,
+    recommendedRevenue: row.recommended_revenue ?? 0,
   };
 }
 

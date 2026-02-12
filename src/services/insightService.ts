@@ -63,12 +63,15 @@ export interface ProductProfitInsight {
     productCode: string;
     productName: string;
     revenue: number;
+    recommendedRevenue: number;
+    commissionRate: number;
     cost: number;
     margin: number;
     marginRate: number;
     quantity: number;
   }[];
   totalRevenue: number;
+  totalRecommendedRevenue: number;
   totalCost: number;
   totalMargin: number;
 }
@@ -519,7 +522,8 @@ export function computeChannelRevenue(
   dailySales: DailySalesData[],
   purchases: PurchaseData[] = [],
   channelCosts: ChannelCostSummary[] = [],
-  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
+  salesDetail: SalesDetailData[] = []
 ): ChannelRevenueInsight {
   let totalJasa = 0, totalCoupang = 0, totalKurly = 0;
 
@@ -540,6 +544,31 @@ export function computeChannelRevenue(
   // 조회 기간 일수 (고정비 일할계산용)
   const periodDays = dailySales.length || 1;
 
+  // salesDetail에서 채널별 권장판매매출 직접 집계 (있으면 역산 대신 사용)
+  const channelRecommendedMap = new Map<string, number>();
+  if (salesDetail.length > 0) {
+    salesDetail.forEach(s => {
+      if (s.recommendedRevenue > 0) {
+        const ch = s.customer || '';
+        channelRecommendedMap.set(ch, (channelRecommendedMap.get(ch) || 0) + s.recommendedRevenue);
+      }
+    });
+  }
+
+  // 채널명 매핑 (거래처명 → 채널명)
+  const resolveChannelRecommended = (channelName: string): number => {
+    // 직접 매치
+    if (channelRecommendedMap.has(channelName)) return channelRecommendedMap.get(channelName)!;
+    // 부분 매치 시도
+    for (const [key, val] of channelRecommendedMap) {
+      const lower = key.toLowerCase();
+      if (channelName === '자사몰' && (lower.includes('자사') || lower.includes('jasa'))) return val;
+      if (channelName === '쿠팡' && lower.includes('쿠팡')) return val;
+      if (channelName === '컬리' && lower.includes('컬리')) return val;
+    }
+    return 0;
+  };
+
   // 채널별 비용 요약 맵
   const costMap = new Map<string, ChannelCostSummary>();
   channelCosts.forEach(c => costMap.set(c.channelName, c));
@@ -553,28 +582,35 @@ export function computeChannelRevenue(
   let sumProfit1 = 0, sumProfit2 = 0, sumProfit3 = 0;
   let sumRecommended = 0, sumDiscount = 0, sumCommission = 0, sumMaterial = 0, sumDirectCost = 0;
 
+  const hasDetailRecommended = channelRecommendedMap.size > 0;
+
   const channels: ChannelProfitDetail[] = channelData.map(ch => {
     const share = totalRevenue > 0 ? (ch.revenue / totalRevenue) * 100 : 0;
     const cc = costMap.get(ch.name);
 
     // === 5단계 수익 구조 ===
-    // jasaPrice 등 = 채널 매출 (정산매출)
     const settlementRevenue = ch.revenue;
     const discountRate = (cc?.discountRate ?? 0) / 100;
     const commissionRate = (cc?.commissionRate ?? 0) / 100;
 
-    // 권장판매가 매출 = 정산매출 / (1 - 할인율 - 수수료율)
-    const denominator = 1 - discountRate - commissionRate;
-    const recommendedRevenue = denominator > 0
-      ? Math.round(settlementRevenue / denominator)
-      : settlementRevenue;
+    // 권장판매매출: salesDetail 실측값 우선, 없으면 역산 폴백
+    let recommendedRevenue: number;
+    if (hasDetailRecommended) {
+      const directRecommended = resolveChannelRecommended(ch.name);
+      recommendedRevenue = directRecommended > 0 ? directRecommended : settlementRevenue;
+    } else {
+      const denominator = 1 - discountRate - commissionRate;
+      recommendedRevenue = denominator > 0
+        ? Math.round(settlementRevenue / denominator)
+        : settlementRevenue;
+    }
     const discountAmount = Math.round(recommendedRevenue * discountRate);
-    const commissionAmount = Math.round(recommendedRevenue * commissionRate);
+    const commissionAmount = recommendedRevenue - settlementRevenue - discountAmount;
 
     // 재료비 = (권장판매가 / 1.1) × 50%  (부가세 제외 후 50%)
     const materialCost = Math.round((recommendedRevenue / 1.1) * 0.5);
 
-    // 기존 호환용 directCost (매출비례 배분 방식은 유지하되 materialCost를 우선 사용)
+    // 기존 호환용 directCost
     const directCost = materialCost;
 
     // 1단계: 제품이익 = 정산매출 - 재료비
@@ -639,11 +675,12 @@ export function computeProductProfit(
   salesDetail: SalesDetailData[],
   purchases: PurchaseData[]
 ): ProductProfitInsight {
-  // 품목별 매출 집계
-  const revenueMap = new Map<string, { name: string; revenue: number; qty: number }>();
+  // 품목별 매출 집계 (정산매출 + 권장판매매출)
+  const revenueMap = new Map<string, { name: string; revenue: number; recommendedRevenue: number; qty: number }>();
   salesDetail.forEach(s => {
-    const existing = revenueMap.get(s.productCode) || { name: s.productName, revenue: 0, qty: 0 };
+    const existing = revenueMap.get(s.productCode) || { name: s.productName, revenue: 0, recommendedRevenue: 0, qty: 0 };
     existing.revenue += s.total;
+    existing.recommendedRevenue += (s.recommendedRevenue || 0);
     existing.qty += s.quantity;
     revenueMap.set(s.productCode, existing);
   });
@@ -654,18 +691,25 @@ export function computeProductProfit(
     costMap.set(p.productCode, (costMap.get(p.productCode) || 0) + p.total);
   });
 
-  let totalRevenue = 0, totalCost = 0;
+  let totalRevenue = 0, totalRecommendedRevenue = 0, totalCost = 0;
 
   const items = Array.from(revenueMap.entries()).map(([code, data]) => {
     const cost = costMap.get(code) || 0;
     const margin = data.revenue - cost;
     const marginRate = data.revenue > 0 ? (margin / data.revenue) * 100 : 0;
+    // 수수료율 역산: 1 - (정산매출 / 권장판매매출)
+    const commissionRate = data.recommendedRevenue > 0
+      ? Math.round((1 - data.revenue / data.recommendedRevenue) * 1000) / 10
+      : 0;
     totalRevenue += data.revenue;
+    totalRecommendedRevenue += data.recommendedRevenue;
     totalCost += cost;
     return {
       productCode: code,
       productName: data.name,
       revenue: data.revenue,
+      recommendedRevenue: data.recommendedRevenue,
+      commissionRate,
       cost,
       margin,
       marginRate: Math.round(marginRate * 10) / 10,
@@ -676,6 +720,7 @@ export function computeProductProfit(
   return {
     items,
     totalRevenue,
+    totalRecommendedRevenue,
     totalCost,
     totalMargin: totalRevenue - totalCost,
   };
@@ -2532,7 +2577,7 @@ export function computeAllInsights(
   labor: LaborDailyData[] = [],
   inventorySnapshots: InventorySnapshotData[] = []
 ): DashboardInsights {
-  const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales, purchases, channelCosts, config) : null;
+  const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales, purchases, channelCosts, config, salesDetail) : null;
   const productProfit = salesDetail.length > 0 ? computeProductProfit(salesDetail, purchases) : null;
   const revenueTrend = dailySales.length > 0 ? computeRevenueTrend(dailySales, purchases, channelCosts, config) : null;
   const materialPrices = purchases.length > 0 ? computeMaterialPrices(purchases) : null;
@@ -2595,7 +2640,7 @@ export function computeAllInsights(
     if (sDates[0] < pStart || sDates[sDates.length - 1] > pEnd) {
       const alignedSales = dailySales.filter(d => d.date >= pStart && d.date <= pEnd);
       if (alignedSales.length > 0) {
-        const alignedCR = computeChannelRevenue(alignedSales, purchases, channelCosts, config);
+        const alignedCR = computeChannelRevenue(alignedSales, purchases, channelCosts, config, salesDetail);
         const alignedProd = production.filter(p => p.date >= pStart && p.date <= pEnd);
         const alignedWA = alignedProd.length > 0 ? computeWasteAnalysis(alignedProd, config, purchases) : wasteAnalysis;
         profitCenterScore = computeProfitCenterScore(alignedCR, costBreakdown, alignedWA, alignedProd, config);

@@ -42,16 +42,15 @@ function mapDailySalesFromDb(row: any): DailySalesData {
 
 function mapSalesDetailFromDb(row: any): SalesDetailData {
   return {
-    productCode: row.product_code ?? '',
-    productName: row.product_name ?? '',
     date: row.date ?? '',
     customer: row.customer ?? '',
-    productDesc: row.product_desc ?? '',
-    spec: row.spec ?? '',
+    productName: row.product_name ?? '',
+    productCode: row.product_code ?? '',
     quantity: row.quantity ?? 0,
     supplyAmount: row.supply_amount ?? 0,
     vat: row.vat ?? 0,
     total: row.total ?? 0,
+    recommendedRevenue: row.recommended_revenue ?? 0,
   };
 }
 
@@ -141,16 +140,15 @@ export interface DailySalesData {
 }
 
 export interface SalesDetailData {
-  productCode: string;
-  productName: string;
   date: string;
   customer: string;
-  productDesc: string;
-  spec: string;
+  productName: string;
+  productCode: string;
   quantity: number;
   supplyAmount: number;
   vat: number;
   total: number;
+  recommendedRevenue: number;
 }
 
 export interface ProductionData {

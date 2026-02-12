@@ -35,12 +35,11 @@ export interface SalesDetailRow {
   product_name: string;
   date: string;
   customer: string;
-  product_desc: string;
-  spec: string;
   quantity: number;
   supply_amount: number;
   vat: number;
   total: number;
+  recommended_revenue: number;
   synced_at?: string;
 }
 

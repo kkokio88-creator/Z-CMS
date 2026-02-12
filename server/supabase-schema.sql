@@ -29,15 +29,19 @@ CREATE TABLE IF NOT EXISTS sales_detail (
   product_name varchar(200),
   date date,
   customer varchar(200),
-  product_desc varchar(200),
-  spec varchar(200),
   quantity numeric DEFAULT 0,
   supply_amount numeric DEFAULT 0,
   vat numeric DEFAULT 0,
   total numeric DEFAULT 0,
+  recommended_revenue numeric DEFAULT 0,
   synced_at timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_sales_detail_date ON sales_detail(date);
+
+-- 마이그레이션: 판매 상세 스키마 변경 (기존 테이블이 있는 경우)
+-- ALTER TABLE sales_detail ADD COLUMN IF NOT EXISTS recommended_revenue numeric DEFAULT 0;
+-- ALTER TABLE sales_detail DROP COLUMN IF EXISTS product_desc;
+-- ALTER TABLE sales_detail DROP COLUMN IF EXISTS spec;
 
 -- 3. 생산/폐기
 CREATE TABLE IF NOT EXISTS production_daily (

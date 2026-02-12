@@ -60,8 +60,8 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
   const channelCosts = useMemo(() => getChannelCostSummaries(), []);
 
   const channelRevenue = useMemo(
-    () => filteredDailySales.length > 0 ? computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config) : null,
-    [filteredDailySales, filteredPurchases, channelCosts, config]
+    () => filteredDailySales.length > 0 ? computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config, filteredSalesDetail) : null,
+    [filteredDailySales, filteredPurchases, channelCosts, config, filteredSalesDetail]
   );
   const productProfit = useMemo(
     () => filteredSalesDetail.length > 0 ? computeProductProfit(filteredSalesDetail, filteredPurchases) : null,
