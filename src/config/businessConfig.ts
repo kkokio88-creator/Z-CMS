@@ -388,9 +388,10 @@ export function loadBusinessConfig(): BusinessConfig {
       const parsed = { ...DEFAULT_BUSINESS_CONFIG, ...JSON.parse(saved) };
       if (parsed.profitCenterGoals) {
         parsed.profitCenterGoals = migrateProfitCenterGoals(parsed.profitCenterGoals);
-        // 배수를 생산매출(targetProductionRevenue) 기준으로 재계산
         parsed.profitCenterGoals = parsed.profitCenterGoals.map((g: ProfitCenterGoal) => deriveMultipliersFromTargets(g));
       }
+      // manualInventoryAdjustment는 코드에서 관리하는 정확한 실재고 값 — localStorage 덮어쓰기 방지
+      parsed.manualInventoryAdjustment = DEFAULT_BUSINESS_CONFIG.manualInventoryAdjustment;
       return parsed;
     }
   } catch (e) {
