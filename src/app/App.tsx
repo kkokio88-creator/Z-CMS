@@ -233,14 +233,15 @@ function AppContent() {
       }
 
       if (!fSales.length || !fPurchases.length) return null;
-      const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, bizConfig);
+      const fSalesDetail = filterByDate(gsSalesDetail, fSales[0]?.date || start, fSales[fSales.length - 1]?.date || end);
+      const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, bizConfig, fSalesDetail);
       const cb = computeCostBreakdown(fPurchases, fUtilities, fProduction, bizConfig, fLabor, inventoryAdjustment);
       const wa = computeWasteAnalysis(fProduction, bizConfig, fPurchases);
       return computeProfitCenterScore(cr, cb, wa, fProduction, bizConfig);
     } catch {
       return null;
     }
-  }, [dateRange, gsDailySales, gsPurchases, gsProduction, gsUtilities, gsLabor, inventoryAdjustment, bizConfig, channelCosts]);
+  }, [dateRange, gsDailySales, gsSalesDetail, gsPurchases, gsProduction, gsUtilities, gsLabor, inventoryAdjustment, bizConfig, channelCosts]);
 
   const renderActiveView = () => {
     if (!initialLoadDone && isSyncing) {

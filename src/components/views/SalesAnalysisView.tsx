@@ -8,12 +8,13 @@ import { SubTabLayout } from '../layout';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../../utils/format';
 import type { DailySalesData, SalesDetailData, PurchaseData } from '../../services/googleSheetService';
 import type { DashboardInsights } from '../../services/insightService';
-import { computeProductProfit } from '../../services/insightService';
+import { computeProductProfit, computeChannelRevenue } from '../../services/insightService';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
 import { useUI } from '../../contexts/UIContext';
 import { getDateRange, filterByDate } from '../../utils/dateRange';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../../utils/weeklyAggregation';
 import { getChannelPricingSettings } from '../domain/ChannelCostAdmin';
+import { getChannelCostSummaries } from '../domain';
 
 interface Props {
   dailySales: DailySalesData[];
@@ -306,7 +307,12 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
       {(activeTab) => {
         // ========== 매출 트렌드 ==========
         if (activeTab === 'trend') {
-          const totalRevenue = filteredDailySales.reduce((s, d) => s + d.totalRevenue, 0);
+          // 정산매출 (salesDetail 공급가액 기준, 채널 매칭)
+          const channelCosts = getChannelCostSummaries();
+          const cr = computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config, filteredSalesDetail);
+          const totalRevenue = cr.totalRawSupplyAmount > 0
+            ? cr.totalRawSupplyAmount - cr.totalPromotionDiscountAmount
+            : filteredDailySales.reduce((s, d) => s + d.totalRevenue, 0);
           const totalDays = filteredDailySales.length || 1;
           const avgDailyRevenue = Math.round(totalRevenue / totalDays);
           const totalTxCount = filteredSalesDetail.length;
@@ -348,7 +354,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
               {/* KPI */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">총 매출</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">정산매출</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalRevenue)}</p>
                 </div>
                 <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">

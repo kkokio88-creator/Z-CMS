@@ -66,7 +66,9 @@ export function useSyncManager(dateRange: DateRangeOption) {
   const [gsMaterialMaster, setGsMaterialMaster] = useState<MaterialMasterItem[]>([]);
   const [gsInventorySnapshots, setGsInventorySnapshots] = useState<InventorySnapshotData[]>([]);
   const [gsChannelProfit, setGsChannelProfit] = useState<ChannelProfitItem[]>([]);
-  const [inventoryAdjustment, setInventoryAdjustment] = useState<InventoryAdjustment | null>(null);
+  const [inventoryAdjustment, setInventoryAdjustment] = useState<InventoryAdjustment | null>(
+    bizConfig.manualInventoryAdjustment ?? null
+  );
 
   // Insights State
   const [insights, setInsights] = useState<DashboardInsights | null>(null);
@@ -430,8 +432,12 @@ export function useSyncManager(dateRange: DateRangeOption) {
         console.log('[inventoryAdjustment] 결과:', adj);
         setInventoryAdjustment(adj);
       } catch (err) {
-        console.warn('[App] 재고 조정 데이터 fetch 실패 (매입액 기반 폴백):', err);
-        setInventoryAdjustment(null);
+        console.warn('[App] 재고 조정 데이터 fetch 실패:', err);
+        if (bizConfig.manualInventoryAdjustment) {
+          setInventoryAdjustment(bizConfig.manualInventoryAdjustment);
+        } else {
+          setInventoryAdjustment(null);
+        }
       }
     };
 
