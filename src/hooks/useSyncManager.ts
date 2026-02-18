@@ -222,14 +222,16 @@ export function useSyncManager(dateRange: DateRangeOption) {
         }
       }
 
-      // Insight 분석 (Supabase 실데이터 기반)
+      // Insight 분석 (출고일 변환된 데이터 기반)
       if (gsResult) {
         try {
+          const shippedDailySales = toShippingDateBasis(gsResult.dailySales || []);
+          const shippedPurchases = toShippingDatePurchases(gsResult.purchases || []);
           const computed = computeAllInsights(
-            gsResult.dailySales || [],
+            shippedDailySales,
             gsResult.salesDetail || [],
             gsResult.production || [],
-            gsResult.purchases || [],
+            shippedPurchases,
             gsResult.utilities || [],
             currentInventoryData,
             channelCosts,
