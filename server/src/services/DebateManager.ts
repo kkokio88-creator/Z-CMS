@@ -21,6 +21,8 @@ import {
   MessagePriority,
 } from '../types';
 import { WipManager } from './WipManager';
+import type { SupabaseAdapter } from '../adapters/SupabaseAdapter';
+import { debateRecordToRow, debateRowToRecord } from '../utils/debateSerializer';
 
 // 팀 -> 도메인 매핑
 const TEAM_TO_DOMAIN: Record<DomainTeam, InsightDomain> = {
@@ -36,6 +38,7 @@ export class DebateManager extends EventEmitter {
   private debateHistory: DebateRecord[] = [];
   private debateQueue: DebateStartRequest[] = [];
   private wipManager: WipManager;
+  private persistence?: SupabaseAdapter;
   private maxActiveDebates: number;
   private maxHistorySize: number;
 
@@ -44,12 +47,55 @@ export class DebateManager extends EventEmitter {
     options: {
       maxActiveDebates?: number;
       maxHistorySize?: number;
+      persistence?: SupabaseAdapter;
     } = {}
   ) {
     super();
     this.wipManager = wipManager;
+    this.persistence = options.persistence;
     this.maxActiveDebates = options.maxActiveDebates ?? 10;
     this.maxHistorySize = options.maxHistorySize ?? 100;
+  }
+
+  /**
+   * DB에서 토론 복원 (서버 시작 시 호출)
+   */
+  async restoreFromDatabase(): Promise<void> {
+    if (!this.persistence) return;
+
+    try {
+      const [activeRows, historyRows] = await Promise.all([
+        this.persistence.getActiveDebates(),
+        this.persistence.getDebateHistory(this.maxHistorySize),
+      ]);
+
+      for (const row of activeRows) {
+        const record = debateRowToRecord(row);
+        this.activeDebates.set(record.id, record);
+      }
+
+      this.debateHistory = historyRows.map(debateRowToRecord);
+
+      console.log(
+        `[DebateManager] DB 복원 완료: 활성 ${activeRows.length}건, 히스토리 ${historyRows.length}건`
+      );
+    } catch (err: unknown) {
+      console.warn(
+        '[DebateManager] DB 복원 실패 (인메모리 모드로 계속):',
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
+  /** non-blocking DB 영속화 (실패해도 인메모리 동작에 영향 없음) */
+  private persistDebate(debate: DebateRecord): void {
+    if (!this.persistence) return;
+    this.persistence.upsertDebate(debateRecordToRow(debate)).catch(err => {
+      console.warn(
+        `[DebateManager] DB 영속화 실패 (${debate.id}):`,
+        err instanceof Error ? err.message : String(err)
+      );
+    });
   }
 
   /**
@@ -91,6 +137,7 @@ export class DebateManager extends EventEmitter {
 
     // WIP 파일 생성
     await this.wipManager.writeDebateLog(debate);
+    this.persistDebate(debate);
 
     // 이벤트 발행
     this.emitDebateEvent('debate_started', debate);
@@ -128,6 +175,7 @@ export class DebateManager extends EventEmitter {
 
     // WIP 파일 업데이트
     await this.wipManager.updateDebateLog(debateId, debate);
+    this.persistDebate(debate);
 
     // 이벤트 발행
     this.emitDebateEvent('round_completed', debate);
@@ -160,6 +208,7 @@ export class DebateManager extends EventEmitter {
 
     // WIP 파일 업데이트
     await this.wipManager.updateDebateLog(debateId, debate);
+    this.persistDebate(debate);
 
     // 이벤트 발행
     this.emitDebateEvent('governance_reviewed', debate);
@@ -191,6 +240,7 @@ export class DebateManager extends EventEmitter {
 
     // WIP 파일 최종 업데이트
     await this.wipManager.updateDebateLog(debateId, debate);
+    this.persistDebate(debate);
 
     // 이벤트 발행
     this.emitDebateEvent('debate_completed', debate);
@@ -357,6 +407,7 @@ export class DebateManager extends EventEmitter {
     this.debateHistory.unshift(debate);
 
     await this.wipManager.updateDebateLog(debateId, debate);
+    this.persistDebate(debate);
 
     console.log(`[DebateManager] 토론 취소: ${debateId} - ${reason}`);
   }

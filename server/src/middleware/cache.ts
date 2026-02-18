@@ -10,9 +10,26 @@ interface CacheEntry {
 class MemoryCache {
   private store = new Map<string, CacheEntry>();
   private defaultTTL: number;
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(defaultTTLSeconds: number = 300) {
     this.defaultTTL = defaultTTLSeconds * 1000;
+    // 만료 항목 자동 정리 (TTL의 2배 간격)
+    this.cleanupTimer = setInterval(() => this.purgeExpired(), this.defaultTTL * 2);
+  }
+
+  private purgeExpired(): void {
+    const now = Date.now();
+    let purged = 0;
+    for (const [key, entry] of this.store) {
+      if (now - entry.createdAt > this.defaultTTL) {
+        this.store.delete(key);
+        purged++;
+      }
+    }
+    if (purged > 0) {
+      console.log(`[Cache] ${purged}개 만료 항목 정리 (남은 ${this.store.size}건)`);
+    }
   }
 
   get(key: string): CacheEntry | null {
@@ -79,13 +96,15 @@ export function cacheMiddleware(req: Request, res: Response, next: NextFunction)
   // 원본 json 메서드를 오버라이드하여 응답을 캐시에 저장
   const originalJson = res.json.bind(res);
   res.json = function (body: any) {
-    cache.set(key, {
-      data: body,
-      headers: {},
-      statusCode: res.statusCode,
-      createdAt: Date.now(),
-    });
-    res.setHeader('X-Cache', 'MISS');
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      cache.set(key, {
+        data: body,
+        headers: {},
+        statusCode: res.statusCode,
+        createdAt: Date.now(),
+      });
+      res.setHeader('X-Cache', 'MISS');
+    }
     return originalJson(body);
   } as any;
 

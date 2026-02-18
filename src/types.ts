@@ -74,6 +74,13 @@ export interface StocktakeAnomalyItem {
   actionStatus?: 'none' | 'adjusted' | 'recount_requested';
 }
 
+// --- Modal Item Discriminated Union ---
+export type ModalItem =
+  | (ProfitRankItem & { kind: 'profit' })
+  | (InventorySafetyItem & { kind: 'inventory' })
+  | (StocktakeAnomalyItem & { kind: 'stocktake' })
+  | (BomDiffItem & { kind: 'bom' });
+
 // --- Notification Type ---
 export interface Notification {
   id: string;

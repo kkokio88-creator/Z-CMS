@@ -29,7 +29,7 @@ export const fetchOrderRecommendation = async (): Promise<OrderRecommendation | 
     }
 
     return result.data as OrderRecommendation;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Order recommendation error:', e);
     return null;
   }

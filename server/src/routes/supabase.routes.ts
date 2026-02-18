@@ -4,8 +4,15 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { syncService } from '../services/SyncService.js';
 import { supabaseAdapter } from '../adapters/SupabaseAdapter.js';
+import { validateBody } from '../middleware/validate.js';
+
+const agentStateSchema = z.object({}).passthrough().refine(
+  val => Object.keys(val).length > 0,
+  { message: '빈 상태 객체는 저장할 수 없습니다' }
+);
 
 const router = Router();
 
@@ -30,8 +37,8 @@ router.post('/sync/google-sheets', async (req: Request, res: Response) => {
       duration: result.duration,
       skippedTables: result.skippedTables,
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -50,8 +57,8 @@ router.post('/sync/ecount', async (_req: Request, res: Response) => {
       records: result.records,
       duration: result.duration,
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -77,8 +84,8 @@ router.post('/sync/all', async (_req: Request, res: Response) => {
           ? ecountResult.value
           : { success: false, error: (ecountResult as PromiseRejectedResult).reason?.message },
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -102,8 +109,8 @@ router.get('/sync/status', async (_req: Request, res: Response) => {
       },
       recentLogs: logs,
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -122,8 +129,8 @@ router.get('/data/daily-sales', async (req: Request, res: Response) => {
       to as string | undefined
     );
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -138,8 +145,8 @@ router.get('/data/sales-detail', async (req: Request, res: Response) => {
       to as string | undefined
     );
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -154,8 +161,8 @@ router.get('/data/production', async (req: Request, res: Response) => {
       to as string | undefined
     );
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -170,8 +177,8 @@ router.get('/data/purchases', async (req: Request, res: Response) => {
       to as string | undefined
     );
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -182,8 +189,8 @@ router.get('/data/inventory', async (_req: Request, res: Response) => {
   try {
     const data = await supabaseAdapter.getInventory();
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -198,8 +205,8 @@ router.get('/data/utilities', async (req: Request, res: Response) => {
       to as string | undefined
     );
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -215,8 +222,8 @@ router.get('/data/labor', async (req: Request, res: Response) => {
       to as string | undefined
     );
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -229,8 +236,8 @@ router.get('/data/bom', async (req: Request, res: Response) => {
     const { source } = req.query;
     const data = await supabaseAdapter.getBom(source as string | undefined);
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -242,8 +249,8 @@ router.get('/data/material-master', async (_req: Request, res: Response) => {
   try {
     const data = await supabaseAdapter.getMaterialMaster();
     res.json({ success: true, data, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -261,6 +268,63 @@ router.get('/data/health', async (_req: Request, res: Response) => {
 });
 
 // ==============================
+// 데이터 정합성 검증
+// ==============================
+
+/**
+ * GET /api/data/validate
+ * Supabase 테이블별 행 수 + 데이터 정합성 검증
+ */
+router.get('/data/validate', async (_req: Request, res: Response) => {
+  try {
+    const [counts, salesValidation, channelValidation, lastSync] = await Promise.all([
+      supabaseAdapter.getTableCounts(),
+      supabaseAdapter.validateSalesDetail(),
+      supabaseAdapter.validateDailySalesChannels(),
+      supabaseAdapter.getRecentSyncLogs(1),
+    ]);
+
+    const issues: string[] = [];
+
+    // 빈 테이블 감지
+    for (const [table, count] of Object.entries(counts)) {
+      if (count === 0) issues.push(`${table}: 데이터 없음 (0행)`);
+      if (count === -1) issues.push(`${table}: 조회 실패`);
+    }
+
+    // sales_detail 비정상 데이터
+    if (salesValidation.zeroRecommended > 0) {
+      issues.push(`sales_detail: 권장판매매출 0인 행 ${salesValidation.zeroRecommended}건`);
+    }
+    if (salesValidation.mismatchRows > 0) {
+      issues.push(`sales_detail: 권장판매매출 < 공급가액인 비정상 행 ${salesValidation.mismatchRows}건`);
+    }
+
+    // daily_sales 채널 합계 불일치
+    if (channelValidation.mismatchRows.length > 0) {
+      issues.push(`daily_sales: 채널 합계 ≠ totalRevenue 불일치 ${channelValidation.mismatchRows.length}건`);
+    }
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      tableCounts: counts,
+      salesDetail: salesValidation,
+      dailySalesChannels: {
+        totalRows: channelValidation.totalRows,
+        mismatchCount: channelValidation.mismatchRows.length,
+        samples: channelValidation.mismatchRows,
+      },
+      lastSync: lastSync[0] || null,
+      issues,
+      healthy: issues.length === 0,
+    });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// ==============================
 // 에이전트 상태 영구 저장
 // ==============================
 
@@ -268,14 +332,14 @@ router.get('/data/health', async (_req: Request, res: Response) => {
  * PUT /api/agent-state/:agentId
  * 에이전트 상태 저장
  */
-router.put('/agent-state/:agentId', async (req: Request, res: Response) => {
+router.put('/agent-state/:agentId', validateBody(agentStateSchema), async (req: Request, res: Response) => {
   try {
     const agentId = req.params.agentId as string;
     const state = req.body;
     await supabaseAdapter.saveAgentState(agentId, state);
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -288,8 +352,8 @@ router.get('/agent-state/:agentId', async (req: Request, res: Response) => {
     const agentId = req.params.agentId as string;
     const state = await supabaseAdapter.loadAgentState(agentId);
     res.json({ success: true, data: state });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 

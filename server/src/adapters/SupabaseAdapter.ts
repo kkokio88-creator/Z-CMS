@@ -283,26 +283,39 @@ export class SupabaseAdapter {
     if (rows.length === 0) return 0;
     const client = this.getClient();
 
-    // sales_detail has no natural unique key, so delete-then-insert
-    // Delete existing records for the date range in this batch
-    const dates = [...new Set(rows.map(r => r.date).filter(Boolean))];
-    if (dates.length > 0) {
-      await client.from('sales_detail').delete().in('date', dates);
+    // 날짜별 그룹핑 → RPC로 원자적 DELETE+INSERT (트랜잭션 안전)
+    const byDate = new Map<string, SalesDetailRow[]>();
+    for (const r of rows) {
+      if (!r.date) continue;
+      const arr = byDate.get(r.date) || [];
+      arr.push(r);
+      byDate.set(r.date, arr);
     }
 
-    // Insert in batches of 500
-    const batchSize = 500;
-    for (let i = 0; i < rows.length; i += batchSize) {
-      const batch = rows.slice(i, i + batchSize).map(r => ({
-        ...r,
-        synced_at: new Date().toISOString(),
-      }));
+    let totalInserted = 0;
+    const errors: string[] = [];
+    const syncedAt = new Date().toISOString();
 
-      const { error } = await client.from('sales_detail').insert(batch);
-      if (error) throw new Error(`sales_detail insert failed: ${error.message}`);
+    for (const [date, dateRows] of byDate) {
+      try {
+        const jsonRows = dateRows.map(r => ({ ...r, synced_at: syncedAt }));
+        const { data, error } = await client.rpc('upsert_sales_detail_by_date', {
+          p_date: date,
+          p_rows: jsonRows,
+        });
+        if (error) throw error;
+        totalInserted += (data as number) ?? dateRows.length;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        errors.push(`${date}: ${msg}`);
+        console.error(`[SupabaseAdapter] sales_detail ${date} 동기화 실패:`, msg);
+      }
     }
 
-    return rows.length;
+    if (errors.length > 0) {
+      console.warn(`[SupabaseAdapter] sales_detail 부분 실패 (${errors.length}/${byDate.size} 날짜): ${errors[0]}`);
+    }
+    return totalInserted;
   }
 
   async getSalesDetail(dateFrom?: string, dateTo?: string): Promise<SalesDetailRow[]> {
@@ -340,24 +353,39 @@ export class SupabaseAdapter {
     if (rows.length === 0) return 0;
     const client = this.getClient();
 
-    // Delete existing records for the date range
-    const dates = [...new Set(rows.map(r => r.date).filter(Boolean))];
-    if (dates.length > 0) {
-      await client.from('purchases').delete().in('date', dates);
+    // 날짜별 그룹핑 → RPC로 원자적 DELETE+INSERT (트랜잭션 안전)
+    const byDate = new Map<string, PurchaseRow[]>();
+    for (const r of rows) {
+      if (!r.date) continue;
+      const arr = byDate.get(r.date) || [];
+      arr.push(r);
+      byDate.set(r.date, arr);
     }
 
-    const batchSize = 500;
-    for (let i = 0; i < rows.length; i += batchSize) {
-      const batch = rows.slice(i, i + batchSize).map(r => ({
-        ...r,
-        synced_at: new Date().toISOString(),
-      }));
+    let totalInserted = 0;
+    const errors: string[] = [];
+    const syncedAt = new Date().toISOString();
 
-      const { error } = await client.from('purchases').insert(batch);
-      if (error) throw new Error(`purchases insert failed: ${error.message}`);
+    for (const [date, dateRows] of byDate) {
+      try {
+        const jsonRows = dateRows.map(r => ({ ...r, synced_at: syncedAt }));
+        const { data, error } = await client.rpc('upsert_purchases_by_date', {
+          p_date: date,
+          p_rows: jsonRows,
+        });
+        if (error) throw error;
+        totalInserted += (data as number) ?? dateRows.length;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        errors.push(`${date}: ${msg}`);
+        console.error(`[SupabaseAdapter] purchases ${date} 동기화 실패:`, msg);
+      }
     }
 
-    return rows.length;
+    if (errors.length > 0) {
+      console.warn(`[SupabaseAdapter] purchases 부분 실패 (${errors.length}/${byDate.size} 날짜): ${errors[0]}`);
+    }
+    return totalInserted;
   }
 
   async getPurchases(dateFrom?: string, dateTo?: string): Promise<PurchaseRow[]> {
@@ -372,19 +400,33 @@ export class SupabaseAdapter {
     if (rows.length === 0) return 0;
     const client = this.getClient();
 
+    const today = new Date().toISOString().slice(0, 10);
     const { error } = await client
       .from('inventory')
       .upsert(
         rows.map(r => ({
           ...r,
-          snapshot_date: r.snapshot_date || new Date().toISOString().slice(0, 10),
+          snapshot_date: r.snapshot_date || today,
           synced_at: new Date().toISOString(),
         })),
-        { onConflict: 'product_code,warehouse_code' }
+        { onConflict: 'product_code,warehouse_code,snapshot_date' }
       );
 
     if (error) throw new Error(`inventory upsert failed: ${error.message}`);
     return rows.length;
+  }
+
+  /** 특정 날짜의 재고 스냅샷 조회 (해당일 이전 가장 최근) */
+  async getInventoryAtDate(targetDate: string): Promise<InventoryRow[]> {
+    const client = this.getClient();
+    const { data, error } = await client.rpc('get_inventory_at_date', {
+      p_date: targetDate,
+    });
+    if (error) {
+      console.error(`[SupabaseAdapter] getInventoryAtDate(${targetDate}) 실패:`, error.message);
+      return [];
+    }
+    return (data ?? []) as InventoryRow[];
   }
 
   async getInventory(): Promise<InventoryRow[]> {
@@ -619,16 +661,14 @@ export class SupabaseAdapter {
   }, stopOnError = false): Promise<{ success: boolean; records: Record<string, number>; errors: string[] }> {
     const records: Record<string, number> = {};
     const errors: string[] = [];
-    const batchTimestamp = new Date().toISOString();
-    const completedTables: string[] = [];
 
     const tableOps = [
-      { key: 'dailySales', data: operations.dailySales, fn: () => this.upsertDailySales(operations.dailySales!), table: 'daily_sales' },
-      { key: 'salesDetail', data: operations.salesDetail, fn: () => this.upsertSalesDetail(operations.salesDetail!), table: 'sales_detail' },
-      { key: 'production', data: operations.production, fn: () => this.upsertProductionDaily(operations.production!), table: 'production_daily' },
-      { key: 'purchases', data: operations.purchases, fn: () => this.upsertPurchases(operations.purchases!), table: 'purchases' },
-      { key: 'utilities', data: operations.utilities, fn: () => this.upsertUtilities(operations.utilities!), table: 'utilities' },
-      { key: 'inventory', data: operations.inventory, fn: () => this.upsertInventory(operations.inventory!), table: 'inventory' },
+      { key: 'dailySales', data: operations.dailySales, fn: () => this.upsertDailySales(operations.dailySales!) },
+      { key: 'salesDetail', data: operations.salesDetail, fn: () => this.upsertSalesDetail(operations.salesDetail!) },
+      { key: 'production', data: operations.production, fn: () => this.upsertProductionDaily(operations.production!) },
+      { key: 'purchases', data: operations.purchases, fn: () => this.upsertPurchases(operations.purchases!) },
+      { key: 'utilities', data: operations.utilities, fn: () => this.upsertUtilities(operations.utilities!) },
+      { key: 'inventory', data: operations.inventory, fn: () => this.upsertInventory(operations.inventory!) },
     ];
 
     for (const op of tableOps) {
@@ -636,13 +676,11 @@ export class SupabaseAdapter {
 
       try {
         records[op.key] = await op.fn();
-        completedTables.push(op.table);
-      } catch (e: any) {
-        errors.push(`${op.key}: ${e.message}`);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        errors.push(`${op.key}: ${msg}`);
         if (stopOnError) {
-          // 롤백: 이미 저장된 테이블에서 batchTimestamp 이후 데이터 제거
-          console.error(`[SupabaseAdapter] batchUpsert 중단 at ${op.key}, 롤백 시도...`);
-          await this.rollbackAfterTimestamp(completedTables, batchTimestamp);
+          console.error(`[SupabaseAdapter] batchUpsert 중단 at ${op.key}`);
           break;
         }
       }
@@ -653,19 +691,6 @@ export class SupabaseAdapter {
       records,
       errors,
     };
-  }
-
-  /** synced_at >= timestamp 인 행을 삭제하여 롤백 */
-  private async rollbackAfterTimestamp(tables: string[], timestamp: string): Promise<void> {
-    const client = this.getClient();
-    for (const table of tables) {
-      try {
-        await client.from(table).delete().gte('synced_at', timestamp);
-        console.log(`[SupabaseAdapter] 롤백 완료: ${table}`);
-      } catch (e: any) {
-        console.error(`[SupabaseAdapter] 롤백 실패: ${table} - ${e.message}`);
-      }
-    }
   }
 
   // ==============================
@@ -699,6 +724,148 @@ export class SupabaseAdapter {
     return data.state;
   }
 
+  /**
+   * 각 테이블별 행 수 조회 (데이터 정합성 검증용)
+   */
+  async getTableCounts(): Promise<Record<string, number>> {
+    const client = this.getClient();
+    const tables = ['daily_sales', 'sales_detail', 'production_daily', 'purchases', 'inventory', 'utilities', 'labor_daily', 'bom', 'material_master'];
+    const counts: Record<string, number> = {};
+
+    await Promise.all(tables.map(async (table) => {
+      const { count, error } = await client.from(table).select('*', { count: 'exact', head: true });
+      counts[table] = error ? -1 : (count ?? 0);
+    }));
+
+    return counts;
+  }
+
+  /**
+   * sales_detail 정합성 검증: 비정상 데이터 탐지
+   */
+  async validateSalesDetail(): Promise<{
+    totalRows: number;
+    zeroRecommended: number;
+    negativeSupply: number;
+    mismatchRows: number;
+  }> {
+    const client = this.getClient();
+    const pageSize = 1000;
+    let totalRows = 0;
+    let zeroRecommended = 0;
+    let negativeSupply = 0;
+    let mismatchRows = 0;
+    let from = 0;
+
+    while (true) {
+      const { data, error } = await client
+        .from('sales_detail')
+        .select('supply_amount, recommended_revenue')
+        .range(from, from + pageSize - 1);
+
+      if (error || !data || data.length === 0) break;
+
+      for (const row of data) {
+        totalRows++;
+        const sa = row.supply_amount ?? 0;
+        const rr = row.recommended_revenue ?? 0;
+
+        if (rr === 0 && sa !== 0) zeroRecommended++;
+        if (sa < 0) negativeSupply++;
+        // 권장판매매출이 공급가액보다 작으면 비정상 (배송행 제외)
+        if (rr > 0 && sa > 0 && rr < sa) mismatchRows++;
+      }
+
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+
+    return { totalRows, zeroRecommended, negativeSupply, mismatchRows };
+  }
+
+  /**
+   * daily_sales 채널 합계 검증
+   */
+  async validateDailySalesChannels(): Promise<{
+    totalRows: number;
+    mismatchRows: { date: string; channelSum: number; totalRevenue: number; diff: number }[];
+  }> {
+    const client = this.getClient();
+    const { data, error } = await client
+      .from('daily_sales')
+      .select('date, jasa_price, coupang_price, kurly_price, total_revenue, frozen_soup, etc, bibimbap, jasa_half, coupang_half, kurly_half, frozen_half, etc_half')
+      .order('date', { ascending: false });
+
+    if (error || !data) return { totalRows: 0, mismatchRows: [] };
+
+    const mismatches: { date: string; channelSum: number; totalRevenue: number; diff: number }[] = [];
+
+    for (const row of data) {
+      const channelSum = (row.jasa_price ?? 0) + (row.coupang_price ?? 0) + (row.kurly_price ?? 0);
+      const totalRevenue = row.total_revenue ?? 0;
+      const diff = Math.abs(channelSum - totalRevenue);
+      // 1원 이상 차이면 불일치 (반올림 오차 허용)
+      if (diff > 1) {
+        mismatches.push({ date: row.date, channelSum, totalRevenue, diff });
+      }
+    }
+
+    return { totalRows: data.length, mismatchRows: mismatches.slice(0, 20) };
+  }
+
+  // ==============================
+  // Debates (토론 영속화)
+  // ==============================
+
+  async upsertDebate(row: import('../utils/debateSerializer.js').DebateRow): Promise<void> {
+    const client = this.getClient();
+    const { error } = await client
+      .from('debates')
+      .upsert({
+        ...row,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
+
+    if (error) throw new Error(`debates upsert failed: ${error.message}`);
+  }
+
+  async getDebate(id: string): Promise<import('../utils/debateSerializer.js').DebateRow | null> {
+    const client = this.getClient();
+    const { data, error } = await client
+      .from('debates')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) return null;
+    return data as import('../utils/debateSerializer.js').DebateRow;
+  }
+
+  async getActiveDebates(): Promise<import('../utils/debateSerializer.js').DebateRow[]> {
+    const client = this.getClient();
+    const { data, error } = await client
+      .from('debates')
+      .select('*')
+      .neq('current_phase', 'complete')
+      .order('started_at', { ascending: false });
+
+    if (error || !data) return [];
+    return data as import('../utils/debateSerializer.js').DebateRow[];
+  }
+
+  async getDebateHistory(limit = 100): Promise<import('../utils/debateSerializer.js').DebateRow[]> {
+    const client = this.getClient();
+    const { data, error } = await client
+      .from('debates')
+      .select('*')
+      .eq('current_phase', 'complete')
+      .order('completed_at', { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+    return data as import('../utils/debateSerializer.js').DebateRow[];
+  }
+
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
       const client = this.getClient();
@@ -709,8 +876,8 @@ export class SupabaseAdapter {
       }
 
       return { success: true, message: 'Supabase 연결 성공' };
-    } catch (err: any) {
-      return { success: false, message: err.message };
+    } catch (err: unknown) {
+      return { success: false, message: err instanceof Error ? err.message : String(err) };
     }
   }
 }

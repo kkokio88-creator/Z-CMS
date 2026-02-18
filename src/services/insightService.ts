@@ -17,7 +17,7 @@ import type {
 import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
 import { BusinessConfig, DEFAULT_BUSINESS_CONFIG, ProfitCenterGoal } from '../config/businessConfig';
-import type { ChannelCostSummary } from '../components/ChannelCostAdmin';
+import type { ChannelCostSummary } from '../components/domain';
 
 // ==============================
 // 타입 정의
@@ -30,7 +30,9 @@ export interface ChannelProfitDetail {
   recommendedRevenue: number;  // 권장판매가 매출
   discountAmount: number;      // 할인금액
   commissionAmount: number;    // 플랫폼 수수료
-  settlementRevenue: number;   // 정산매출 (= revenue)
+  rawSupplyAmount: number;     // 공급가액 (ECOUNT 원본)
+  promotionDiscountAmount: number; // 할인매출 (공급가액 × 할인매출비율)
+  settlementRevenue: number;   // 정산매출 = 공급가액 - 할인매출
   materialCost: number;        // 재료비 (권장판매가/1.1 × 50%)
   directCost: number;          // 직접재료비 (매출비례 배분) — 기존 호환
   profit1: number;             // 1단계: 제품이익 = 정산매출 - 재료비
@@ -51,6 +53,8 @@ export interface ChannelRevenueInsight {
   totalRecommendedRevenue: number;
   totalDiscountAmount: number;
   totalCommissionAmount: number;
+  totalRawSupplyAmount: number;
+  totalPromotionDiscountAmount: number;
   totalMaterialCost: number;
   totalDirectCost: number;
   totalProfit1: number;
@@ -564,8 +568,8 @@ export function computeChannelRevenue(
     // 부분 매치 시도
     for (const [key, val] of map) {
       const lower = key.toLowerCase();
-      if (channelName === '자사몰' && (lower.includes('자사') || lower.includes('jasa') || lower.includes('고도몰'))) return val;
-      if (channelName === '쿠팡' && lower.includes('쿠팡')) return val;
+      if (channelName === '자사몰' && (lower.includes('자사') || lower.includes('jasa') || lower.includes('고도몰') || lower.includes('집반찬'))) return val;
+      if (channelName === '쿠팡' && (lower.includes('쿠팡') || lower.includes('포워드'))) return val;
       if (channelName === '컬리' && lower.includes('컬리')) return val;
     }
     return 0;
@@ -583,6 +587,7 @@ export function computeChannelRevenue(
 
   let sumProfit1 = 0, sumProfit2 = 0, sumProfit3 = 0;
   let sumRecommended = 0, sumDiscount = 0, sumCommission = 0, sumMaterial = 0, sumDirectCost = 0;
+  let sumRawSupply = 0, sumPromoDiscount = 0;
 
   const hasDetailData = channelSettlementMap.size > 0 || channelRecommendedMap.size > 0;
 
@@ -594,14 +599,19 @@ export function computeChannelRevenue(
     const discountRate = (cc?.discountRate ?? 0) / 100;
     const commissionRate = (cc?.commissionRate ?? 0) / 100;
 
-    // 정산매출: salesDetail 공급가액 합계 우선, 없으면 dailySales 폴백
-    let settlementRevenue: number;
+    // 공급가액: salesDetail 공급가액 합계 우선, 없으면 dailySales 폴백
+    let rawSupplyAmount: number;
     if (hasDetailData && channelSettlementMap.size > 0) {
       const directSettlement = resolveChannelMap(ch.name, channelSettlementMap);
-      settlementRevenue = directSettlement > 0 ? directSettlement : ch.revenue;
+      rawSupplyAmount = directSettlement > 0 ? directSettlement : ch.revenue;
     } else {
-      settlementRevenue = ch.revenue;
+      rawSupplyAmount = ch.revenue;
     }
+
+    // 정산매출 = 공급가액 - 할인매출 (promotionDiscountRate 적용)
+    const promoRate = (cc?.promotionDiscountRate ?? 0) / 100;
+    const promotionDiscountAmount = Math.round(rawSupplyAmount * promoRate);
+    const settlementRevenue = rawSupplyAmount - promotionDiscountAmount;
 
     // 권장판매매출: salesDetail 실측값 우선, 없으면 역산 폴백
     let recommendedRevenue: number;
@@ -615,7 +625,7 @@ export function computeChannelRevenue(
         : settlementRevenue;
     }
     const discountAmount = Math.round(recommendedRevenue * discountRate);
-    const commissionAmount = recommendedRevenue - settlementRevenue - discountAmount;
+    const commissionAmount = recommendedRevenue - rawSupplyAmount - discountAmount;
 
     // 재료비 = (권장판매가 / 1.1) × 50%  (부가세 제외 후 50%)
     const materialCost = Math.round((recommendedRevenue / 1.1) * 0.5);
@@ -657,11 +667,14 @@ export function computeChannelRevenue(
     sumProfit1 += profit1;
     sumProfit2 += profit2;
     sumProfit3 += profit3;
+    sumRawSupply += rawSupplyAmount;
+    sumPromoDiscount += promotionDiscountAmount;
 
     return {
       name: ch.name, revenue: ch.revenue, share,
-      recommendedRevenue, discountAmount, commissionAmount, settlementRevenue, materialCost,
-      directCost, profit1, channelVariableCost, profit2, channelFixedCost, profit3,
+      recommendedRevenue, discountAmount, commissionAmount,
+      rawSupplyAmount, promotionDiscountAmount, settlementRevenue,
+      materialCost, directCost, profit1, channelVariableCost, profit2, channelFixedCost, profit3,
       marginRate1, marginRate2, marginRate3,
     };
   });
@@ -675,6 +688,8 @@ export function computeChannelRevenue(
     totalRecommendedRevenue: sumRecommended,
     totalDiscountAmount: sumDiscount,
     totalCommissionAmount: sumCommission,
+    totalRawSupplyAmount: sumRawSupply,
+    totalPromotionDiscountAmount: sumPromoDiscount,
     totalMaterialCost: sumMaterial,
     totalDirectCost: sumDirectCost,
     totalProfit1: sumProfit1, totalProfit2: sumProfit2, totalProfit3: sumProfit3,
@@ -984,8 +999,8 @@ export function computeWasteAnalysis(
   let totalEstimatedCost = 0;
 
   const daily = production.map(p => {
-    // 품목별 실제 단가 우선, 없으면 config 폴백
-    const unitCost = unitPriceMap.get(p.productName) || fallbackCost;
+    // ProductionData는 일별 집계이므로 config 폴백 단가 사용
+    const unitCost = fallbackCost;
     const estimatedCost = p.wasteFinishedEa * unitCost;
     totalEstimatedCost += estimatedCost;
     return {
@@ -1599,7 +1614,7 @@ export function computeFreshness(
   // 재고 맵
   const stockMap = new Map<string, InventorySafetyItem>();
   inventoryData.forEach(inv => {
-    const key = inv.skuCode || inv.skuName;
+    const key = inv.id || inv.skuName;
     stockMap.set(key, inv);
   });
 
@@ -2585,7 +2600,8 @@ export function computeAllInsights(
   bomData: BomItemData[] = [],
   materialMaster: MaterialMasterItem[] = [],
   labor: LaborDailyData[] = [],
-  inventorySnapshots: InventorySnapshotData[] = []
+  inventorySnapshots: InventorySnapshotData[] = [],
+  inventoryAdjustment?: InventoryAdjustment | null
 ): DashboardInsights {
   const channelRevenue = dailySales.length > 0 ? computeChannelRevenue(dailySales, purchases, channelCosts, config, salesDetail) : null;
   const productProfit = salesDetail.length > 0 ? computeProductProfit(salesDetail, purchases) : null;
@@ -2596,7 +2612,7 @@ export function computeAllInsights(
   const productionEfficiency = production.length > 0 ? computeProductionEfficiency(production) : null;
 
   const costBreakdown = purchases.length > 0
-    ? computeCostBreakdown(purchases, utilities, production, config, labor)
+    ? computeCostBreakdown(purchases, utilities, production, config, labor, inventoryAdjustment)
     : null;
 
   const statisticalOrder = (inventoryData && inventoryData.length > 0 && purchases.length > 0)

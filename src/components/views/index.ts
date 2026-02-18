@@ -1,0 +1,12 @@
+export { DashboardHomeView } from './DashboardHomeView';
+export { ProfitAnalysisView } from './ProfitAnalysisView';
+export { SalesAnalysisView } from './SalesAnalysisView';
+export { CostManagementView } from './CostManagementView';
+export { ProductionBomView } from './ProductionBomView';
+export { InventoryOrderView } from './InventoryOrderView';
+export { SettingsView } from './SettingsView';
+export { default as BudgetExpenseView } from './BudgetExpenseView';
+export { default as MaterialPriceImpactView } from './MaterialPriceImpactView';
+export { default as DailyPerformanceView } from './DailyPerformanceView';
+export { default as StatisticalOrderingView } from './StatisticalOrderingView';
+export { default as BomIntegrityAuditView } from './BomIntegrityAuditView';

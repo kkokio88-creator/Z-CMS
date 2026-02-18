@@ -23,6 +23,8 @@ export class EcountAdapter {
   private _config: EcountConfig | null = null;
   private sessionId: string | null = null;
   private loginPromise: Promise<boolean> | null = null;
+  private apiCache = new Map<string, { data: any; expiry: number }>();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5분
 
   // dotenv.config() 이후에 env를 읽도록 lazy 로딩
   private get config(): EcountConfig {
@@ -99,10 +101,30 @@ export class EcountAdapter {
     return this.loginPromise;
   }
 
-  private async callApi<T>(endpoint: string, params: Record<string, unknown> = {}): Promise<T[]> {
+  private getCacheKey(endpoint: string, params: Record<string, unknown>): string {
+    return `${endpoint}:${JSON.stringify(params)}`;
+  }
+
+  public invalidateCache(pattern?: string): void {
+    if (!pattern) {
+      this.apiCache.clear();
+      return;
+    }
+    for (const key of this.apiCache.keys()) {
+      if (key.includes(pattern)) this.apiCache.delete(key);
+    }
+  }
+
+  private async callApi<T>(endpoint: string, params: Record<string, unknown> = {}, retryCount: number = 0): Promise<T[]> {
     const loginSuccess = await this.ensureLogin();
     if (!loginSuccess) {
       throw new Error('ECOUNT login failed');
+    }
+
+    const cacheKey = this.getCacheKey(endpoint, params);
+    const cached = this.apiCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) {
+      return cached.data;
     }
 
     const url = `${this.getBaseUrl()}${endpoint}?SESSION_ID=${this.sessionId}`;
@@ -120,9 +142,14 @@ export class EcountAdapter {
       const data = (await response.json()) as EcountApiResponse<T>;
 
       if (data.Error?.Code === '999') {
-        console.log('Session expired, re-logging in...');
+        if (retryCount >= 2) {
+          console.error(`ECOUNT API max retries exceeded for ${endpoint}`);
+          return [];
+        }
+        console.log(`Session expired, re-logging in... (retry ${retryCount + 1}/2)`);
         this.sessionId = null;
-        return this.callApi(endpoint, params);
+        this.loginPromise = null;
+        return this.callApi(endpoint, params, retryCount + 1);
       }
 
       if (data.Status !== '200' || !data.Data?.Result) {
@@ -130,6 +157,7 @@ export class EcountAdapter {
         return [];
       }
 
+      this.apiCache.set(cacheKey, { data: data.Data.Result, expiry: Date.now() + this.CACHE_TTL });
       return data.Data.Result;
     } catch (error) {
       console.error(`ECOUNT API error for ${endpoint}:`, error);

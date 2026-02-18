@@ -23,6 +23,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-server/credentials/service-account.json
 .vercel
 .env*.local
+
+# 서버 시크릿 (API 키, 인증서 등 민감 정보)
+server/.env
+server/.env.*
+!server/.env.example
+server/credentials/
+
+# Temporary/debug files
+tmp_*
+nul
+e2e-*.mjs
+e2e-*.png
+e2e-screenshots/

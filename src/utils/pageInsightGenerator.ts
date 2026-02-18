@@ -590,7 +590,7 @@ function generateInventoryInsights(subTab: string | null, ins: DashboardInsights
   if (subTab === 'statistical') {
     const so = ins.statisticalOrder;
     if (so) {
-      const urgentItems = so.items.filter(i => i.urgency === 'urgent' || i.urgency === 'shortage');
+      const urgentItems = so.items.filter(i => i.status === 'urgent' || i.status === 'shortage');
       cards.push({
         id: 'inv-stat-order',
         icon: 'calculate',

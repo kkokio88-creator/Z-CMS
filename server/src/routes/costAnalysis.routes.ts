@@ -19,6 +19,16 @@ const router = Router();
 // Helper Functions
 // ========================================
 
+function deterministicRandom(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    const char = seed.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash % 100) / 100; // Returns 0-1
+}
+
 type AnomalyLevel = 'normal' | 'warning' | 'critical';
 type BudgetStatus = 'normal' | 'warning' | 'critical';
 type PerformanceStatus = 'on-target' | 'below-target' | 'above-target';
@@ -49,14 +59,7 @@ const determinePerformanceStatus = (actual: number, target: number): Performance
   return 'on-target';
 };
 
-const formatDate = (dateStr: string): string => {
-  if (!dateStr) return '';
-  // YYYYMMDD -> YYYY-MM-DD
-  if (dateStr.length === 8) {
-    return `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
-  }
-  return dateStr;
-};
+import { formatDateISO as formatDate } from '../utils/formatDate.js';
 
 const getDateRange = (days: number): { from: string; to: string } => {
   const to = new Date();
@@ -612,7 +615,7 @@ function transformChannelProfitability(
       netProfit: Math.round(grossProfit * 0.8), // 예시: 80%
       netMargin: Math.round(grossMargin * 0.8 * 100) / 100,
       profitTrend: grossMargin > 20 ? 'up' : grossMargin > 10 ? 'stable' : 'down',
-      trendPercent: Math.round((Math.random() - 0.5) * 20 * 100) / 100,
+      trendPercent: Math.round((deterministicRandom(`trend-${channel}`) - 0.5) * 20 * 100) / 100,
       orderCount: data.orders,
       avgOrderValue: data.orders > 0 ? Math.round(data.revenue / data.orders) : 0,
     });

@@ -7,8 +7,9 @@ import { google, sheets_v4 } from 'googleapis';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const SPREADSHEET_ID = '1GUo9wmwmm14zhb_gtpoNrDBfJ5DqEm5pf4jpRsto-JI';
-const BOM_SPREADSHEET_ID = '1H8EI3AaYG8m7xASFI6Rj8N6Zb7TvCnnGkr2MJtYHZO8';
+// 지연 평가: dotenv.config()가 import 후에 실행되므로 함수로 래핑
+const getSpreadsheetId = () => process.env.GOOGLE_SPREADSHEET_ID || '';
+const getBomSpreadsheetId = () => process.env.GOOGLE_BOM_SPREADSHEET_ID || '';
 
 // 시트 GID 매핑
 const SHEET_GIDS = {
@@ -158,11 +159,11 @@ export interface MaterialMasterData {
 }
 
 export class GoogleSheetAdapter {
-  private baseUrl: string;
   private sheetsClient: sheets_v4.Sheets | null = null;
 
-  constructor() {
-    this.baseUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv`;
+  /** 지연 평가: dotenv.config() 이후에 환경변수가 로드되므로 매번 읽음 */
+  private get baseUrl(): string {
+    return `https://docs.google.com/spreadsheets/d/${getSpreadsheetId()}/gviz/tq?tqx=out:csv`;
   }
 
   /**
@@ -284,11 +285,15 @@ export class GoogleSheetAdapter {
   }
 
   /**
-   * 날짜 문자열 정규화 (YYYY-MM-DD 또는 YYYY/MM/DD → YYYY-MM-DD)
+   * 날짜 문자열 정규화 → YYYY-MM-DD
+   * 지원 형식: YYYY/MM/DD, YYYY/M/D, YYYY-MM-DD, YYYY-M-D
    */
   private parseDate(value: string): string {
     if (!value || value.trim() === '') return '';
-    return value.trim().replace(/\//g, '-');
+    const s = value.trim().replace(/\//g, '-');
+    const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (!m) return s;
+    return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
   }
 
   /**
@@ -380,27 +385,51 @@ export class GoogleSheetAdapter {
 
   /**
    * 판매 상세 데이터 가져오기
+   * 헤더 기반 컬럼 매핑 — 컬럼 순서 변경에 안전
    */
   async fetchSalesDetail(): Promise<SalesDetailData[]> {
-    const rows = await this.fetchSheet(SHEET_GIDS.salesDetail);
+    const rows = await this.fetchSheetByName('판매');
+    if (rows.length < 2) return [];
+
+    // 헤더 행에서 컬럼 인덱스 자동 감지
+    const header = rows[0].map(h => (h || '').trim());
+    const col = {
+      date: header.findIndex(h => h.includes('일별') || h === '날짜'),
+      customer: header.findIndex(h => h.includes('거래처')),
+      productName: header.findIndex(h => h === '품목별' || h === '품목명'),
+      productCode: header.findIndex(h => h.includes('품목코드')),
+      quantity: header.findIndex(h => h === '수량'),
+      supplyAmount: header.findIndex(h => h.includes('공급가액')),
+      vat: header.findIndex(h => h.includes('부가세')),
+      total: header.findIndex(h => h === '합계'),
+      recommendedRevenue: header.findIndex(h => h.includes('권장판매')),
+    };
+
+    // 필수 컬럼 검증
+    if (col.date < 0 || col.supplyAmount < 0) {
+      console.error('[GoogleSheetAdapter] 판매 시트 헤더 매핑 실패:', header);
+      return [];
+    }
+
+    console.log('[GoogleSheetAdapter] 판매 시트 컬럼 매핑:', col);
+
     const results: SalesDetailData[] = [];
 
-    // 헤더: 일별, 거래처, 품목별, 품목코드, 수량, 공급가액(정산), 부가세, 합계, 권장판매매출
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      const date = this.parseDate(row[0]);
+      const date = this.parseDate(col.date >= 0 ? row[col.date] : '');
       if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
 
       results.push({
         date,
-        customer: row[1] || '',
-        productName: row[2] || '',
-        productCode: row[3] || '',
-        quantity: this.parseNumber(row[4]),
-        supplyAmount: this.parseNumber(row[5]),
-        vat: this.parseNumber(row[6]),
-        total: this.parseNumber(row[7]),
-        recommendedRevenue: this.parseNumber(row[8]),
+        customer: col.customer >= 0 ? (row[col.customer] || '') : '',
+        productName: col.productName >= 0 ? (row[col.productName] || '') : '',
+        productCode: col.productCode >= 0 ? (row[col.productCode] || '') : '',
+        quantity: col.quantity >= 0 ? this.parseNumber(row[col.quantity]) : 0,
+        supplyAmount: this.parseNumber(row[col.supplyAmount]),
+        vat: col.vat >= 0 ? this.parseNumber(row[col.vat]) : 0,
+        total: col.total >= 0 ? this.parseNumber(row[col.total]) : 0,
+        recommendedRevenue: col.recommendedRevenue >= 0 ? this.parseNumber(row[col.recommendedRevenue]) : 0,
       });
     }
 
@@ -573,7 +602,7 @@ export class GoogleSheetAdapter {
    * BOM 스프레드시트에서 A~L열 파싱
    */
   async fetchBom(sheetName: string, source: 'SAN' | 'ZIP'): Promise<BomSheetData[]> {
-    const rows = await this.fetchSheetByApi(BOM_SPREADSHEET_ID, sheetName);
+    const rows = await this.fetchSheetByApi(getBomSpreadsheetId(), sheetName);
     const results: BomSheetData[] = [];
 
     // 헤더가 2행, 데이터는 3행부터 (CSV 인덱스 기준 1부터 시작이므로 i=2)
@@ -607,7 +636,7 @@ export class GoogleSheetAdapter {
    * BOM 스프레드시트에서 A~P열 파싱
    */
   async fetchMaterialMaster(): Promise<MaterialMasterData[]> {
-    const rows = await this.fetchSheetByName('1.자재정보', BOM_SPREADSHEET_ID);
+    const rows = await this.fetchSheetByName('1.자재정보', getBomSpreadsheetId());
     const results: MaterialMasterData[] = [];
 
     // 헤더가 2행, 데이터는 3행부터 (CSV 인덱스 기준 i=2)

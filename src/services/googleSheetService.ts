@@ -16,10 +16,18 @@ import {
   directFetchInventorySnapshots,
 } from './supabaseClient';
 import { loadBusinessConfig } from '../config/businessConfig';
+import {
+  DailySalesSchema,
+  SalesDetailSchema,
+  ProductionSchema,
+  PurchaseSchema,
+  UtilitySchema,
+} from '../validation/schemas';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 // Supabase 스네이크_케이스 → 프론트엔드 camelCase 변환 헬퍼
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapDailySalesFromDb(row: any): DailySalesData {
   return {
     date: row.date,
@@ -40,6 +48,7 @@ function mapDailySalesFromDb(row: any): DailySalesData {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapSalesDetailFromDb(row: any): SalesDetailData {
   return {
     date: row.date ?? '',
@@ -54,6 +63,7 @@ function mapSalesDetailFromDb(row: any): SalesDetailData {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapProductionFromDb(row: any): ProductionData {
   return {
     date: row.date,
@@ -75,6 +85,7 @@ function mapProductionFromDb(row: any): ProductionData {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPurchaseFromDb(row: any): PurchaseData {
   return {
     date: row.date ?? '',
@@ -89,6 +100,7 @@ function mapPurchaseFromDb(row: any): PurchaseData {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapUtilityFromDb(row: any): UtilityData {
   return {
     date: row.date,
@@ -290,6 +302,13 @@ export interface InventorySnapshotData {
   snapshotDate: string;
 }
 
+/** 데이터셋별 조회 상태 */
+export interface DatasetStatus {
+  loaded: boolean;
+  count: number;
+  source: 'supabase' | 'backend' | 'legacy' | 'none';
+}
+
 export interface GoogleSheetSyncResult {
   dailySales: DailySalesData[];
   salesDetail: SalesDetailData[];
@@ -317,6 +336,8 @@ export interface GoogleSheetSyncResult {
     bom: number;
     materialMaster: number;
   };
+  /** 데이터셋별 조회 상태 (부분 실패 추적용) */
+  dataStatus?: Record<string, DatasetStatus>;
 }
 
 export interface ChannelProfitItem {
@@ -377,7 +398,7 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
     fetch(`${BACKEND_URL}/sync/google-sheets`, { method: 'POST' }).catch(() => {});
   }
 
-  // 개별 fetch 함수 호출 (각각 3-Tier 폴백 내장: 백엔드→Supabase직접→Google Sheets)
+  // 개별 fetch 함수 호출 (각각 2-Tier 폴백 내장: Supabase직접→백엔드API)
   try {
     const [dailySales, salesDetail, production, purchases, utilities, labor, bom, materialMaster, inventorySnapshots] = await Promise.all([
       fetchDailySales(),
@@ -391,7 +412,32 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
       fetchInventorySnapshots(),
     ]);
 
-    // 데이터가 하나라도 있으면 성공
+    // 데이터셋별 상태 추적
+    const mkStatus = (data: any[], name: string): DatasetStatus => ({
+      loaded: data.length > 0,
+      count: data.length,
+      source: data.length > 0 ? (isSupabaseDirectAvailable() ? 'supabase' : 'backend') : 'none',
+    });
+
+    const dataStatus: Record<string, DatasetStatus> = {
+      dailySales: mkStatus(dailySales, 'dailySales'),
+      salesDetail: mkStatus(salesDetail, 'salesDetail'),
+      production: mkStatus(production, 'production'),
+      purchases: mkStatus(purchases, 'purchases'),
+      utilities: mkStatus(utilities, 'utilities'),
+      labor: mkStatus(labor, 'labor'),
+      bom: mkStatus(bom, 'bom'),
+      materialMaster: mkStatus(materialMaster, 'materialMaster'),
+      inventorySnapshots: mkStatus(inventorySnapshots, 'inventorySnapshots'),
+    };
+
+    // 부분 실패 로깅
+    const failedSets = Object.entries(dataStatus).filter(([, s]) => !s.loaded).map(([k]) => k);
+    if (failedSets.length > 0 && failedSets.length < 9) {
+      console.warn(`[syncGoogleSheetData] 부분 조회 실패 (${failedSets.length}/9): ${failedSets.join(', ')}`);
+    }
+
+    // 핵심 데이터가 하나라도 있으면 성공
     if (dailySales.length > 0 || salesDetail.length > 0 || production.length > 0) {
       const profitTrend = buildProfitTrend(dailySales);
       const { topProfit, bottomProfit } = buildProfitRanking(salesDetail);
@@ -426,6 +472,7 @@ export const syncGoogleSheetData = async (): Promise<GoogleSheetSyncResult> => {
           bom: bom.length,
           materialMaster: materialMaster.length,
         },
+        dataStatus,
       };
     }
   } catch (err) {
@@ -478,7 +525,7 @@ const syncGoogleSheetDataLegacy = async (): Promise<GoogleSheetSyncResult> => {
         materialMaster: result.data?.materialMasterCount || 0,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Google Sheet sync failed:', error);
     throw error;
   }
@@ -630,7 +677,19 @@ export const fetchDailySales = async (): Promise<DailySalesData[]> => {
   try {
     const response = await fetch(`${BACKEND_URL}/data/daily-sales`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) return result.data.map(mapDailySalesFromDb);
+    if (result.success && result.data?.length > 0) {
+      return result.data
+        .map((row: any) => {
+          const mapped = mapDailySalesFromDb(row);
+          const validation = DailySalesSchema.safeParse(mapped);
+          if (!validation.success) {
+            console.warn('[GoogleSheet] 일별매출 데이터 검증 실패:', validation.error.issues[0]?.message);
+            return null;
+          }
+          return mapped;
+        })
+        .filter((item: DailySalesData | null): item is DailySalesData => item !== null);
+    }
   } catch { /* 백엔드 실패 */ }
 
   return [];
@@ -649,7 +708,19 @@ export const fetchSalesDetail = async (): Promise<SalesDetailData[]> => {
   try {
     const response = await fetch(`${BACKEND_URL}/data/sales-detail`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) return result.data.map(mapSalesDetailFromDb);
+    if (result.success && result.data?.length > 0) {
+      return result.data
+        .map((row: any) => {
+          const mapped = mapSalesDetailFromDb(row);
+          const validation = SalesDetailSchema.safeParse(mapped);
+          if (!validation.success) {
+            console.warn('[GoogleSheet] 판매상세 데이터 검증 실패:', validation.error.issues[0]?.message);
+            return null;
+          }
+          return mapped;
+        })
+        .filter((item: SalesDetailData | null): item is SalesDetailData => item !== null);
+    }
   } catch { /* 백엔드 실패 */ }
   return [];
 };
@@ -667,7 +738,19 @@ export const fetchProduction = async (): Promise<ProductionData[]> => {
   try {
     const response = await fetch(`${BACKEND_URL}/data/production`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) return result.data.map(mapProductionFromDb);
+    if (result.success && result.data?.length > 0) {
+      return result.data
+        .map((row: any) => {
+          const mapped = mapProductionFromDb(row);
+          const validation = ProductionSchema.safeParse(mapped);
+          if (!validation.success) {
+            console.warn('[GoogleSheet] 생산 데이터 검증 실패:', validation.error.issues[0]?.message);
+            return null;
+          }
+          return mapped;
+        })
+        .filter((item: ProductionData | null): item is ProductionData => item !== null);
+    }
   } catch { /* 백엔드 실패 */ }
   return [];
 };
@@ -685,7 +768,19 @@ export const fetchPurchases = async (): Promise<PurchaseData[]> => {
   try {
     const response = await fetch(`${BACKEND_URL}/data/purchases`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) return result.data.map(mapPurchaseFromDb);
+    if (result.success && result.data?.length > 0) {
+      return result.data
+        .map((row: any) => {
+          const mapped = mapPurchaseFromDb(row);
+          const validation = PurchaseSchema.safeParse(mapped);
+          if (!validation.success) {
+            console.warn('[GoogleSheet] 구매 데이터 검증 실패:', validation.error.issues[0]?.message);
+            return null;
+          }
+          return mapped;
+        })
+        .filter((item: PurchaseData | null): item is PurchaseData => item !== null);
+    }
   } catch { /* 백엔드 실패 */ }
   return [];
 };
@@ -703,13 +798,26 @@ export const fetchUtilities = async (): Promise<UtilityData[]> => {
   try {
     const response = await fetch(`${BACKEND_URL}/data/utilities`, { signal: AbortSignal.timeout(5000) });
     const result = await response.json();
-    if (result.success && result.data?.length > 0) return result.data.map(mapUtilityFromDb);
+    if (result.success && result.data?.length > 0) {
+      return result.data
+        .map((row: any) => {
+          const mapped = mapUtilityFromDb(row);
+          const validation = UtilitySchema.safeParse(mapped);
+          if (!validation.success) {
+            console.warn('[GoogleSheet] 유틸리티 데이터 검증 실패:', validation.error.issues[0]?.message);
+            return null;
+          }
+          return mapped;
+        })
+        .filter((item: UtilityData | null): item is UtilityData => item !== null);
+    }
   } catch { /* 백엔드 실패 */ }
   return [];
 };
 
 // DB→camelCase 변환 맵퍼 (labor, bom, materialMaster)
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapLaborFromDb(row: any): LaborDailyData {
   return {
     date: row.date ?? '',
@@ -734,6 +842,7 @@ function mapLaborFromDb(row: any): LaborDailyData {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapBomFromDb(row: any): BomItemData {
   return {
     source: row.source ?? '',
@@ -752,6 +861,7 @@ function mapBomFromDb(row: any): BomItemData {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapMaterialMasterFromDb(row: any): MaterialMasterItem {
   return {
     no: row.no ?? 0,

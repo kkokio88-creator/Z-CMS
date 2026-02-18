@@ -87,15 +87,17 @@ export const testApiConnection = async (): Promise<{ success: boolean; message: 
         message: `실패: ${result.message || '연결에 실패했습니다.'}`,
       };
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     // Check if backend is running
-    if (e.name === 'TypeError' || e.message === 'Failed to fetch') {
+    const msg = e instanceof Error ? e.message : String(e);
+    const name = e instanceof Error ? e.name : '';
+    if (name === 'TypeError' || msg === 'Failed to fetch') {
       return {
         success: false,
         message: '백엔드 서버에 연결할 수 없습니다. server 폴더에서 npm run dev를 실행하세요.',
       };
     }
-    return { success: false, message: `오류: ${e.message}` };
+    return { success: false, message: `오류: ${msg}` };
   }
 };
 
@@ -228,14 +230,15 @@ export const syncAllEcountData = async (): Promise<SyncResult> => {
       dataAvailability,
       message: statusMessage,
     };
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('ECOUNT sync failed:', e);
+    const msg = e instanceof Error ? e.message : String(e);
     return {
       ...emptyResult,
       message:
-        e.message === 'Failed to fetch'
+        msg === 'Failed to fetch'
           ? '백엔드 서버에 연결할 수 없습니다.'
-          : `동기화 오류: ${e.message}`,
+          : `동기화 오류: ${msg}`,
     };
   }
 };

@@ -1,5 +1,15 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { ecountAdapter } from '../adapters/EcountAdapter.js';
+import { apiAuth } from '../middleware/apiAuth.js';
+import { validateBody } from '../middleware/validate.js';
+
+const ecountConfigSchema = z.object({
+  COM_CODE: z.string().min(1, 'COM_CODE 필수'),
+  USER_ID: z.string().min(1, 'USER_ID 필수'),
+  API_KEY: z.string().min(1, 'API_KEY 필수'),
+  ZONE: z.string().default('CD'),
+});
 
 const router = Router();
 
@@ -11,8 +21,8 @@ router.get('/config', (req: Request, res: Response) => {
   });
 });
 
-// Update ECOUNT config
-router.post('/config', (req: Request, res: Response) => {
+// Update ECOUNT config (인증 필요)
+router.post('/config', apiAuth, validateBody(ecountConfigSchema), (req: Request, res: Response) => {
   const { COM_CODE, USER_ID, API_KEY, ZONE } = req.body;
 
   ecountAdapter.updateConfig({
@@ -260,20 +270,7 @@ function determineStockStatus(
   return 'Normal';
 }
 
-function formatDate(dateStr: string): string {
-  // Handle YYYYMMDD format
-  if (dateStr.length === 8) {
-    const month = dateStr.substring(4, 6);
-    const day = dateStr.substring(6, 8);
-    return `${month}/${day}`;
-  }
-  // Handle other formats
-  const date = new Date(dateStr);
-  if (!isNaN(date.getTime())) {
-    return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
-  }
-  return dateStr;
-}
+import { formatDateDisplay as formatDate } from '../utils/formatDate.js';
 
 // Get sales data
 router.get('/sales', async (req: Request, res: Response) => {

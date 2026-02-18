@@ -4,6 +4,7 @@
  */
 
 import { BusinessConfig, loadBusinessConfig } from '../config/businessConfig';
+import { directFetchInventoryAtDate } from './supabaseClient';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
@@ -168,7 +169,7 @@ export const fetchPurchaseOrders = async (
     }
 
     return result.data.map((po: any) => ({
-      orderId: po.ORDER_NO || po.SLIP_NO || `PO-${Math.random().toString(36).substr(2, 9)}`,
+      orderId: po.ORDER_NO || po.SLIP_NO || `PO-${Date.now().toString(36)}`,
       orderDate: po.ORDER_DATE || po.IO_DATE || '',
       supplierName: po.CUST_DES || po.VENDOR_DES || '미지정',
       supplierCode: po.CUST_CD || po.VENDOR_CD || '',
@@ -188,14 +189,40 @@ export const fetchPurchaseOrders = async (
 export const fetchInventoryByLocation = async (
   baseDate?: string
 ): Promise<InventoryByLocation[]> => {
-  // 1. Supabase 캐시에서 먼저 시도
+  const bizConfig = loadBusinessConfig();
+  const defaultUnitPrice = bizConfig.wasteUnitCost;
+
+  // 1. Supabase RPC (날짜별 스냅샷) — baseDate 있으면 해당 날짜 재고 조회
+  if (baseDate) {
+    try {
+      // baseDate가 YYYYMMDD 형식이면 YYYY-MM-DD로 변환
+      const dateStr = baseDate.length === 8
+        ? `${baseDate.slice(0, 4)}-${baseDate.slice(4, 6)}-${baseDate.slice(6, 8)}`
+        : baseDate;
+      const snapshots = await directFetchInventoryAtDate(dateStr);
+      if (snapshots.length > 0) {
+        const mapped = snapshots.map(inv => ({
+          warehouseCode: inv.warehouseCode || '001',
+          warehouseName: inv.warehouseCode || '메인창고',
+          productCode: inv.productCode || '',
+          productName: inv.productName || inv.productCode || '품목',
+          quantity: inv.balanceQty,
+          unitPrice: defaultUnitPrice,
+          totalValue: inv.balanceQty * defaultUnitPrice,
+          category: '일반',
+        }));
+        console.log(`[costManagementService] Supabase 재고 스냅샷 (${dateStr}):`, mapped.length, '건');
+        return mapped;
+      }
+    } catch { /* Supabase RPC 실패 - 폴백 */ }
+  }
+
+  // 2. Supabase 최신 캐시 (baseDate 없을 때)
   try {
     const sbResponse = await fetch(`${BACKEND_URL}/data/inventory`);
     const sbResult = await sbResponse.json();
 
     if (sbResult.success && sbResult.data && sbResult.data.length > 0) {
-      const bizConfig = loadBusinessConfig();
-      const defaultUnitPrice = bizConfig.wasteUnitCost;
       const mapped = sbResult.data.map((inv: any) => ({
         warehouseCode: inv.warehouse_code || '001',
         warehouseName: inv.warehouse_code || '메인창고',

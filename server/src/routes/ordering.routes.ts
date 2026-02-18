@@ -3,9 +3,24 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { statisticalOrderingService } from '../services/StatisticalOrderingService.js';
+import { validateBody } from '../middleware/validate.js';
 
 const router = Router();
+
+const orderingConfigSchema = z.object({
+  serviceLevel: z.number().min(0).max(1).optional(),
+  forecastWeeks: z.number().int().min(1).max(52).optional(),
+  leadTimeDays: z.number().int().min(0).optional(),
+  safetyStockMultiplier: z.number().min(0).optional(),
+}).passthrough();
+
+const simulateSchema = z.object({
+  serviceLevel: z.number().min(0).max(1).optional(),
+  forecastWeeks: z.number().int().min(1).max(52).optional(),
+  additionalDemand: z.record(z.string(), z.number()).optional(),
+});
 
 /**
  * GET /api/ordering/recommendation
@@ -20,11 +35,12 @@ router.get('/recommendation', async (_req: Request, res: Response) => {
       success: true,
       data: recommendation,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('[Ordering API] 발주 권고 생성 실패:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: msg,
     });
   }
 });
@@ -57,11 +73,12 @@ router.get('/meal-plan', async (req: Request, res: Response) => {
         end: endDate || defaultEnd,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('[Ordering API] 식단 계획 조회 실패:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: msg,
     });
   }
 });
@@ -89,11 +106,12 @@ router.get('/sales-stats', async (req: Request, res: Response) => {
         samplePeriod: `최근 ${forecastWeeks}주`,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('[Ordering API] 판매 통계 조회 실패:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: msg,
     });
   }
 });
@@ -111,11 +129,12 @@ router.get('/recipes', async (_req: Request, res: Response) => {
       data: recipes,
       count: recipes.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('[Ordering API] 레시피 조회 실패:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: msg,
     });
   }
 });
@@ -133,11 +152,12 @@ router.get('/ingredients', async (_req: Request, res: Response) => {
       data: ingredients,
       count: ingredients.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('[Ordering API] 식자재 마스터 조회 실패:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: msg,
     });
   }
 });
@@ -161,11 +181,12 @@ router.get('/inventory', async (_req: Request, res: Response) => {
       data: inventoryObj,
       itemCount: inventory.size,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('[Ordering API] 재고 조회 실패:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: msg,
     });
   }
 });
@@ -189,11 +210,12 @@ router.get('/in-transit', async (_req: Request, res: Response) => {
       data: inTransitObj,
       itemCount: inTransit.size,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('[Ordering API] 미입고 조회 실패:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: msg,
     });
   }
 });
@@ -210,10 +232,10 @@ router.get('/config', (_req: Request, res: Response) => {
       success: true,
       data: config,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 });
@@ -222,7 +244,7 @@ router.get('/config', (_req: Request, res: Response) => {
  * PUT /api/ordering/config
  * 설정 업데이트
  */
-router.put('/config', (req: Request, res: Response) => {
+router.put('/config', validateBody(orderingConfigSchema), (req: Request, res: Response) => {
   try {
     const newConfig = req.body;
 
@@ -234,10 +256,10 @@ router.put('/config', (req: Request, res: Response) => {
       data: updatedConfig,
       message: '설정이 업데이트되었습니다.',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 });
@@ -246,7 +268,7 @@ router.put('/config', (req: Request, res: Response) => {
  * POST /api/ordering/simulate
  * 발주 시뮬레이션 (what-if 분석)
  */
-router.post('/simulate', async (req: Request, res: Response) => {
+router.post('/simulate', validateBody(simulateSchema), async (req: Request, res: Response) => {
   try {
     const { serviceLevel, forecastWeeks, additionalDemand } = req.body;
 
@@ -299,11 +321,12 @@ router.post('/simulate', async (req: Request, res: Response) => {
         additionalDemand,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('[Ordering API] 시뮬레이션 실패:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: msg,
     });
   }
 });

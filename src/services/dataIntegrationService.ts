@@ -139,8 +139,8 @@ export async function fetchSheetData(
 
     const result = await response.json();
     return result;
-  } catch (error: any) {
-    return { success: false, data: [], error: error.message };
+  } catch (error: unknown) {
+    return { success: false, data: [], error: error instanceof Error ? error.message : String(error) };
   }
 }
 

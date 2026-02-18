@@ -137,12 +137,18 @@ router.get('/utilities', async (req: Request, res: Response) => {
  * Transform Google Sheet data to frontend format
  */
 function transformGoogleSheetData(data: any) {
+  // 실제 원가율 계산: 총구매액 / 총매출액
+  const totalRevenue = data.dailySales.reduce((s: number, d: any) => s + (d.totalRevenue || 0), 0);
+  const totalPurchaseCost = data.purchases.reduce((s: number, p: any) => s + (p.total || 0), 0);
+  const actualCostRate = totalRevenue > 0 ? totalPurchaseCost / totalRevenue : 0.7;
+  const actualMarginRate = Math.round((1 - actualCostRate) * 100 * 10) / 10;
+
   // 일별 매출 → 채널별 수익 트렌드
   const profitTrend = data.dailySales.map((d: any) => ({
     date: formatDateForDisplay(d.date),
     revenue: d.totalRevenue,
-    profit: Math.round(d.totalRevenue * 0.3), // 마진율 30% 가정
-    marginRate: 30,
+    profit: Math.round(d.totalRevenue * (1 - actualCostRate)),
+    marginRate: actualMarginRate,
     channels: {
       jasa: d.jasaPrice,
       coupang: d.coupangPrice,
@@ -175,8 +181,8 @@ function transformGoogleSheetData(data: any) {
       channel: data.channel,
       revenue: data.revenue,
       quantity: data.quantity,
-      profit: Math.round(data.revenue * 0.3),
-      margin: 30,
+      profit: Math.round(data.revenue * (1 - actualCostRate)),
+      margin: actualMarginRate,
     }))
     .sort((a, b) => b.revenue - a.revenue);
 

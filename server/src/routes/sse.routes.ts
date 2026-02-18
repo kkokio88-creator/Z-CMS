@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import type { EventBus } from '../services/EventBus.js';
 import type { AgentMessage } from '../types/index.js';
 
@@ -10,7 +11,7 @@ const activeConnections = new Map<string, { connectedAt: Date; lastEventId: numb
 // SSE endpoint for real-time agent updates
 router.get('/', (req: Request, res: Response) => {
   const eventBus = req.app.locals.eventBus as EventBus;
-  const connId = `sse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const connId = `sse-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const lastEventId = req.headers['last-event-id']
     ? parseInt(req.headers['last-event-id'] as string, 10)
     : 0;
@@ -19,7 +20,8 @@ router.get('/', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('X-SSE-Connection-Id', connId);
 
   activeConnections.set(connId, { connectedAt: new Date(), lastEventId });

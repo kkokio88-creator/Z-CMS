@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { agentRoutes } from './routes/agent.routes.js';
@@ -13,10 +14,13 @@ import orderingRoutes from './routes/ordering.routes.js';
 import sheetsRoutes from './routes/sheets.routes.js';
 import { createDebateRoutes } from './routes/debate.routes.js';
 import { createGovernanceRoutes } from './routes/governance.routes.js';
+import { createConveneRoutes } from './routes/convene.routes.js';
+import { createHealthRoutes } from './routes/health.routes.js';
 import supabaseRoutes from './routes/supabase.routes.js';
 import { supabaseAdapter } from './adapters/SupabaseAdapter.js';
 import { syncService } from './services/SyncService.js';
 import { cacheMiddleware, cache, createCacheRoutes } from './middleware/cache.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import { EventBus } from './services/EventBus.js';
 import { StateManager } from './services/StateManager.js';
 import { LearningRegistry } from './services/LearningRegistry.js';
@@ -65,7 +69,13 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // CSP는 프론트엔드에서 별도 관리
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // Rate Limiting
 const globalLimiter = rateLimit({
@@ -92,8 +102,21 @@ const dataLimiter = rateLimit({
   message: { error: '데이터 요청이 너무 많습니다. 15분 후에 다시 시도해주세요.' },
 });
 
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'AI 분석 요청이 너무 많습니다. 15분 후에 다시 시도해주세요.' },
+});
+
 app.use('/api/sync', syncLimiter);
 app.use('/api/data', dataLimiter);
+app.use('/api/debates', aiLimiter);
+app.use('/api/agents', aiLimiter);
+app.use('/api/governance', aiLimiter);
+app.use('/api/cost-analysis/convene', aiLimiter);
+app.use('/api/dashboard-planning/convene', aiLimiter);
 app.use('/api', globalLimiter);
 
 // Initialize shared services
@@ -106,6 +129,7 @@ const wipManager = new WipManager('./wip');
 const debateManager = new DebateManager(wipManager, {
   maxActiveDebates: 10,
   maxHistorySize: 100,
+  persistence: supabaseAdapter.isConfigured() ? supabaseAdapter : undefined,
 });
 
 // Initialize WIP folder
@@ -113,9 +137,17 @@ wipManager.initialize().catch(err => {
   console.warn('[Server] WIP 폴더 초기화 실패:', err.message);
 });
 
+// DB에서 토론 복원
+debateManager.restoreFromDatabase().catch(err => {
+  console.warn('[Server] 토론 DB 복원 실패:', err instanceof Error ? err.message : String(err));
+});
+
 // ================================
-// 레거시 에이전트 (병행 운영)
+// 에이전트 모드: legacy | trio | both (기본: both)
 // ================================
+const AGENT_MODE = (process.env.AGENT_MODE || 'both') as 'legacy' | 'trio' | 'both';
+
+// 레거시 에이전트
 const bomWasteAgent = new BomWasteAgent(eventBus, stateManager, learningRegistry);
 const inventoryAgent = new InventoryAgent(eventBus, stateManager, learningRegistry);
 const profitabilityAgent = new ProfitabilityAgent(eventBus, stateManager, learningRegistry);
@@ -127,46 +159,42 @@ const coordinatorAgent = new CoordinatorAgent(eventBus, stateManager, learningRe
   costManagementAgent,
 ]);
 
-// Start legacy agents
-bomWasteAgent.start();
-inventoryAgent.start();
-profitabilityAgent.start();
-costManagementAgent.start();
-coordinatorAgent.start();
+if (AGENT_MODE === 'legacy' || AGENT_MODE === 'both') {
+  bomWasteAgent.start();
+  inventoryAgent.start();
+  profitabilityAgent.start();
+  costManagementAgent.start();
+  coordinatorAgent.start();
+  console.log(`[AgentMode] 레거시 에이전트 시작됨`);
+}
 
-// ================================
 // 새 Trio 팀 (변증법적 토론)
-// ================================
 const bomWasteTeam = createBomWasteTeam(eventBus, stateManager, learningRegistry);
 const inventoryTeam = createInventoryTeam(eventBus, stateManager, learningRegistry);
 const profitabilityTeam = createProfitabilityTeam(eventBus, stateManager, learningRegistry);
 const costTeam = createCostTeam(eventBus, stateManager, learningRegistry);
 
-// Inject dependencies to teams
 bomWasteTeam.injectDependencies(debateManager, geminiAdapter);
 inventoryTeam.injectDependencies(debateManager, geminiAdapter);
 profitabilityTeam.injectDependencies(debateManager, geminiAdapter);
 costTeam.injectDependencies(debateManager, geminiAdapter);
 
-// Start Trio teams
-bomWasteTeam.start();
-inventoryTeam.start();
-profitabilityTeam.start();
-costTeam.start();
-
-// ================================
 // 거버넌스 에이전트
-// ================================
 const qaSpecialist = new QASpecialist(eventBus, stateManager, learningRegistry);
 const complianceAuditor = new ComplianceAuditor(eventBus, stateManager, learningRegistry);
 
-// Inject dependencies
 qaSpecialist.injectDependencies(debateManager, geminiAdapter);
 complianceAuditor.injectDependencies(debateManager, geminiAdapter);
 
-// Start governance agents
-qaSpecialist.start();
-complianceAuditor.start();
+if (AGENT_MODE === 'trio' || AGENT_MODE === 'both') {
+  bomWasteTeam.start();
+  inventoryTeam.start();
+  profitabilityTeam.start();
+  costTeam.start();
+  qaSpecialist.start();
+  complianceAuditor.start();
+  console.log(`[AgentMode] Trio 팀 + 거버넌스 시작됨`);
+}
 
 // ================================
 // Chief Orchestrator
@@ -230,16 +258,16 @@ app.use('/api/sheets', sheetsRoutes);
 app.use('/api/data', cacheMiddleware);
 app.use('/api/cache', createCacheRoutes());
 
-// Supabase 데이터/동기화 라우트
-app.use('/api', supabaseRoutes);
-
-// 동기화 완료 시 데이터 캐시 무효화
+// 동기화 완료 시 데이터 캐시 무효화 (supabaseRoutes 보다 먼저 등록)
 app.use('/api/sync', (_req, _res, next) => {
   if (_req.method === 'POST') {
     cache.invalidatePattern('/api/data');
   }
   next();
 });
+
+// Supabase 데이터/동기화 라우트
+app.use('/api', supabaseRoutes);
 
 // 새 라우트: 토론 및 거버넌스
 app.use('/api/debates', createDebateRoutes(debateManager, wipManager, chiefOrchestrator));
@@ -253,10 +281,10 @@ app.get('/api/sheets/test', async (_req, res) => {
   try {
     const result = await multiSpreadsheetAdapter.testConnections();
     res.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 });
@@ -275,231 +303,25 @@ app.get('/api/sheets/cost-data', async (_req, res) => {
         fetchedAt: data.fetchedAt,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 });
 
-// 원가 분석 에이전트 회의 소집
-app.post('/api/cost-analysis/convene', async (req, res) => {
-  try {
-    // 1. 데이터 가져오기
-    console.log('[CostAnalysis] 데이터 가져오는 중...');
-    const costData = await multiSpreadsheetAdapter.fetchAllCostAnalysisData();
+// 회의 소집 라우트 (convene.routes.ts로 분리)
+app.use('/api', createConveneRoutes(chiefOrchestrator, multiSpreadsheetAdapter));
 
-    // 2. 데이터 요약 생성
-    const dataSummary = {
-      period: {
-        sales:
-          costData.sales.length > 0
-            ? `${costData.sales[0]?.date || 'N/A'} ~ ${costData.sales[costData.sales.length - 1]?.date || 'N/A'}`
-            : '데이터 없음',
-        purchases:
-          costData.purchases.length > 0
-            ? `${costData.purchases[0]?.date || 'N/A'} ~ ${costData.purchases[costData.purchases.length - 1]?.date || 'N/A'}`
-            : '데이터 없음',
-      },
-      counts: {
-        sales: costData.sales.length,
-        purchases: costData.purchases.length,
-        bomItems: costData.bom.length,
-      },
-      // 주요 품목 요약
-      topItems: {
-        sales: [...new Set(costData.sales.map(s => s.itemName))].slice(0, 10),
-        purchases: [...new Set(costData.purchases.map(p => p.itemName))].slice(0, 10),
-        bom: costData.bom.map(b => b.parentItemName).slice(0, 10),
-      },
-    };
-
-    console.log('[CostAnalysis] 데이터 요약:', JSON.stringify(dataSummary, null, 2));
-
-    // 3. 원가 분석 팀 토론 시작
-    console.log('[CostAnalysis] 원가 분석 토론 시작...');
-    const debateId = await chiefOrchestrator.orchestrateDebate({
-      team: 'cost-management-team',
-      topic: '원가 구조 분석 및 최적화 방안',
-      contextData: {
-        dataSummary,
-        rawDataAvailable: true,
-        analysisType: 'comprehensive-cost-review',
-        fetchedAt: costData.fetchedAt,
-      },
-      priority: 'high',
-    });
-
-    // 4. BOM 팀 토론도 시작 (원가와 연관)
-    const bomDebateId = await chiefOrchestrator.orchestrateDebate({
-      team: 'bom-waste-team',
-      topic: 'BOM 기반 원가 분석',
-      contextData: {
-        bomItems: dataSummary.topItems.bom,
-        bomCount: dataSummary.counts.bomItems,
-        purchaseItems: dataSummary.topItems.purchases,
-      },
-      priority: 'high',
-    });
-
-    res.json({
-      success: true,
-      message: '원가 분석 에이전트 회의 소집 완료',
-      dataSummary,
-      debates: {
-        costDebateId: debateId,
-        bomDebateId: bomDebateId,
-      },
-    });
-  } catch (error: any) {
-    console.error('[CostAnalysis] 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// 대시보드 기획 회의 소집
-app.post('/api/dashboard-planning/convene', async (req, res) => {
-  try {
-    // 1. 데이터 가져오기
-    console.log('[DashboardPlanning] 데이터 가져오는 중...');
-    const costData = await multiSpreadsheetAdapter.fetchAllCostAnalysisData();
-
-    // 2. 데이터 구조 분석
-    const dataStructure = {
-      sales: {
-        count: costData.sales.length,
-        fields: costData.sales.length > 0 ? Object.keys(costData.sales[0]) : [],
-        sampleItems: costData.sales.slice(0, 5).map(s => s.itemName),
-        uniqueItems: [...new Set(costData.sales.map(s => s.itemName))].length,
-        totalAmount: costData.sales.reduce((sum, s) => sum + s.amount, 0),
-      },
-      purchases: {
-        count: costData.purchases.length,
-        fields: costData.purchases.length > 0 ? Object.keys(costData.purchases[0]) : [],
-        sampleItems: costData.purchases.slice(0, 5).map(p => p.itemName),
-        uniqueItems: [...new Set(costData.purchases.map(p => p.itemName))].length,
-        totalAmount: costData.purchases.reduce((sum, p) => sum + p.amount, 0),
-      },
-      bom: {
-        count: costData.bom.length,
-        fields: costData.bom.length > 0 ? Object.keys(costData.bom[0]) : [],
-        sampleParents: [...new Set(costData.bom.map(b => b.parentItemName))].slice(0, 5),
-      },
-    };
-
-    // 3. 분석 가능한 지표 정의
-    const analysisOpportunities = {
-      costAnalysis: [
-        '품목별 매입단가 추이 분석',
-        '판매금액 대비 원가율 계산',
-        'BOM 기반 제품별 원가 산출',
-        '공급업체별 매입 비교',
-      ],
-      profitAnalysis: [
-        '품목별 마진율 분석',
-        '고마진/저마진 품목 식별',
-        '판매량 vs 수익성 매트릭스',
-      ],
-      efficiencyAnalysis: ['BOM 효율성 분석', '원자재 사용량 최적화', '대체 원자재 비용 비교'],
-    };
-
-    console.log('[DashboardPlanning] 데이터 구조:', JSON.stringify(dataStructure, null, 2));
-
-    // 4. 원가 분석팀 토론 - 대시보드 기획
-    console.log('[DashboardPlanning] 대시보드 기획 토론 시작...');
-    const costDebateId = await chiefOrchestrator.orchestrateDebate({
-      team: 'cost-management-team',
-      topic: '원가 분석 대시보드 설계 및 분석 방법론',
-      contextData: {
-        dataStructure,
-        analysisOpportunities,
-        userGoal:
-          '사용자가 직관적으로 원가 현황을 파악하고 원가 절감 활동을 수행할 수 있는 대시보드 설계',
-        requirements: [
-          '실시간 원가 현황 모니터링',
-          '품목별/기간별 원가 추이 시각화',
-          '원가 절감 기회 자동 식별',
-          '실행 가능한 권고사항 제시',
-        ],
-      },
-      priority: 'critical',
-    });
-
-    // 5. BOM 팀 토론 - BOM 기반 분석
-    const bomDebateId = await chiefOrchestrator.orchestrateDebate({
-      team: 'bom-waste-team',
-      topic: 'BOM 기반 원가 분석 대시보드 설계',
-      contextData: {
-        bomStructure: dataStructure.bom,
-        analysisGoals: ['BOM 구조 시각화', '원자재 비용 영향도 분석', '대체 원자재 시뮬레이션'],
-      },
-      priority: 'high',
-    });
-
-    // 6. 수익성 팀 토론 - 마진 분석
-    const profitDebateId = await chiefOrchestrator.orchestrateDebate({
-      team: 'profitability-team',
-      topic: '수익성 분석 대시보드 설계',
-      contextData: {
-        salesData: dataStructure.sales,
-        purchaseData: dataStructure.purchases,
-        analysisGoals: ['품목별 마진율 시각화', '수익성 기반 품목 분류', '가격 조정 시뮬레이션'],
-      },
-      priority: 'high',
-    });
-
-    res.json({
-      success: true,
-      message: '대시보드 기획 에이전트 회의 소집 완료',
-      dataStructure,
-      analysisOpportunities,
-      debates: {
-        costDebateId,
-        bomDebateId,
-        profitDebateId,
-      },
-    });
-  } catch (error: any) {
-    console.error('[DashboardPlanning] 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// Health check
-app.get('/api/health', (_req, res) => {
-  const debateStatus = chiefOrchestrator.getDebateStatus();
-  const teamStatuses = chiefOrchestrator.getAllTeamStatuses();
-
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    // 레거시 에이전트
-    legacyAgents: {
-      coordinator: coordinatorAgent.getStatus(),
-      bomWaste: bomWasteAgent.getStatus(),
-      inventory: inventoryAgent.getStatus(),
-      profitability: profitabilityAgent.getStatus(),
-      costManagement: costManagementAgent.getStatus(),
-    },
-    // 새 에이전틱 시스템
-    agenticSystem: {
-      chiefOrchestrator: chiefOrchestrator.getStatus(),
-      governance: {
-        qaSpecialist: qaSpecialist.getStatus(),
-        complianceAuditor: complianceAuditor.getStatus(),
-      },
-      teams: teamStatuses,
-      debates: debateStatus,
-    },
-  });
-});
+// Health check 라우트 (health.routes.ts로 분리)
+app.use('/api', createHealthRoutes(chiefOrchestrator, {
+  coordinator: coordinatorAgent,
+  bomWaste: bomWasteAgent,
+  inventory: inventoryAgent,
+  profitability: profitabilityAgent,
+  costManagement: costManagementAgent,
+}));
 
 // ================================
 // Supabase 자동 동기화
@@ -556,6 +378,9 @@ async function runInitialSyncWithRetry(maxRetries: number, retryDelayMs: number)
     }
   }
 }
+
+// 공통 에러 핸들러 (모든 라우트 뒤에 등록)
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`🚀 Z-CMS Agent Server running on port ${PORT}`);

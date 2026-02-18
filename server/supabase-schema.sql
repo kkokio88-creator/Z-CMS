@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(date);
 -- ALTER TABLE purchases DROP COLUMN IF EXISTS inbound_price;
 -- ALTER TABLE purchases DROP COLUMN IF EXISTS inbound_total;
 
--- 5. 재고 현황
+-- 5. 재고 현황 (일별 스냅샷 보존 — 기초/기말 재고 원가 계산용)
 CREATE TABLE IF NOT EXISTS inventory (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product_code varchar(50) NOT NULL,
@@ -96,7 +96,21 @@ CREATE TABLE IF NOT EXISTS inventory (
   snapshot_date date DEFAULT CURRENT_DATE,
   synced_at timestamptz DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_product_wh ON inventory(product_code, warehouse_code);
+-- 마이그레이션: 일별 스냅샷 보존을 위해 unique index에 snapshot_date 추가
+-- 기존 인덱스가 있으면 삭제 후 재생성 필요:
+-- DROP INDEX IF EXISTS idx_inventory_product_wh;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_product_wh_date ON inventory(product_code, warehouse_code, snapshot_date);
+
+-- 특정 날짜의 재고 스냅샷 조회 (해당일 이전 가장 최근 스냅샷)
+CREATE OR REPLACE FUNCTION get_inventory_at_date(p_date date)
+RETURNS TABLE (product_code varchar, product_name varchar, balance_qty numeric, warehouse_code varchar, snapshot_date date)
+LANGUAGE sql STABLE AS $$
+  SELECT DISTINCT ON (i.product_code, i.warehouse_code)
+    i.product_code, i.product_name, i.balance_qty, i.warehouse_code, i.snapshot_date
+  FROM inventory i
+  WHERE i.snapshot_date <= p_date
+  ORDER BY i.product_code, i.warehouse_code, i.snapshot_date DESC;
+$$;
 
 -- 6. 유틸리티 사용량
 CREATE TABLE IF NOT EXISTS utilities (
@@ -238,3 +252,86 @@ CREATE TABLE IF NOT EXISTS material_master (
   synced_at timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_material_master_code ON material_master(material_code);
+
+-- 14. 토론 영속화
+CREATE TABLE IF NOT EXISTS debates (
+  id uuid PRIMARY KEY,
+  domain varchar(50) NOT NULL,
+  team varchar(50) NOT NULL,
+  topic text NOT NULL,
+  version integer NOT NULL DEFAULT 1,
+  current_phase varchar(30) NOT NULL DEFAULT 'thesis',
+  context_data jsonb DEFAULT '{}'::jsonb,
+  thesis jsonb,
+  antithesis jsonb,
+  synthesis jsonb,
+  final_decision jsonb,
+  governance_reviews jsonb DEFAULT '[]'::jsonb,
+  started_at timestamptz NOT NULL,
+  completed_at timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_debates_team ON debates(team);
+CREATE INDEX IF NOT EXISTS idx_debates_phase ON debates(current_phase);
+CREATE INDEX IF NOT EXISTS idx_debates_completed ON debates(completed_at DESC);
+
+-- ==============================
+-- RPC 함수: 원자적 DELETE-INSERT (트랜잭션 안전성)
+-- ==============================
+
+-- sales_detail: 날짜별 원자적 upsert
+CREATE OR REPLACE FUNCTION upsert_sales_detail_by_date(p_date date, p_rows jsonb)
+RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE
+  inserted integer;
+BEGIN
+  DELETE FROM sales_detail WHERE date = p_date;
+
+  INSERT INTO sales_detail (product_code, product_name, date, customer, quantity, supply_amount, vat, total, recommended_revenue, synced_at)
+  SELECT
+    (r->>'product_code')::varchar,
+    (r->>'product_name')::varchar,
+    (r->>'date')::date,
+    (r->>'customer')::varchar,
+    (r->>'quantity')::numeric,
+    (r->>'supply_amount')::numeric,
+    (r->>'vat')::numeric,
+    (r->>'total')::numeric,
+    (r->>'recommended_revenue')::numeric,
+    (r->>'synced_at')::timestamptz
+  FROM jsonb_array_elements(p_rows) AS r;
+
+  GET DIAGNOSTICS inserted = ROW_COUNT;
+  RETURN inserted;
+END;
+$$;
+
+-- purchases: 날짜별 원자적 upsert
+CREATE OR REPLACE FUNCTION upsert_purchases_by_date(p_date date, p_rows jsonb)
+RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE
+  inserted integer;
+BEGIN
+  DELETE FROM purchases WHERE date = p_date;
+
+  INSERT INTO purchases (date, product_code, product_name, quantity, unit_price, supply_amount, vat, total, supplier_name, synced_at)
+  SELECT
+    (r->>'date')::date,
+    (r->>'product_code')::varchar,
+    (r->>'product_name')::varchar,
+    (r->>'quantity')::numeric,
+    (r->>'unit_price')::numeric,
+    (r->>'supply_amount')::numeric,
+    (r->>'vat')::numeric,
+    (r->>'total')::numeric,
+    (r->>'supplier_name')::varchar,
+    (r->>'synced_at')::timestamptz
+  FROM jsonb_array_elements(p_rows) AS r;
+
+  GET DIAGNOSTICS inserted = ROW_COUNT;
+  RETURN inserted;
+END;
+$$;

@@ -11,6 +11,8 @@ import { DebateRecord, DebatePhase, WipFileMetadata, InsightDomain, DomainTeam }
 export class WipManager {
   private wipPath: string;
   private archivePath: string;
+  /** debateId → filename 인덱스 (파일 전체 읽기 회피) */
+  private debateIndex: Map<string, string> = new Map();
 
   constructor(basePath: string = './wip') {
     this.wipPath = basePath;
@@ -228,6 +230,7 @@ export class WipManager {
 
     try {
       await fs.writeFile(filepath, content, 'utf-8');
+      this.debateIndex.set(debate.id, filepath);
       console.log(`[WipManager] 토론 로그 저장: ${filename}`);
       return filepath;
     } catch (error) {
@@ -253,9 +256,21 @@ export class WipManager {
   }
 
   /**
-   * 토론 ID로 파일 찾기
+   * 토론 ID로 파일 찾기 (인덱스 우선, fallback: 파일 스캔)
    */
   private async findDebateFiles(debateId: string): Promise<string[]> {
+    // 인덱스에서 먼저 조회
+    const indexed = this.debateIndex.get(debateId);
+    if (indexed) {
+      try {
+        await fs.access(indexed);
+        return [indexed];
+      } catch {
+        this.debateIndex.delete(debateId);
+      }
+    }
+
+    // Fallback: 파일 스캔
     try {
       const files = await fs.readdir(this.wipPath);
       const matchingFiles: string[] = [];
@@ -266,12 +281,13 @@ export class WipManager {
           const content = await fs.readFile(filepath, 'utf-8');
           if (content.includes(`- **ID**: ${debateId}`)) {
             matchingFiles.push(filepath);
+            this.debateIndex.set(debateId, filepath);
           }
         }
       }
 
       return matchingFiles;
-    } catch (error) {
+    } catch {
       return [];
     }
   }

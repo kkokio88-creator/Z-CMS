@@ -45,7 +45,7 @@ export const syncCostAnalysisData = async (): Promise<CostAnalysisSyncResult | n
     }
 
     return result.data as CostAnalysisSyncResult;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Cost analysis sync error:', e);
     return null;
   }

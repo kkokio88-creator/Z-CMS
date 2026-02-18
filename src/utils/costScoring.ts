@@ -4,7 +4,7 @@
  */
 import type { ProfitCenterGoal, BusinessConfig } from '../config/businessConfig';
 import type { DailySalesData, PurchaseData, UtilityData, ProductionData, LaborDailyData } from '../services/googleSheetService';
-import type { ChannelCostSummary } from '../components/ChannelCostAdmin';
+import type { ChannelCostSummary } from '../components/domain';
 import { isSubMaterial, computeChannelRevenue, type InventoryAdjustment } from '../services/insightService';
 import { filterByDate } from './dateRange';
 import { groupByWeek, weekKeyToLabel } from './weeklyAggregation';

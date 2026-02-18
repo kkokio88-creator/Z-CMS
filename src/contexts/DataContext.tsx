@@ -1,7 +1,6 @@
 /**
  * Data Context — 데이터 상태 전역 관리
- * App.tsx의 데이터 상태를 Context로 제공하여
- * 하위 컴포넌트에서 props 없이 접근 가능하게 합니다.
+ * 동기화 상태는 SyncContext로 분리되었습니다.
  */
 
 import React, { createContext, useContext, ReactNode } from 'react';
@@ -20,8 +19,6 @@ import type {
   InventorySafetyItem,
   StocktakeAnomalyItem,
 } from '../types';
-import type { DataAvailability } from '../services/ecountService';
-import type { SyncStatusInfo } from '../services/supabaseClient';
 
 export interface DataContextType {
   // Google Sheet 데이터
@@ -40,17 +37,6 @@ export interface DataContextType {
 
   // 인사이트
   insights: DashboardInsights | null;
-
-  // 동기화 상태
-  isSyncing: boolean;
-  lastSyncTime: string;
-  syncMessage: string;
-  dataAvailability: DataAvailability;
-  dataSource: 'backend' | 'direct' | false;
-  syncStatus: SyncStatusInfo | null;
-
-  // 액션
-  handleSync: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);

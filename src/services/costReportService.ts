@@ -95,13 +95,14 @@ export const testSheetsConnection = async (): Promise<{
   try {
     const response = await fetch(`${BACKEND_URL}/cost-report/test`);
     return await response.json();
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     return {
       success: false,
       message:
-        error.message === 'Failed to fetch'
+        msg === 'Failed to fetch'
           ? '백엔드 서버에 연결할 수 없습니다.'
-          : `오류: ${error.message}`,
+          : `오류: ${msg}`,
     };
   }
 };
@@ -120,7 +121,7 @@ export const getCostSummary = async (): Promise<CostReportData> => {
       summary: result.data || [],
       targets: result.targets || [],
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Cost summary fetch error:', error);
     return {
       summary: [],
