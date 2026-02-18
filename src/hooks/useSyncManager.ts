@@ -402,7 +402,13 @@ export function useSyncManager(dateRange: DateRangeOption) {
         }
 
         if (effectiveBegin.length === 0 && effectiveEnd.length === 0) {
-          setInventoryAdjustment(null);
+          // 최종 폴백: businessConfig의 수동 재고 조정값
+          if (bizConfig.manualInventoryAdjustment) {
+            console.log('[inventoryAdjustment] 수동 설정값 사용:', bizConfig.manualInventoryAdjustment);
+            setInventoryAdjustment(bizConfig.manualInventoryAdjustment);
+          } else {
+            setInventoryAdjustment(null);
+          }
           return;
         }
 

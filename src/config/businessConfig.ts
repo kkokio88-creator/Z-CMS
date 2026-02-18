@@ -182,6 +182,14 @@ export interface BusinessConfig {
   // === 독립채산제 ===
   /** 매출구간별 독립채산제 목표 */
   profitCenterGoals: ProfitCenterGoal[];
+
+  // === 수동 재고 조정 (Supabase/ECOUNT 조회 실패 시 폴백) ===
+  manualInventoryAdjustment?: {
+    beginningRawInventoryValue: number;
+    endingRawInventoryValue: number;
+    beginningSubInventoryValue: number;
+    endingSubInventoryValue: number;
+  };
 }
 
 /** 기본 비즈니스 설정값 */
@@ -340,6 +348,14 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
       },
     },
   ],
+
+  // 수동 재고 조정 (2025년 1월 기준: 기초=12/31, 기말=1/31)
+  manualInventoryAdjustment: {
+    beginningRawInventoryValue: 65207146,
+    endingRawInventoryValue: 75488766,
+    beginningSubInventoryValue: 0,
+    endingSubInventoryValue: 0,
+  },
 };
 
 const SETTINGS_STORAGE_KEY = 'ZCMS_BUSINESS_CONFIG';

@@ -166,20 +166,28 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
     [production, prevRange]
   );
 
-  // 정산매출 계산: computeChannelRevenue 경유 (채널 매핑된 정산매출)
-  const getSettlementRevenue = (sales: DailySalesData[], detail: SalesDetailData[]) => {
-    if (sales.length === 0) return 0;
-    const cr = computeChannelRevenue(sales, filteredPurchases, channelCosts, config, detail);
-    return cr.totalRawSupplyAmount > 0
-      ? cr.totalRawSupplyAmount - cr.totalPromotionDiscountAmount
-      : cr.totalRevenue;
-  };
+  // salesDetail 날짜 필터 (반드시 기간별로 필터링)
+  const filteredSalesDetail = useMemo(
+    () => filterByDate(salesDetail, rangeStart, rangeEnd),
+    [salesDetail, rangeStart, rangeEnd]
+  );
+  const prevSalesDetail = useMemo(
+    () => filterByDate(salesDetail, prevRange.start, prevRange.end),
+    [salesDetail, prevRange]
+  );
 
   // KPI 계산
   const kpis = useMemo(() => {
-    // 정산매출 = computeChannelRevenue 채널 매핑 기반
-    const totalRevenue = getSettlementRevenue(filteredSales, salesDetail);
-    const prevRevenue = getSettlementRevenue(prevSales, salesDetail);
+    // 정산매출 = computeChannelRevenue 경유 (채널 매핑 + 날짜 필터링된 salesDetail)
+    const calcSettlement = (sales: DailySalesData[], detail: SalesDetailData[]) => {
+      if (sales.length === 0) return 0;
+      const cr = computeChannelRevenue(sales, filteredPurchases, channelCosts, config, detail);
+      return cr.totalRawSupplyAmount > 0
+        ? cr.totalRawSupplyAmount - cr.totalPromotionDiscountAmount
+        : cr.totalRevenue;
+    };
+    const totalRevenue = calcSettlement(filteredSales, filteredSalesDetail);
+    const prevRevenue = calcSettlement(prevSales, prevSalesDetail);
     const revenueChange = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue * 100) : 0;
 
     // 폐기율: 폐기수량 / 총생산수량
@@ -198,7 +206,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       wasteRateChange: parseFloat(wasteRateChange.toFixed(1)),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredSales, filteredPurchases, salesDetail, channelCosts, config, filteredProduction, prevSales, prevProduction]);
+  }, [filteredSales, filteredSalesDetail, filteredPurchases, channelCosts, config, filteredProduction, prevSales, prevSalesDetail, prevProduction]);
 
   // 차트 데이터 (날짜순 정렬)
   const revenueTrend = useMemo(
