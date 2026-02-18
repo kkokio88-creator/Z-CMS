@@ -13,6 +13,7 @@ import {
   computeRevenueTrend,
   computeProductBEP,
   computeCostBreakdown,
+  type InventoryAdjustment,
 } from '../../services/insightService';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
 import { getChannelCostSummaries } from '../domain';
@@ -28,6 +29,7 @@ interface Props {
   salesDetail: SalesDetailData[];
   purchases: PurchaseData[];
   insights: DashboardInsights | null;
+  inventoryAdjustment?: InventoryAdjustment | null;
   onItemClick: (item: import('../../types').ModalItem) => void;
   onTabChange?: (tab: string) => void;
 }
@@ -36,7 +38,7 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 const CHANNEL_COLORS = ['#3B82F6', '#10B981', '#F59E0B'];
 const BUDGET_COLORS = { rawMaterial: '#3B82F6', subMaterial: '#10B981', labor: '#F59E0B', overhead: '#EF4444' };
 
-export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, purchases, insights, onItemClick, onTabChange }) => {
+export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, purchases, insights, inventoryAdjustment = null, onItemClick, onTabChange }) => {
   const config = useBusinessConfig();
   const { dateRange } = useUI();
 
@@ -76,8 +78,8 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
     [productProfit, channelRevenue, config]
   );
   const costBreakdown = useMemo(
-    () => filteredPurchases.length > 0 ? computeCostBreakdown(filteredPurchases, [], [], config) : null,
-    [filteredPurchases, config]
+    () => filteredPurchases.length > 0 ? computeCostBreakdown(filteredPurchases, [], [], config, [], inventoryAdjustment) : null,
+    [filteredPurchases, config, inventoryAdjustment]
   );
 
   // 날짜 라벨

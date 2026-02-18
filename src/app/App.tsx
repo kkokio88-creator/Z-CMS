@@ -305,6 +305,7 @@ function AppContent() {
               salesDetail={gsSalesDetail}
               purchases={gsPurchases}
               insights={insights}
+              inventoryAdjustment={inventoryAdjustment}
               onItemClick={handleItemClick}
               onTabChange={setActiveSubTab}
             />

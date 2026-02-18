@@ -26,6 +26,7 @@ import {
   computeAllInsights,
   DashboardInsights,
   isSubMaterial,
+  diagnoseSubMaterialClassification,
   type InventoryAdjustment,
 } from '../services/insightService';
 import { fetchInventoryByLocation } from '../services/costManagementService';
@@ -411,9 +412,10 @@ export function useSyncManager(dateRange: DateRangeOption) {
           return;
         }
 
+        const subExcl = bizConfig.subMaterialExcludeCodes || [];
         const calcValue = (items: typeof effectiveBegin, type: 'raw' | 'sub') => {
           return items
-            .filter(inv => type === 'sub' ? isSubMaterial(inv.productName, inv.productCode) : !isSubMaterial(inv.productName, inv.productCode))
+            .filter(inv => type === 'sub' ? isSubMaterial(inv.productName, inv.productCode, subExcl) : !isSubMaterial(inv.productName, inv.productCode, subExcl))
             .reduce((sum, inv) => {
               const price = masterPriceMap.get(inv.productCode) || inv.unitPrice || 0;
               return sum + inv.quantity * price;
@@ -446,6 +448,32 @@ export function useSyncManager(dateRange: DateRangeOption) {
         gsLabor, gsInventorySnapshots, inventoryAdjustment,
       );
       setInsights(computed);
+
+      // 부재료 분류 진단 (목표: 27,764,633)
+      const TARGET_SUB_COST = 27_764_633;
+      const diag = diagnoseSubMaterialClassification(gsPurchases, TARGET_SUB_COST, inventoryAdjustment);
+      console.group('[부재료 분류 진단]');
+      console.log(`현재 부재료 매입(공급가액): ${diag.currentSubTotal.toLocaleString()}원`);
+      console.log(`목표 부재료 매입(공급가액): ${diag.targetPurchaseSub.toLocaleString()}원`);
+      console.log(`초과분: ${diag.excess.toLocaleString()}원`);
+      console.log('--- 현재 부재료 품목 ---');
+      console.table(diag.subItems.map(i => ({
+        품목코드: i.code,
+        품명: i.name,
+        공급가액: i.supplyAmt.toLocaleString(),
+        분류근거: i.reason,
+      })));
+      if (diag.suggestedExclusions.length > 0) {
+        console.log('--- 제외 제안 (초과분 해소용) ---');
+        console.table(diag.suggestedExclusions.map(i => ({
+          품목코드: i.code,
+          품명: i.name,
+          공급가액: i.supplyAmt.toLocaleString(),
+          분류근거: i.reason,
+        })));
+        console.log('제안 코드 목록:', diag.suggestedExclusions.map(i => i.code));
+      }
+      console.groupEnd();
     } catch (e) {
       console.warn('[useSyncManager] inventoryAdjustment 재계산 실패:', e);
     }

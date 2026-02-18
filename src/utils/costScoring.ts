@@ -141,23 +141,23 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const targets = activeBracket.targets;
 
   // 원가 계산: 매입액 (공급가액 기준, VAT 제외)
-  const purchaseRaw = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.supplyAmount, 0);
-  const purchaseSub = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.supplyAmount, 0);
+  const subExcl = config.subMaterialExcludeCodes || [];
+  const costExcl = config.costExcludeCodes || [];
+  const costPurchases = costExcl.length > 0 ? fPurchases.filter(p => !costExcl.includes(p.productCode)) : fPurchases;
+  const purchaseRaw = costPurchases.filter(p => !isSubMaterial(p.productName, p.productCode, subExcl)).reduce((s, p) => s + p.supplyAmount, 0);
+  const purchaseSub = costPurchases.filter(p => isSubMaterial(p.productName, p.productCode, subExcl)).reduce((s, p) => s + p.supplyAmount, 0);
 
-  // 의제 매입세액 공제: 당기 매입액 × 공제율 (총 원가에서 차감)
-  const totalPurchase = purchaseRaw + purchaseSub;
-  const deemedInputTaxCredit = Math.round(totalPurchase * (config.deemedInputTaxRate || 0));
-  const rawShare = totalPurchase > 0 ? purchaseRaw / totalPurchase : 0.5;
-  const rawDeduction = Math.round(deemedInputTaxCredit * rawShare);
-  const subDeduction = deemedInputTaxCredit - rawDeduction;
+  // 의제 매입세액 공제: 원재료 당기 매입액 × 공제율 (원재료에만 적용, insightService와 동일)
+  const rawDeduction = Math.round(purchaseRaw * (config.deemedInputTaxRate || 0));
+  const deemedInputTaxCredit = rawDeduction;
 
-  // 실제 사용액 = 기초재고 + 당기매입 - 기말재고 (재고 조정 있을 때)
+  // 실제 사용액 = 기초재고 + 당기매입 - 기말재고 - 의제매입세 공제(원재료만)
   const rawCost = (inventoryAdjustment
     ? inventoryAdjustment.beginningRawInventoryValue + purchaseRaw - inventoryAdjustment.endingRawInventoryValue
     : purchaseRaw) - rawDeduction;
-  const subCost = (inventoryAdjustment
+  const subCost = inventoryAdjustment
     ? inventoryAdjustment.beginningSubInventoryValue + purchaseSub - inventoryAdjustment.endingSubInventoryValue
-    : purchaseSub) - subDeduction;
+    : purchaseSub;
 
   // 노무비: Google Sheets labor 데이터 사용 (insightService와 동일)
   const fLabor = filterByDate(labor, rangeStart, rangeEnd);
@@ -224,8 +224,11 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
 
   // 주간 그룹핑
   const salesWeeks = groupByWeek(fSales, 'date');
-  const rawPurchases = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode));
-  const subPurchases = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode));
+  const subExcl2 = config.subMaterialExcludeCodes || [];
+  const costExcl2 = config.costExcludeCodes || [];
+  const costPurchases2 = costExcl2.length > 0 ? fPurchases.filter(p => !costExcl2.includes(p.productCode)) : fPurchases;
+  const rawPurchases = costPurchases2.filter(p => !isSubMaterial(p.productName, p.productCode, subExcl2));
+  const subPurchases = costPurchases2.filter(p => isSubMaterial(p.productName, p.productCode, subExcl2));
   const rawWeeks = groupByWeek(rawPurchases, 'date');
   const subWeeks = groupByWeek(subPurchases, 'date');
   const utilWeeks = groupByWeek(fUtilities, 'date');
@@ -251,12 +254,9 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
     const subPurchase = subItems.reduce((s, p) => s + p.supplyAmount, 0);
     const util = utilItems.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
 
-    // 의제 매입세액 공제
-    const wkTotalPurchase = rawPurchase + subPurchase;
-    const wkDeemed = Math.round(wkTotalPurchase * (config.deemedInputTaxRate || 0));
-    const wkRawShare = wkTotalPurchase > 0 ? rawPurchase / wkTotalPurchase : 0.5;
-    const raw = rawPurchase - Math.round(wkDeemed * wkRawShare);
-    const sub = subPurchase - (wkDeemed - Math.round(wkDeemed * wkRawShare));
+    // 의제 매입세액 공제: 원재료에만 적용 (insightService와 동일)
+    const raw = rawPurchase - Math.round(rawPurchase * (config.deemedInputTaxRate || 0));
+    const sub = subPurchase;
 
     const laborCost = hasLaborData
       ? laborItems.reduce((s, l) => s + l.totalPay, 0)

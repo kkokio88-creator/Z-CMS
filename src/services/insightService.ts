@@ -1090,10 +1090,83 @@ export function computeProductionEfficiency(production: ProductionData[]): Produ
 
 const SUB_MATERIAL_KEYWORDS = ['포장', '박스', '비닐', '라벨', '테이프', '봉투', '스티커', '밴드', '용기', '캡', '뚜껑'];
 
-/** 부재료 판별: 품목코드 ZIP_S_ 우선, 없으면 키워드 폴백 */
-export function isSubMaterial(productName: string, productCode?: string): boolean {
+/** 부재료 판별: 품목코드 ZIP_S_ 우선, 없으면 키워드 폴백. excludeCodes로 제외 가능 */
+export function isSubMaterial(
+  productName: string,
+  productCode?: string,
+  excludeCodes?: string[],
+): boolean {
+  if (excludeCodes?.length && productCode && excludeCodes.includes(productCode)) return false;
   if (productCode) return productCode.startsWith('ZIP_S_');
   return SUB_MATERIAL_KEYWORDS.some(kw => productName.includes(kw));
+}
+
+/** 원가계산 제외 대상 판별 */
+export function isCostExcluded(productCode: string, costExcludeCodes?: string[]): boolean {
+  return !!costExcludeCodes?.length && costExcludeCodes.includes(productCode);
+}
+
+/**
+ * 부재료 분류 역산 진단
+ * 목표 부재료비에 맞추기 위해 어떤 품목을 제외해야 하는지 분석
+ */
+export function diagnoseSubMaterialClassification(
+  purchases: PurchaseData[],
+  targetSubCost: number,
+  inventoryAdjustment?: InventoryAdjustment | null,
+): {
+  currentSubTotal: number;
+  targetPurchaseSub: number;
+  excess: number;
+  subItems: { code: string; name: string; supplyAmt: number; reason: string }[];
+  suggestedExclusions: { code: string; name: string; supplyAmt: number; reason: string }[];
+} {
+  // 역산: targetSubCost = 기초 + purchaseSub - 기말 → purchaseSub = targetSubCost - 기초 + 기말
+  const targetPurchaseSub = inventoryAdjustment
+    ? targetSubCost - inventoryAdjustment.beginningSubInventoryValue + inventoryAdjustment.endingSubInventoryValue
+    : targetSubCost;
+
+  // 현재 부재료 품목 집계 (productCode 기준 그룹)
+  const subMap = new Map<string, { name: string; supplyAmt: number; reason: string }>();
+  purchases.forEach(p => {
+    if (isSubMaterial(p.productName, p.productCode)) {
+      const key = p.productCode || `__NAME__${p.productName}`;
+      const existing = subMap.get(key) || { name: p.productName, supplyAmt: 0, reason: '' };
+      existing.supplyAmt += p.supplyAmount;
+      existing.reason = p.productCode?.startsWith('ZIP_S_') ? 'ZIP_S_ 코드' : `키워드(${SUB_MATERIAL_KEYWORDS.find(kw => p.productName.includes(kw)) || '?'})`;
+      subMap.set(key, existing);
+    }
+  });
+
+  const subItems = Array.from(subMap.entries())
+    .map(([code, d]) => ({ code, ...d }))
+    .sort((a, b) => b.supplyAmt - a.supplyAmt);
+
+  const currentSubTotal = subItems.reduce((s, i) => s + i.supplyAmt, 0);
+  const excess = currentSubTotal - targetPurchaseSub;
+
+  // 역산: excess 만큼 제거해야 할 품목 조합 찾기 (greedy: 큰 것부터 제거)
+  const suggestedExclusions: typeof subItems = [];
+  if (excess > 0) {
+    let remaining = excess;
+    // 1차: 키워드 매칭 품목 우선 제거 (코드 기반보다 불확실)
+    const keywordItems = subItems.filter(i => !i.reason.startsWith('ZIP_S_'));
+    const codeItems = subItems.filter(i => i.reason.startsWith('ZIP_S_'));
+
+    for (const item of keywordItems) {
+      if (remaining <= 0) break;
+      suggestedExclusions.push(item);
+      remaining -= item.supplyAmt;
+    }
+    // 키워드 제거로 부족하면 코드 기반도 제거 시도
+    for (const item of codeItems) {
+      if (remaining <= 0) break;
+      suggestedExclusions.push(item);
+      remaining -= item.supplyAmt;
+    }
+  }
+
+  return { currentSubTotal, targetPurchaseSub, excess, subItems, suggestedExclusions };
 }
 
 export function computeCostBreakdown(
@@ -1104,11 +1177,12 @@ export function computeCostBreakdown(
   labor: LaborDailyData[] = [],
   inventoryAdjustment?: InventoryAdjustment | null
 ): CostBreakdownInsight {
-  // 원재료 / 부재료 분류
+  // 원가계산 제외 품목 필터 + 원재료/부재료 분류
   const rawItems: PurchaseData[] = [];
   const subItems: PurchaseData[] = [];
   purchases.forEach(p => {
-    if (isSubMaterial(p.productName, p.productCode)) {
+    if (isCostExcluded(p.productCode, config.costExcludeCodes)) return; // 원가 제외
+    if (isSubMaterial(p.productName, p.productCode, config.subMaterialExcludeCodes)) {
       subItems.push(p);
     } else {
       rawItems.push(p);

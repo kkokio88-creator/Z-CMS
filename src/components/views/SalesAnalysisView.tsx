@@ -8,12 +8,13 @@ import { SubTabLayout } from '../layout';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../../utils/format';
 import type { DailySalesData, SalesDetailData, PurchaseData } from '../../services/googleSheetService';
 import type { DashboardInsights } from '../../services/insightService';
-import { computeProductProfit } from '../../services/insightService';
+import { computeProductProfit, computeChannelRevenue } from '../../services/insightService';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
 import { useUI } from '../../contexts/UIContext';
 import { getDateRange, filterByDate } from '../../utils/dateRange';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../../utils/weeklyAggregation';
 import { getChannelPricingSettings } from '../domain/ChannelCostAdmin';
+import { getChannelCostSummaries } from '../domain';
 
 interface Props {
   dailySales: DailySalesData[];
@@ -306,9 +307,11 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
       {(activeTab) => {
         // ========== 매출 트렌드 ==========
         if (activeTab === 'trend') {
-          // 정산매출 = salesDetail 공급가액 합계 (가장 정확한 원천 데이터)
-          const totalRevenue = filteredSalesDetail.length > 0
-            ? filteredSalesDetail.reduce((s, d) => s + (d.supplyAmount || 0), 0)
+          // 정산매출 = computeChannelRevenue (채널 매핑 + promotionDiscount 적용)
+          const channelCosts = getChannelCostSummaries();
+          const cr = computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config, filteredSalesDetail);
+          const totalRevenue = cr.totalRawSupplyAmount > 0
+            ? cr.totalRawSupplyAmount - cr.totalPromotionDiscountAmount
             : filteredDailySales.reduce((s, d) => s + d.totalRevenue, 0);
           const totalDays = filteredDailySales.length || 1;
           const avgDailyRevenue = Math.round(totalRevenue / totalDays);

@@ -135,18 +135,19 @@ export const CostManagementView: React.FC<Props> = ({
 
   // 생산매출 = 권장판매가 매출 × 50% (computeChannelRevenue에서 계산)
   const filteredDailySales = useMemo(() => filterByDate(dailySales, rangeStart, rangeEnd), [dailySales, rangeStart, rangeEnd]);
+  const filteredSalesDetail = useMemo(() => filterByDate(salesDetail, rangeStart, rangeEnd), [salesDetail, rangeStart, rangeEnd]);
   const productionRevenue = useMemo(() => {
     if (filteredDailySales.length === 0) return 0;
     const channelCosts = getChannelCostSummaries();
-    const cr = computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config, salesDetail);
+    const cr = computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config, filteredSalesDetail);
     return cr.totalProductionRevenue;
-  }, [filteredDailySales, filteredPurchases, config, salesDetail]);
+  }, [filteredDailySales, filteredPurchases, config, filteredSalesDetail]);
 
   // 주간 점수 (기존 costScoring 유지 — 주간 추세 그래프용)
   const scoringParams = useMemo(() => ({
-    dailySales: filteredDailySales, purchases: filteredPurchases, utilities: filteredUtilities, production: filteredProduction, labor: filteredLabor, salesDetail, config, rangeStart, rangeEnd, rangeDays,
+    dailySales: filteredDailySales, purchases: filteredPurchases, utilities: filteredUtilities, production: filteredProduction, labor: filteredLabor, salesDetail: filteredSalesDetail, config, rangeStart, rangeEnd, rangeDays,
     channelCosts: getChannelCostSummaries(),
-  }), [filteredDailySales, filteredPurchases, filteredUtilities, filteredProduction, filteredLabor, salesDetail, config, rangeStart, rangeEnd, rangeDays]);
+  }), [filteredDailySales, filteredPurchases, filteredUtilities, filteredProduction, filteredLabor, filteredSalesDetail, config, rangeStart, rangeEnd, rangeDays]);
   const weeklyScores = useMemo(() => computeWeeklyCostScores(scoringParams), [scoringParams]);
 
   // 날짜 필터된 데이터로 로컬 계산 (기간 변경 시 반응)
@@ -221,8 +222,11 @@ export const CostManagementView: React.FC<Props> = ({
   // =============================================
   const weeklyData = useMemo(() => {
     // purchases를 원재료/부재료로 분류
-    const rawPurchases = filteredPurchases.filter(p => !isSubMaterial(p.productName, p.productCode));
-    const subPurchases = filteredPurchases.filter(p => isSubMaterial(p.productName, p.productCode));
+    const excluded = config.costExcludeCodes || [];
+    const subExcl = config.subMaterialExcludeCodes || [];
+    const costPurchases = excluded.length > 0 ? filteredPurchases.filter(p => !excluded.includes(p.productCode)) : filteredPurchases;
+    const rawPurchases = costPurchases.filter(p => !isSubMaterial(p.productName, p.productCode, subExcl));
+    const subPurchases = costPurchases.filter(p => isSubMaterial(p.productName, p.productCode, subExcl));
 
     // 주간별 그룹핑
     const rawWeeks = groupByWeek(rawPurchases, 'date');

@@ -190,6 +190,12 @@ export interface BusinessConfig {
     beginningSubInventoryValue: number;
     endingSubInventoryValue: number;
   };
+
+  // === 부재료 분류 제외 품목 ===
+  /** 부재료 분류에서 제외할 품목코드 (ZIP_S_로 시작하지만 원재료로 분류해야 하는 품목) */
+  subMaterialExcludeCodes?: string[];
+  /** 원가계산에서 완전 제외할 품목코드 (원재료도 부재료도 아닌 비생산 매입) */
+  costExcludeCodes?: string[];
 }
 
 /** 기본 비즈니스 설정값 */
@@ -356,6 +362,35 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
     beginningSubInventoryValue: 52474547,
     endingSubInventoryValue: 49708324,
   },
+
+  // 부재료 분류 제외/원가 제외 — 재고조사 미포함 비생산 매입 품목
+  subMaterialExcludeCodes: [],
+  costExcludeCodes: [
+    // ZIP_S_: 부재료 재고 미포함 포장/용기/소모품
+    'ZIP_S_6108',  // 10103 [EA]
+    'ZIP_S_6176',  // 집반찬연구소_소형필름(2열)_리뉴얼
+    'ZIP_S_6104',  // 신선상자_소
+    'ZIP_S_6005',  // 아이시스생수
+    'ZIP_S_6528',  // 19155(0.75t)
+    'ZIP_S_6502',  // 에어캡_PP-F5
+    'ZIP_S_6162',  // 19153
+    // ZIP_M_9xxx: 직원식당용/샘플 (비생산)
+    'ZIP_M_9000',  // 직원식당용 원재료_면세품목
+    'ZIP_M_9001',  // 직원식당용 원재료_과세품목
+    'ZIP_M_9998',  // 샘플(깻순데친2kg)
+    // ZIP_E: 포장비/위생용품 (비생산 소모품)
+    'ZIP_E_1037',  // opp film roll
+    'ZIP_E_0005',  // 리본(카트리지)_대형
+    'ZIP_E_0007',  // 리본(카트리지)_특대형
+    'ZIP_E_1030',  // 라벨지_외박스용
+    'ZIP_E_1028',  // 라텍스장갑M
+    'ZIP_E_0003',  // 테이프_크라프트
+    'ZIP_E_0006',  // 리본(카트리지)_일반형
+    'ZIP_E_1002',  // 태화 고무장갑
+    'ZIP_E_1024',  // 수세미(파랑)
+    'ZIP_E_1018',  // 스티코구형공용장화270
+    'ZIP_E_1019',  // 스티코구형공용장화280
+  ],
 };
 
 const SETTINGS_STORAGE_KEY = 'ZCMS_BUSINESS_CONFIG';
@@ -390,8 +425,10 @@ export function loadBusinessConfig(): BusinessConfig {
         parsed.profitCenterGoals = migrateProfitCenterGoals(parsed.profitCenterGoals);
         parsed.profitCenterGoals = parsed.profitCenterGoals.map((g: ProfitCenterGoal) => deriveMultipliersFromTargets(g));
       }
-      // manualInventoryAdjustment는 코드에서 관리하는 정확한 실재고 값 — localStorage 덮어쓰기 방지
+      // 코드에서 관리하는 정확한 값 — localStorage 덮어쓰기 방지
       parsed.manualInventoryAdjustment = DEFAULT_BUSINESS_CONFIG.manualInventoryAdjustment;
+      parsed.costExcludeCodes = DEFAULT_BUSINESS_CONFIG.costExcludeCodes;
+      parsed.subMaterialExcludeCodes = DEFAULT_BUSINESS_CONFIG.subMaterialExcludeCodes;
       return parsed;
     }
   } catch (e) {
