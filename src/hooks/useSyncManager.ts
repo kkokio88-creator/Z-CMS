@@ -353,12 +353,19 @@ export function useSyncManager(dateRange: DateRangeOption) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 날짜 범위 변경 시 기초/기말 재고 fetch → 재고 조정 원가 계산용
+  // 날짜 범위 변경 시 재고 조정 원가 계산용
+  // manualInventoryAdjustment가 설정되어 있으면 비동기 fetch를 건너뜀
+  // (fetchInventoryByLocation은 unitPrice=wasteUnitCost(1000)으로 반환하여 부정확)
   useEffect(() => {
+    if (bizConfig.manualInventoryAdjustment) {
+      // 수동 설정값 우선 사용 (정확한 실재고 금액)
+      setInventoryAdjustment(bizConfig.manualInventoryAdjustment);
+      return;
+    }
+
     const fetchInventoryAdjustment = async () => {
       try {
         const { start, end } = getDateRange(dateRange);
-        // 기초재고일 = rangeStart - 1일
         const beginDate = new Date(start);
         beginDate.setDate(beginDate.getDate() - 1);
         const beginDateStr = beginDate.toISOString().slice(0, 10).replace(/-/g, '');
@@ -369,19 +376,16 @@ export function useSyncManager(dateRange: DateRangeOption) {
           fetchInventoryByLocation(endDateStr),
         ]);
 
-        // materialMaster 단가 lookup (있으면 사용, 없으면 ECOUNT 응답의 unitPrice)
         const masterPriceMap = new Map<string, number>();
         gsMaterialMaster.forEach(m => {
           if (m.unitPrice > 0) masterPriceMap.set(m.materialCode, m.unitPrice);
         });
 
-        // fetchInventoryByLocation 실패 시 gsInventorySnapshots 폴백
         let effectiveBegin = beginInventory;
         let effectiveEnd = endInventory;
         if (beginInventory.length === 0 && endInventory.length === 0 && gsInventorySnapshots.length > 0) {
           const beginTarget = beginDate.toISOString().slice(0, 10);
           const endTarget = end;
-          // 스냅샷에서 가장 가까운 날짜 찾기
           const dates = [...new Set(gsInventorySnapshots.map(s => s.snapshotDate))].sort();
           const findClosest = (target: string) => dates.reduce((best, d) => Math.abs(new Date(d).getTime() - new Date(target).getTime()) < Math.abs(new Date(best).getTime() - new Date(target).getTime()) ? d : best, dates[0]);
           const beginSnapDate = findClosest(beginTarget);
@@ -400,17 +404,10 @@ export function useSyncManager(dateRange: DateRangeOption) {
             }));
           effectiveBegin = toInventory(beginSnapDate);
           effectiveEnd = toInventory(endSnapDate);
-          console.log(`[inventoryAdjustment] 스냅샷 폴백: 기초(${beginSnapDate}) ${effectiveBegin.length}건, 기말(${endSnapDate}) ${effectiveEnd.length}건`);
         }
 
         if (effectiveBegin.length === 0 && effectiveEnd.length === 0) {
-          // 최종 폴백: businessConfig의 수동 재고 조정값
-          if (bizConfig.manualInventoryAdjustment) {
-            console.log('[inventoryAdjustment] 수동 설정값 사용:', bizConfig.manualInventoryAdjustment);
-            setInventoryAdjustment(bizConfig.manualInventoryAdjustment);
-          } else {
-            setInventoryAdjustment(null);
-          }
+          setInventoryAdjustment(null);
           return;
         }
 
@@ -429,15 +426,10 @@ export function useSyncManager(dateRange: DateRangeOption) {
           beginningSubInventoryValue: calcValue(effectiveBegin, 'sub'),
           endingSubInventoryValue: calcValue(effectiveEnd, 'sub'),
         };
-        console.log('[inventoryAdjustment] 결과:', adj);
         setInventoryAdjustment(adj);
       } catch (err) {
         console.warn('[App] 재고 조정 데이터 fetch 실패:', err);
-        if (bizConfig.manualInventoryAdjustment) {
-          setInventoryAdjustment(bizConfig.manualInventoryAdjustment);
-        } else {
-          setInventoryAdjustment(null);
-        }
+        setInventoryAdjustment(null);
       }
     };
 

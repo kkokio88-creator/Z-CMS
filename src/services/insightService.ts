@@ -2758,19 +2758,16 @@ export function computeProfitCenterScore(
 
   const targets = activeBracket.targets;
   const comp = costBreakdown.composition;
-  const rawMaterialGross = comp.find(c => c.name === '원재료')?.value || 0;
-  const subMaterialGross = comp.find(c => c.name === '부재료')?.value || 0;
+  // composition 값은 computeCostBreakdown에서 이미 의제매입세 공제 + 재고조정 적용됨
+  const rawMaterial = comp.find(c => c.name === '원재료')?.value || 0;
+  const subMaterial = comp.find(c => c.name === '부재료')?.value || 0;
   const laborCost = comp.find(c => c.name === '노무비')?.value || 0;
   const overheadCost = comp.find(c => c.name === '수도광열전력')?.value || 0;
 
-  // 의제 매입세액 공제: 당기 매입액(원재료+부재료) × 공제율 → 원가에서 차감
-  const totalMaterialGross = rawMaterialGross + subMaterialGross;
-  const deemedInputTaxCredit = Math.round(totalMaterialGross * (config.deemedInputTaxRate || 0));
-  const rawShare = totalMaterialGross > 0 ? rawMaterialGross / totalMaterialGross : 0.5;
-  const rawDeduction = Math.round(deemedInputTaxCredit * rawShare);
-  const subDeduction = deemedInputTaxCredit - rawDeduction;
-  const rawMaterial = rawMaterialGross - rawDeduction;
-  const subMaterial = subMaterialGross - subDeduction;
+  // 의제 매입세액 공제액 (UI 표시용, 원가에서 이미 차감됨)
+  const deemedInputTaxCredit = Math.round(
+    (rawMaterial + subMaterial) * (config.deemedInputTaxRate || 0) / (1 - (config.deemedInputTaxRate || 0))
+  );
 
   const totalExpense = overheadCost;
 
