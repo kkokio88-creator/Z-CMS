@@ -2735,8 +2735,10 @@ export function computeProfitCenterScore(
     ? Math.max(1, Math.round((new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000) + 1)
     : channelRevenue.dailyTrend.length || 1;
 
-  // 매출구간 결정: 정산매출(실결제 금액) 기준
-  const settlementRevenue = channelRevenue.totalRevenue;
+  // 매출구간 결정: 정산매출(공급가액 - 프로모할인) 기준, salesDetail 없으면 dailySales 폴백
+  const settlementRevenue = channelRevenue.totalRawSupplyAmount > 0
+    ? channelRevenue.totalRawSupplyAmount - channelRevenue.totalPromotionDiscountAmount
+    : channelRevenue.totalRevenue;
   const monthlySettlement = Math.round(settlementRevenue * 30 / calendarDays);
 
   // 점수 계산용: 생산매출 (= 권장판매가 × 50%)

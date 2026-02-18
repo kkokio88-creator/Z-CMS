@@ -4,7 +4,7 @@ import { KPICard } from '../common';
 import type { SyncStatusInfo } from '../../services/supabaseClient';
 import { formatCurrency } from '../../utils/format';
 import type { ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../../services/insightService';
-import type { DailySalesData, ProductionData, PurchaseData } from '../../services/googleSheetService';
+import type { DailySalesData, ProductionData, PurchaseData, SalesDetailData } from '../../services/googleSheetService';
 import { useUI } from '../../contexts/UIContext';
 import { getDateRange, filterByDate, getRangeLabel } from '../../utils/dateRange';
 import { FormulaTooltip } from '../common';
@@ -16,6 +16,7 @@ interface DashboardHomeViewProps {
   isSyncing: boolean;
   lastSyncTime: string;
   dailySales: DailySalesData[];
+  salesDetail?: SalesDetailData[];
   production: ProductionData[];
   purchases: PurchaseData[];
   onNavigate?: (view: string) => void;
@@ -107,6 +108,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   isSyncing,
   lastSyncTime,
   dailySales,
+  salesDetail = [],
   production,
   purchases,
   dataSource,
@@ -159,11 +161,25 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
     [production, prevRange]
   );
 
+  // salesDetail 날짜 필터
+  const filteredSalesDetail = useMemo(
+    () => filterByDate(salesDetail, rangeStart, rangeEnd),
+    [salesDetail, rangeStart, rangeEnd]
+  );
+  const prevSalesDetail = useMemo(
+    () => filterByDate(salesDetail, prevRange.start, prevRange.end),
+    [salesDetail, prevRange]
+  );
+
   // KPI 계산
   const kpis = useMemo(() => {
-    // 총 매출
-    const totalRevenue = filteredSales.reduce((s, d) => s + (d.totalRevenue || 0), 0);
-    const prevRevenue = prevSales.reduce((s, d) => s + (d.totalRevenue || 0), 0);
+    // 정산매출 = salesDetail 공급가액 합계 (있으면), 없으면 dailySales 폴백
+    const totalRevenue = filteredSalesDetail.length > 0
+      ? filteredSalesDetail.reduce((s, d) => s + (d.supplyAmount || 0), 0)
+      : filteredSales.reduce((s, d) => s + (d.totalRevenue || 0), 0);
+    const prevRevenue = prevSalesDetail.length > 0
+      ? prevSalesDetail.reduce((s, d) => s + (d.supplyAmount || 0), 0)
+      : prevSales.reduce((s, d) => s + (d.totalRevenue || 0), 0);
     const revenueChange = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue * 100) : 0;
 
     // 폐기율: 폐기수량 / 총생산수량
@@ -181,7 +197,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       wasteRate: parseFloat(wasteRate.toFixed(1)),
       wasteRateChange: parseFloat(wasteRateChange.toFixed(1)),
     };
-  }, [filteredSales, filteredProduction, prevSales, prevProduction]);
+  }, [filteredSales, filteredSalesDetail, filteredProduction, prevSales, prevSalesDetail, prevProduction]);
 
   // 차트 데이터 (날짜순 정렬)
   const revenueTrend = useMemo(
@@ -250,7 +266,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       <InsightSection id={["home-revenue", "home-waste"]}>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          title={`총 매출 (${rangeLabel})`}
+          title={`정산매출 (${rangeLabel})`}
           value={`₩${formatCurrency(kpis.totalRevenue)}`}
           change={`${kpis.revenueChange >= 0 ? '+' : ''}${kpis.revenueChange}%`}
           isPositive={kpis.revenueChange >= 0}

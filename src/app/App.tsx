@@ -286,6 +286,7 @@ function AppContent() {
               isSyncing={isSyncing}
               lastSyncTime={lastSyncTime}
               dailySales={gsDailySales}
+              salesDetail={gsSalesDetail}
               production={gsProduction}
               purchases={gsPurchases}
               onNavigate={view => handleSetActiveView(view as ViewType)}
