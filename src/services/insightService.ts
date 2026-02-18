@@ -430,6 +430,7 @@ export interface ProfitCenterScoreInsight {
   calendarDays: number;
   scores: ProfitCenterScoreMetric[];
   overallScore: number;
+  deemedInputTaxCredit: number;
 }
 
 // BOM 소진량 이상 감지 타입
@@ -2748,10 +2749,19 @@ export function computeProfitCenterScore(
 
   const targets = activeBracket.targets;
   const comp = costBreakdown.composition;
-  const rawMaterial = comp.find(c => c.name === '원재료')?.value || 0;
-  const subMaterial = comp.find(c => c.name === '부재료')?.value || 0;
+  const rawMaterialGross = comp.find(c => c.name === '원재료')?.value || 0;
+  const subMaterialGross = comp.find(c => c.name === '부재료')?.value || 0;
   const laborCost = comp.find(c => c.name === '노무비')?.value || 0;
   const overheadCost = comp.find(c => c.name === '수도광열전력')?.value || 0;
+
+  // 의제 매입세액 공제: 당기 매입액(원재료+부재료) × 공제율 → 원가에서 차감
+  const totalMaterialGross = rawMaterialGross + subMaterialGross;
+  const deemedInputTaxCredit = Math.round(totalMaterialGross * (config.deemedInputTaxRate || 0));
+  const rawShare = totalMaterialGross > 0 ? rawMaterialGross / totalMaterialGross : 0.5;
+  const rawDeduction = Math.round(deemedInputTaxCredit * rawShare);
+  const subDeduction = deemedInputTaxCredit - rawDeduction;
+  const rawMaterial = rawMaterialGross - rawDeduction;
+  const subMaterial = subMaterialGross - subDeduction;
 
   const totalExpense = overheadCost;
 
@@ -2804,5 +2814,5 @@ export function computeProfitCenterScore(
   // 종합점수 = 5개 지표 점수의 평균
   const overallScore = Math.round(scores.reduce((s, m) => s + m.score, 0) / scores.length);
 
-  return { activeBracket, monthlyRevenue, calendarDays, scores, overallScore };
+  return { activeBracket, monthlyRevenue, calendarDays, scores, overallScore, deemedInputTaxCredit };
 }

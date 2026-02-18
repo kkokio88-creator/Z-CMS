@@ -31,6 +31,7 @@ export interface CostScoringResult {
   items: CostItemScore[];      // [원재료, 부재료, 노무비, 수도광열전력]
   totalSurplus: number;
   totalCost: number;
+  deemedInputTaxCredit: number;  // 의제 매입세액 공제액
 }
 
 export interface WeeklyCostScore {
@@ -139,13 +140,20 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const purchaseRaw = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
   const purchaseSub = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
 
+  // 의제 매입세액 공제: 당기 매입액 × 공제율 (총 원가에서 차감)
+  const totalPurchase = purchaseRaw + purchaseSub;
+  const deemedInputTaxCredit = Math.round(totalPurchase * (config.deemedInputTaxRate || 0));
+  const rawShare = totalPurchase > 0 ? purchaseRaw / totalPurchase : 0.5;
+  const rawDeduction = Math.round(deemedInputTaxCredit * rawShare);
+  const subDeduction = deemedInputTaxCredit - rawDeduction;
+
   // 실제 사용액 = 기초재고 + 당기매입 - 기말재고 (재고 조정 있을 때)
-  const rawCost = inventoryAdjustment
+  const rawCost = (inventoryAdjustment
     ? inventoryAdjustment.beginningRawInventoryValue + purchaseRaw - inventoryAdjustment.endingRawInventoryValue
-    : purchaseRaw;
-  const subCost = inventoryAdjustment
+    : purchaseRaw) - rawDeduction;
+  const subCost = (inventoryAdjustment
     ? inventoryAdjustment.beginningSubInventoryValue + purchaseSub - inventoryAdjustment.endingSubInventoryValue
-    : purchaseSub;
+    : purchaseSub) - subDeduction;
 
   // 노무비: Google Sheets labor 데이터 사용 (insightService와 동일)
   const fLabor = filterByDate(labor, rangeStart, rangeEnd);
@@ -180,6 +188,7 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
     items,
     totalSurplus,
     totalCost,
+    deemedInputTaxCredit,
   };
 }
 
@@ -231,9 +240,16 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
     // 주간 생산매출 = 주간 채널정산매출 × 비율
     const weekSettlement = salesItems.reduce((s, d) => s + d.jasaPrice + d.coupangPrice + d.kurlyPrice, 0);
     const rev = Math.round(weekSettlement * prodRatio);
-    const raw = rawItems.reduce((s, p) => s + p.total, 0);
-    const sub = subItems.reduce((s, p) => s + p.total, 0);
+    const rawPurchase = rawItems.reduce((s, p) => s + p.total, 0);
+    const subPurchase = subItems.reduce((s, p) => s + p.total, 0);
     const util = utilItems.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
+
+    // 의제 매입세액 공제
+    const wkTotalPurchase = rawPurchase + subPurchase;
+    const wkDeemed = Math.round(wkTotalPurchase * (config.deemedInputTaxRate || 0));
+    const wkRawShare = wkTotalPurchase > 0 ? rawPurchase / wkTotalPurchase : 0.5;
+    const raw = rawPurchase - Math.round(wkDeemed * wkRawShare);
+    const sub = subPurchase - (wkDeemed - Math.round(wkDeemed * wkRawShare));
 
     const laborCost = hasLaborData
       ? laborItems.reduce((s, l) => s + l.totalPay, 0)

@@ -66,6 +66,8 @@ export interface BusinessConfig {
   laborCostRatio: number;
   /** 간접 경비 추정 비율 (0~1, 구매비 대비) */
   overheadRatio: number;
+  /** 의제 매입세액 공제율 (0~1, 당기 매입액 대비, 기본 0.028 = 2.8%) */
+  deemedInputTaxRate: number;
 
   // === 발주/재고 ===
   /** 기본 리드타임 (일) */
@@ -196,6 +198,7 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
   // 원가 비율
   laborCostRatio: 0.25,
   overheadRatio: 0.05,
+  deemedInputTaxRate: 0.028,
 
   // 발주/재고
   defaultLeadTime: 3,

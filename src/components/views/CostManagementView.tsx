@@ -452,6 +452,11 @@ export const CostManagementView: React.FC<Props> = ({
                         );
                       })}
                     </div>
+                    {sc.deemedInputTaxCredit > 0 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                        * 의제 매입세액 공제 {formatCurrency(sc.deemedInputTaxCredit)} 반영 (매입액의 {((sc.deemedInputTaxCredit / (sc.scores.reduce((s, m) => s + (m.metric === '원재료' || m.metric === '부재료' ? (m.actualAmount || 0) : 0), 0) + sc.deemedInputTaxCredit)) * 100).toFixed(1)}%)
+                      </p>
+                    )}
                   </div>
                 </>
               ) : (

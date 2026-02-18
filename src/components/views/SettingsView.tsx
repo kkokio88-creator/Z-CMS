@@ -741,6 +741,14 @@ export const SettingsView: React.FC = () => {
             <p className="text-xs text-gray-500 mt-1">구매비 대비 기타 간접 경비 비율</p>
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">의제 매입세액 공제율</label>
+            <div className="flex items-center gap-2">
+              <input type="number" step="0.1" min="0" max="100" value={Math.round((draft.deemedInputTaxRate ?? 0.028) * 1000) / 10} onChange={e => updateDraft({ deemedInputTaxRate: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">당기 매입액 대비 의제 매입세액 공제율 (원가 점수에 반영)</p>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">월 고정경비</label>
             <div className="flex items-center gap-2">
               <input type="number" step="10000" min="0" value={draft.monthlyFixedOverhead} onChange={e => updateDraft({ monthlyFixedOverhead: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
