@@ -353,8 +353,8 @@ export const DEFAULT_BUSINESS_CONFIG: BusinessConfig = {
   manualInventoryAdjustment: {
     beginningRawInventoryValue: 65207146,
     endingRawInventoryValue: 75488766,
-    beginningSubInventoryValue: 0,
-    endingSubInventoryValue: 0,
+    beginningSubInventoryValue: 52474547,
+    endingSubInventoryValue: 49708324,
   },
 };
 

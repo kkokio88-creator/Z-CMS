@@ -1118,21 +1118,18 @@ export function computeCostBreakdown(
   const purchaseRaw = rawItems.reduce((s, p) => s + p.supplyAmount, 0);
   const purchaseSub = subItems.reduce((s, p) => s + p.supplyAmount, 0);
 
-  // 의제 매입세액 공제: 당기 매입액(공급가액) × 공제율
-  const totalPurchase = purchaseRaw + purchaseSub;
-  const deemedCredit = Math.round(totalPurchase * (config.deemedInputTaxRate || 0));
-  const rawShare = totalPurchase > 0 ? purchaseRaw / totalPurchase : 0.5;
-  const rawDeduction = Math.round(deemedCredit * rawShare);
-  const subDeduction = deemedCredit - rawDeduction;
+  // 의제 매입세액 공제: 원재료 당기 매입액(공급가액) × 공제율 (원재료에만 적용)
+  const rawDeduction = Math.round(purchaseRaw * (config.deemedInputTaxRate || 0));
 
   // 실제 사용액 = 기초재고 + 당기매입(공급가액) - 기말재고 - 의제매입세 공제
   const totalRaw = (inventoryAdjustment
     ? inventoryAdjustment.beginningRawInventoryValue + purchaseRaw - inventoryAdjustment.endingRawInventoryValue
     : purchaseRaw) - rawDeduction;
 
-  const totalSub = (inventoryAdjustment
+  // 부재료: 의제매입세 공제 미적용
+  const totalSub = inventoryAdjustment
     ? inventoryAdjustment.beginningSubInventoryValue + purchaseSub - inventoryAdjustment.endingSubInventoryValue
-    : purchaseSub) - subDeduction;
+    : purchaseSub;
   // 경비 = 수도광열비 + 전력비 (유틸리티만, 고정비/변동비 제외)
   const totalUtility = utilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
 
@@ -2764,9 +2761,9 @@ export function computeProfitCenterScore(
   const laborCost = comp.find(c => c.name === '노무비')?.value || 0;
   const overheadCost = comp.find(c => c.name === '수도광열전력')?.value || 0;
 
-  // 의제 매입세액 공제액 (UI 표시용, 원가에서 이미 차감됨)
+  // 의제 매입세액 공제액 (UI 표시용, 원재료에만 적용됨)
   const deemedInputTaxCredit = Math.round(
-    (rawMaterial + subMaterial) * (config.deemedInputTaxRate || 0) / (1 - (config.deemedInputTaxRate || 0))
+    rawMaterial * (config.deemedInputTaxRate || 0) / (1 - (config.deemedInputTaxRate || 0))
   );
 
   const totalExpense = overheadCost;
