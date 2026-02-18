@@ -1,4 +1,4 @@
-import type { DailySalesData, PurchaseData } from '../services/googleSheetService';
+import type { DailySalesData } from '../services/googleSheetService';
 
 /** YYYY-MM-DD 문자열을 +1일 이동 */
 function nextDay(dateStr: string): string {
@@ -77,12 +77,4 @@ export function toShippingDateBasis(dailySales: DailySalesData[]): DailySalesDat
   }
   result.sort((a, b) => a.date.localeCompare(b.date));
   return result;
-}
-
-/**
- * 구매 데이터를 출고일 기준으로 +1일 shift
- * (매입은 생산일 기준 → 출고 기준 매출과 정렬하기 위해)
- */
-export function toShippingDatePurchases(purchases: PurchaseData[]): PurchaseData[] {
-  return purchases.map(p => ({ ...p, date: nextDay(p.date) }));
 }

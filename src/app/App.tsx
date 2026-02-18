@@ -329,6 +329,7 @@ function AppContent() {
               utilities={gsUtilities}
               production={gsProduction}
               dailySales={gsDailySales}
+              salesDetail={gsSalesDetail}
               labor={gsLabor}
               insights={insights}
               profitCenterScore={filteredProfitCenterScore}

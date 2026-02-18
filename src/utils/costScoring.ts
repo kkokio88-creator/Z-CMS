@@ -3,7 +3,7 @@
  * 매출/원가 배수 기반으로 4개 항목(원재료/부재료/노무비/수도광열전력)을 점수화
  */
 import type { ProfitCenterGoal, BusinessConfig } from '../config/businessConfig';
-import type { DailySalesData, PurchaseData, UtilityData, ProductionData, LaborDailyData } from '../services/googleSheetService';
+import type { DailySalesData, PurchaseData, UtilityData, ProductionData, LaborDailyData, SalesDetailData } from '../services/googleSheetService';
 import type { ChannelCostSummary } from '../components/domain';
 import { isSubMaterial, computeChannelRevenue, type InventoryAdjustment } from '../services/insightService';
 import { filterByDate } from './dateRange';
@@ -99,6 +99,7 @@ interface ComputeParams {
   utilities: UtilityData[];
   production: ProductionData[];
   labor?: LaborDailyData[];
+  salesDetail?: SalesDetailData[];
   config: BusinessConfig;
   rangeStart: string;
   rangeEnd: string;
@@ -115,7 +116,7 @@ const COST_COLORS = {
 };
 
 export function computeCostScores(params: ComputeParams): CostScoringResult | null {
-  const { dailySales, purchases, utilities, production, labor = [], config, rangeStart, rangeEnd, rangeDays, channelCosts = [], inventoryAdjustment } = params;
+  const { dailySales, purchases, utilities, production, labor = [], salesDetail = [], config, rangeStart, rangeEnd, rangeDays, channelCosts = [], inventoryAdjustment } = params;
 
   const goals = config.profitCenterGoals;
   if (!goals || goals.length === 0) return null;
@@ -126,8 +127,8 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const fUtilities = filterByDate(utilities, rangeStart, rangeEnd);
   const fProduction = filterByDate(production, rangeStart, rangeEnd);
 
-  // 매출 계산 (computeChannelRevenue 경유)
-  const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, config);
+  // 매출 계산 (computeChannelRevenue 경유, salesDetail 포함)
+  const cr = computeChannelRevenue(fSales, fPurchases, channelCosts, config, salesDetail);
   const filteredRevenue = cr.totalProductionRevenue; // 점수 계산용 = 생산매출
   if (filteredRevenue === 0) return null;
 
@@ -193,7 +194,7 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
 }
 
 export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[] {
-  const { dailySales, purchases, utilities, production, labor: laborData = [], config, rangeStart, rangeEnd, channelCosts = [] } = params;
+  const { dailySales, purchases, utilities, production, labor: laborData = [], salesDetail = [], config, rangeStart, rangeEnd, channelCosts = [] } = params;
 
   const goals = config.profitCenterGoals;
   if (!goals || goals.length === 0) return [];
@@ -204,8 +205,8 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
   const fProduction = filterByDate(production, rangeStart, rangeEnd);
   const fLabor = filterByDate(laborData, rangeStart, rangeEnd);
 
-  // 매출 계산
-  const overallCR = computeChannelRevenue(fSales, fPurchases, channelCosts, config);
+  // 매출 계산 (salesDetail 포함)
+  const overallCR = computeChannelRevenue(fSales, fPurchases, channelCosts, config, salesDetail);
   const totalRev = overallCR.totalProductionRevenue; // 점수 계산용 = 생산매출
   // 주간 배분용 비율: 생산매출 / 채널정산매출
   const prodRatio = overallCR.totalRevenue > 0 ? overallCR.totalProductionRevenue / overallCR.totalRevenue : 0.5;

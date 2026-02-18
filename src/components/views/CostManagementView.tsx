@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { SubTabLayout, Pagination } from '../layout';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../../utils/format';
-import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData } from '../../services/googleSheetService';
+import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData, SalesDetailData } from '../../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation, ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../../services/insightService';
 import { isSubMaterial, computeCostBreakdown, computeMaterialPrices, computeUtilityCosts, computeLimitPrice, computeChannelRevenue, type InventoryAdjustment } from '../../services/insightService';
 import { getChannelCostSummaries } from '../domain';
@@ -25,6 +25,7 @@ interface Props {
   utilities: UtilityData[];
   production: ProductionData[];
   dailySales: DailySalesData[];
+  salesDetail?: SalesDetailData[];
   labor?: LaborDailyData[];
   insights: DashboardInsights | null;
   profitCenterScore?: ProfitCenterScoreInsight | null;
@@ -107,6 +108,7 @@ export const CostManagementView: React.FC<Props> = ({
   utilities,
   production,
   dailySales,
+  salesDetail = [],
   labor = [],
   insights,
   profitCenterScore = null,
@@ -136,15 +138,15 @@ export const CostManagementView: React.FC<Props> = ({
   const productionRevenue = useMemo(() => {
     if (filteredDailySales.length === 0) return 0;
     const channelCosts = getChannelCostSummaries();
-    const cr = computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config);
+    const cr = computeChannelRevenue(filteredDailySales, filteredPurchases, channelCosts, config, salesDetail);
     return cr.totalProductionRevenue;
-  }, [filteredDailySales, filteredPurchases, config]);
+  }, [filteredDailySales, filteredPurchases, config, salesDetail]);
 
   // 주간 점수 (기존 costScoring 유지 — 주간 추세 그래프용)
   const scoringParams = useMemo(() => ({
-    dailySales: filteredDailySales, purchases: filteredPurchases, utilities: filteredUtilities, production: filteredProduction, labor: filteredLabor, config, rangeStart, rangeEnd, rangeDays,
+    dailySales: filteredDailySales, purchases: filteredPurchases, utilities: filteredUtilities, production: filteredProduction, labor: filteredLabor, salesDetail, config, rangeStart, rangeEnd, rangeDays,
     channelCosts: getChannelCostSummaries(),
-  }), [filteredDailySales, filteredPurchases, filteredUtilities, filteredProduction, filteredLabor, config, rangeStart, rangeEnd, rangeDays]);
+  }), [filteredDailySales, filteredPurchases, filteredUtilities, filteredProduction, filteredLabor, salesDetail, config, rangeStart, rangeEnd, rangeDays]);
   const weeklyScores = useMemo(() => computeWeeklyCostScores(scoringParams), [scoringParams]);
 
   // 날짜 필터된 데이터로 로컬 계산 (기간 변경 시 반응)

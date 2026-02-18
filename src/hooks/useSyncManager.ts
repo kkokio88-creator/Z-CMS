@@ -36,10 +36,10 @@ import { getDateRange } from '../utils/dateRange';
 import type { DateRangeOption } from '../utils/dateRange';
 import { loadCache, saveCache } from './useDataCache';
 import { generateInventoryFromPurchases } from '../services/inventoryFallbackService';
-import { toShippingDateBasis, toShippingDatePurchases } from '../utils/shippingDateTransform';
+import { toShippingDateBasis } from '../utils/shippingDateTransform';
 
 export function useSyncManager(dateRange: DateRangeOption) {
-  console.log('[Z-CMS] useSyncManager v2 — 출고일 변환 적용됨');
+  console.log('[Z-CMS] useSyncManager v3');
   // --- Memoized config values (computed once, stable across renders) ---
   const bizConfig = useMemo(() => loadBusinessConfig(), []);
   const channelCosts = useMemo(() => getChannelCostSummaries(), []);
@@ -131,16 +131,10 @@ export function useSyncManager(dateRange: DateRangeOption) {
       // Google Sheet 데이터 적용 (매출, 생산, 구매 등) — 출고일 변환 적용
       if (gsResult && (gsResult.profitTrend?.length > 0 || gsResult.production?.length > 0)) {
         hasGsData = true;
-        const shippedSales = toShippingDateBasis(gsResult.dailySales);
-        // 디버그: 출고일 변환 전/후 비교 (첫 3일)
-        if (gsResult.dailySales.length > 0) {
-          console.log('[ShippingDate] 변환 전 (생산일 기준):', gsResult.dailySales.slice(0, 3).map(d => ({ date: d.date, jasa: d.jasaPrice, coupang: d.coupangPrice, kurly: d.kurlyPrice, total: d.totalRevenue })));
-          console.log('[ShippingDate] 변환 후 (출고일 기준):', shippedSales.slice(0, 3).map(d => ({ date: d.date, jasa: d.jasaPrice, coupang: d.coupangPrice, kurly: d.kurlyPrice, total: d.totalRevenue })));
-        }
-        setGsDailySales(shippedSales);
+        setGsDailySales(toShippingDateBasis(gsResult.dailySales));
         setGsSalesDetail(gsResult.salesDetail);
         setGsProduction(gsResult.production);
-        setGsPurchases(toShippingDatePurchases(gsResult.purchases));
+        setGsPurchases(gsResult.purchases);
         setGsUtilities(gsResult.utilities);
         setGsLabor(gsResult.labor || []);
         setGsBom(gsResult.bom || []);
@@ -229,16 +223,14 @@ export function useSyncManager(dateRange: DateRangeOption) {
         }
       }
 
-      // Insight 분석 (출고일 변환된 데이터 기반)
+      // Insight 분석 (출고일 변환된 dailySales 기반, purchases는 원본 유지)
       if (gsResult) {
         try {
-          const shippedDailySales = toShippingDateBasis(gsResult.dailySales || []);
-          const shippedPurchases = toShippingDatePurchases(gsResult.purchases || []);
           const computed = computeAllInsights(
-            shippedDailySales,
+            toShippingDateBasis(gsResult.dailySales || []),
             gsResult.salesDetail || [],
             gsResult.production || [],
-            shippedPurchases,
+            gsResult.purchases || [],
             gsResult.utilities || [],
             currentInventoryData,
             channelCosts,
@@ -319,15 +311,10 @@ export function useSyncManager(dateRange: DateRangeOption) {
     const cached = loadCache();
     if (cached) {
       // 캐시에서 즉시 로드 → 화면 즉시 표시 (출고일 변환 적용)
-      const rawDs = cached.dailySales || [];
-      const ds = toShippingDateBasis(rawDs);
-      if (rawDs.length > 0) {
-        console.log('[ShippingDate:캐시] 변환 전:', rawDs.slice(0, 2).map(d => ({ date: d.date, coupang: d.coupangPrice, kurly: d.kurlyPrice })));
-        console.log('[ShippingDate:캐시] 변환 후:', ds.slice(0, 2).map(d => ({ date: d.date, coupang: d.coupangPrice, kurly: d.kurlyPrice })));
-      }
+      const ds = toShippingDateBasis(cached.dailySales || []);
       const sd = cached.salesDetail || [];
       const prod = cached.production || [];
-      const purch = toShippingDatePurchases(cached.purchases || []);
+      const purch = cached.purchases || [];
       const util = cached.utilities || [];
       const lab = cached.labor || [];
       const bom = cached.bom || [];
