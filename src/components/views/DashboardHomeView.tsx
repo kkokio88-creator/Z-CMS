@@ -5,8 +5,6 @@ import type { SyncStatusInfo } from '../../services/supabaseClient';
 import { formatCurrency } from '../../utils/format';
 import type { ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../../services/insightService';
 import type { DailySalesData, ProductionData, PurchaseData, SalesDetailData } from '../../services/googleSheetService';
-import { computeChannelRevenue } from '../../services/insightService';
-import { getChannelCostSummaries } from '../domain';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
 import { useUI } from '../../contexts/UIContext';
 import { getDateRange, filterByDate, getRangeLabel } from '../../utils/dateRange';
@@ -120,7 +118,6 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   onNavigate,
 }) => {
   const config = useBusinessConfig();
-  const channelCosts = useMemo(() => getChannelCostSummaries(), []);
   const { dateRange } = useUI();
   const totalRecords = syncStatus
     ? Object.values(syncStatus.tableCounts).reduce((a, b) => a + b, 0)
@@ -178,13 +175,10 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
 
   // KPI 계산
   const kpis = useMemo(() => {
-    // 정산매출 = computeChannelRevenue 경유 (채널 매핑 + 날짜 필터링된 salesDetail)
+    // 정산매출 = salesDetail 공급가액 합계 (가장 정확한 원천 데이터)
     const calcSettlement = (sales: DailySalesData[], detail: SalesDetailData[]) => {
-      if (sales.length === 0) return 0;
-      const cr = computeChannelRevenue(sales, filteredPurchases, channelCosts, config, detail);
-      return cr.totalRawSupplyAmount > 0
-        ? cr.totalRawSupplyAmount - cr.totalPromotionDiscountAmount
-        : cr.totalRevenue;
+      if (detail.length > 0) return detail.reduce((s, d) => s + (d.supplyAmount || 0), 0);
+      return sales.reduce((s, d) => s + d.totalRevenue, 0);
     };
     const totalRevenue = calcSettlement(filteredSales, filteredSalesDetail);
     const prevRevenue = calcSettlement(prevSales, prevSalesDetail);
@@ -206,7 +200,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       wasteRateChange: parseFloat(wasteRateChange.toFixed(1)),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredSales, filteredSalesDetail, filteredPurchases, channelCosts, config, filteredProduction, prevSales, prevSalesDetail, prevProduction]);
+  }, [filteredSales, filteredSalesDetail, filteredProduction, prevSales, prevSalesDetail, prevProduction]);
 
   // 차트 데이터 (날짜순 정렬)
   const revenueTrend = useMemo(
