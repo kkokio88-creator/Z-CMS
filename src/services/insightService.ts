@@ -1115,17 +1115,24 @@ export function computeCostBreakdown(
     }
   });
 
-  const purchaseRaw = rawItems.reduce((s, p) => s + p.total, 0);
-  const purchaseSub = subItems.reduce((s, p) => s + p.total, 0);
+  const purchaseRaw = rawItems.reduce((s, p) => s + p.supplyAmount, 0);
+  const purchaseSub = subItems.reduce((s, p) => s + p.supplyAmount, 0);
 
-  // 실제 사용액 = 기초재고 + 당기매입 - 기말재고 (ECOUNT 재고 연동 시)
-  const totalRaw = inventoryAdjustment
+  // 의제 매입세액 공제: 당기 매입액(공급가액) × 공제율
+  const totalPurchase = purchaseRaw + purchaseSub;
+  const deemedCredit = Math.round(totalPurchase * (config.deemedInputTaxRate || 0));
+  const rawShare = totalPurchase > 0 ? purchaseRaw / totalPurchase : 0.5;
+  const rawDeduction = Math.round(deemedCredit * rawShare);
+  const subDeduction = deemedCredit - rawDeduction;
+
+  // 실제 사용액 = 기초재고 + 당기매입(공급가액) - 기말재고 - 의제매입세 공제
+  const totalRaw = (inventoryAdjustment
     ? inventoryAdjustment.beginningRawInventoryValue + purchaseRaw - inventoryAdjustment.endingRawInventoryValue
-    : purchaseRaw;  // ECOUNT 불가 시 기존 매입액 방식 폴백
+    : purchaseRaw) - rawDeduction;
 
-  const totalSub = inventoryAdjustment
+  const totalSub = (inventoryAdjustment
     ? inventoryAdjustment.beginningSubInventoryValue + purchaseSub - inventoryAdjustment.endingSubInventoryValue
-    : purchaseSub;
+    : purchaseSub) - subDeduction;
   // 경비 = 수도광열비 + 전력비 (유틸리티만, 고정비/변동비 제외)
   const totalUtility = utilities.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
 
@@ -1143,13 +1150,13 @@ export function computeCostBreakdown(
   rawItems.forEach(p => {
     const month = p.date.slice(0, 7);
     const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, laborPay: 0 };
-    existing.raw += p.total;
+    existing.raw += p.supplyAmount;
     monthlyMap.set(month, existing);
   });
   subItems.forEach(p => {
     const month = p.date.slice(0, 7);
     const existing = monthlyMap.get(month) || { raw: 0, sub: 0, utility: 0, laborPay: 0 };
-    existing.sub += p.total;
+    existing.sub += p.supplyAmount;
     monthlyMap.set(month, existing);
   });
   utilities.forEach(u => {
@@ -1194,11 +1201,11 @@ export function computeCostBreakdown(
     { name: '수도광열전력', value: totalOverhead, rate: grandTotal > 0 ? Math.round((totalOverhead / grandTotal) * 1000) / 10 : 0 },
   ];
 
-  // 원재료 상세
+  // 원재료 상세 (공급가액 기준)
   const rawDetailMap = new Map<string, { name: string; total: number; qty: number }>();
   rawItems.forEach(p => {
     const existing = rawDetailMap.get(p.productCode) || { name: p.productName, total: 0, qty: 0 };
-    existing.total += p.total;
+    existing.total += p.supplyAmount;
     existing.qty += p.quantity;
     rawDetailMap.set(p.productCode, existing);
   });
@@ -1215,11 +1222,11 @@ export function computeCostBreakdown(
     total: totalRaw,
   };
 
-  // 부재료 상세
+  // 부재료 상세 (공급가액 기준)
   const subDetailMap = new Map<string, { name: string; total: number; qty: number }>();
   subItems.forEach(p => {
     const existing = subDetailMap.get(p.productCode) || { name: p.productName, total: 0, qty: 0 };
-    existing.total += p.total;
+    existing.total += p.supplyAmount;
     existing.qty += p.quantity;
     subDetailMap.set(p.productCode, existing);
   });

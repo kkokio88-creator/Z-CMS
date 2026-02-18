@@ -136,9 +136,9 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const activeBracket = findActiveBracket(goals, monthlyRevenue);
   const targets = activeBracket.targets;
 
-  // 원가 계산: 매입액
-  const purchaseRaw = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
-  const purchaseSub = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.total, 0);
+  // 원가 계산: 매입액 (공급가액 기준, VAT 제외)
+  const purchaseRaw = fPurchases.filter(p => !isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.supplyAmount, 0);
+  const purchaseSub = fPurchases.filter(p => isSubMaterial(p.productName, p.productCode)).reduce((s, p) => s + p.supplyAmount, 0);
 
   // 의제 매입세액 공제: 당기 매입액 × 공제율 (총 원가에서 차감)
   const totalPurchase = purchaseRaw + purchaseSub;
@@ -240,8 +240,8 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
     // 주간 생산매출 = 주간 채널정산매출 × 비율
     const weekSettlement = salesItems.reduce((s, d) => s + d.jasaPrice + d.coupangPrice + d.kurlyPrice, 0);
     const rev = Math.round(weekSettlement * prodRatio);
-    const rawPurchase = rawItems.reduce((s, p) => s + p.total, 0);
-    const subPurchase = subItems.reduce((s, p) => s + p.total, 0);
+    const rawPurchase = rawItems.reduce((s, p) => s + p.supplyAmount, 0);
+    const subPurchase = subItems.reduce((s, p) => s + p.supplyAmount, 0);
     const util = utilItems.reduce((s, u) => s + u.elecCost + u.waterCost + u.gasCost, 0);
 
     // 의제 매입세액 공제
