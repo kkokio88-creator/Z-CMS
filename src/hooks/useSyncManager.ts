@@ -39,6 +39,7 @@ import { generateInventoryFromPurchases } from '../services/inventoryFallbackSer
 import { toShippingDateBasis, toShippingDatePurchases } from '../utils/shippingDateTransform';
 
 export function useSyncManager(dateRange: DateRangeOption) {
+  console.log('[Z-CMS] useSyncManager v2 — 출고일 변환 적용됨');
   // --- Memoized config values (computed once, stable across renders) ---
   const bizConfig = useMemo(() => loadBusinessConfig(), []);
   const channelCosts = useMemo(() => getChannelCostSummaries(), []);
@@ -317,8 +318,13 @@ export function useSyncManager(dateRange: DateRangeOption) {
   useEffect(() => {
     const cached = loadCache();
     if (cached) {
-      // 캐시에서 즉시 로드 → 화면 즉시 표시
-      const ds = toShippingDateBasis(cached.dailySales || []);
+      // 캐시에서 즉시 로드 → 화면 즉시 표시 (출고일 변환 적용)
+      const rawDs = cached.dailySales || [];
+      const ds = toShippingDateBasis(rawDs);
+      if (rawDs.length > 0) {
+        console.log('[ShippingDate:캐시] 변환 전:', rawDs.slice(0, 2).map(d => ({ date: d.date, coupang: d.coupangPrice, kurly: d.kurlyPrice })));
+        console.log('[ShippingDate:캐시] 변환 후:', ds.slice(0, 2).map(d => ({ date: d.date, coupang: d.coupangPrice, kurly: d.kurlyPrice })));
+      }
       const sd = cached.salesDetail || [];
       const prod = cached.production || [];
       const purch = toShippingDatePurchases(cached.purchases || []);
