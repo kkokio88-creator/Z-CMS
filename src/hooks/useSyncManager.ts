@@ -367,18 +367,46 @@ export function useSyncManager(dateRange: DateRangeOption) {
           fetchInventoryByLocation(endDateStr),
         ]);
 
-        if (beginInventory.length === 0 && endInventory.length === 0) {
-          setInventoryAdjustment(null);
-          return;
-        }
-
         // materialMaster 단가 lookup (있으면 사용, 없으면 ECOUNT 응답의 unitPrice)
         const masterPriceMap = new Map<string, number>();
         gsMaterialMaster.forEach(m => {
           if (m.unitPrice > 0) masterPriceMap.set(m.materialCode, m.unitPrice);
         });
 
-        const calcValue = (items: typeof beginInventory, type: 'raw' | 'sub') => {
+        // fetchInventoryByLocation 실패 시 gsInventorySnapshots 폴백
+        let effectiveBegin = beginInventory;
+        let effectiveEnd = endInventory;
+        if (beginInventory.length === 0 && endInventory.length === 0 && gsInventorySnapshots.length > 0) {
+          const beginTarget = beginDate.toISOString().slice(0, 10);
+          const endTarget = end;
+          // 스냅샷에서 가장 가까운 날짜 찾기
+          const dates = [...new Set(gsInventorySnapshots.map(s => s.snapshotDate))].sort();
+          const findClosest = (target: string) => dates.reduce((best, d) => Math.abs(new Date(d).getTime() - new Date(target).getTime()) < Math.abs(new Date(best).getTime() - new Date(target).getTime()) ? d : best, dates[0]);
+          const beginSnapDate = findClosest(beginTarget);
+          const endSnapDate = findClosest(endTarget);
+          const toInventory = (snapDate: string) => gsInventorySnapshots
+            .filter(s => s.snapshotDate === snapDate)
+            .map(s => ({
+              warehouseCode: s.warehouseCode || '001',
+              warehouseName: s.warehouseCode || '메인창고',
+              productCode: s.productCode,
+              productName: s.productName,
+              quantity: s.balanceQty,
+              unitPrice: masterPriceMap.get(s.productCode) || 0,
+              totalValue: s.balanceQty * (masterPriceMap.get(s.productCode) || 0),
+              category: '일반',
+            }));
+          effectiveBegin = toInventory(beginSnapDate);
+          effectiveEnd = toInventory(endSnapDate);
+          console.log(`[inventoryAdjustment] 스냅샷 폴백: 기초(${beginSnapDate}) ${effectiveBegin.length}건, 기말(${endSnapDate}) ${effectiveEnd.length}건`);
+        }
+
+        if (effectiveBegin.length === 0 && effectiveEnd.length === 0) {
+          setInventoryAdjustment(null);
+          return;
+        }
+
+        const calcValue = (items: typeof effectiveBegin, type: 'raw' | 'sub') => {
           return items
             .filter(inv => type === 'sub' ? isSubMaterial(inv.productName, inv.productCode) : !isSubMaterial(inv.productName, inv.productCode))
             .reduce((sum, inv) => {
@@ -387,12 +415,14 @@ export function useSyncManager(dateRange: DateRangeOption) {
             }, 0);
         };
 
-        setInventoryAdjustment({
-          beginningRawInventoryValue: calcValue(beginInventory, 'raw'),
-          endingRawInventoryValue: calcValue(endInventory, 'raw'),
-          beginningSubInventoryValue: calcValue(beginInventory, 'sub'),
-          endingSubInventoryValue: calcValue(endInventory, 'sub'),
-        });
+        const adj = {
+          beginningRawInventoryValue: calcValue(effectiveBegin, 'raw'),
+          endingRawInventoryValue: calcValue(effectiveEnd, 'raw'),
+          beginningSubInventoryValue: calcValue(effectiveBegin, 'sub'),
+          endingSubInventoryValue: calcValue(effectiveEnd, 'sub'),
+        };
+        console.log('[inventoryAdjustment] 결과:', adj);
+        setInventoryAdjustment(adj);
       } catch (err) {
         console.warn('[App] 재고 조정 데이터 fetch 실패 (매입액 기반 폴백):', err);
         setInventoryAdjustment(null);
@@ -400,7 +430,7 @@ export function useSyncManager(dateRange: DateRangeOption) {
     };
 
     fetchInventoryAdjustment();
-  }, [dateRange, gsMaterialMaster]);
+  }, [dateRange, gsMaterialMaster, gsInventorySnapshots]);
 
   // inventoryAdjustment 변경 시 insights 재계산 (비동기 fetch 완료 후 원가 반영)
   useEffect(() => {
