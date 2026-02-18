@@ -127,10 +127,16 @@ export function useSyncManager(dateRange: DateRangeOption) {
         setDataAvailability(ecountResult.dataAvailability);
       }
 
-      // Google Sheet 데이터 적용 (매출, 생산, 구매 등)
+      // Google Sheet 데이터 적용 (매출, 생산, 구매 등) — 출고일 변환 적용
       if (gsResult && (gsResult.profitTrend?.length > 0 || gsResult.production?.length > 0)) {
         hasGsData = true;
-        setGsDailySales(toShippingDateBasis(gsResult.dailySales));
+        const shippedSales = toShippingDateBasis(gsResult.dailySales);
+        // 디버그: 출고일 변환 전/후 비교 (첫 3일)
+        if (gsResult.dailySales.length > 0) {
+          console.log('[ShippingDate] 변환 전 (생산일 기준):', gsResult.dailySales.slice(0, 3).map(d => ({ date: d.date, jasa: d.jasaPrice, coupang: d.coupangPrice, kurly: d.kurlyPrice, total: d.totalRevenue })));
+          console.log('[ShippingDate] 변환 후 (출고일 기준):', shippedSales.slice(0, 3).map(d => ({ date: d.date, jasa: d.jasaPrice, coupang: d.coupangPrice, kurly: d.kurlyPrice, total: d.totalRevenue })));
+        }
+        setGsDailySales(shippedSales);
         setGsSalesDetail(gsResult.salesDetail);
         setGsProduction(gsResult.production);
         setGsPurchases(toShippingDatePurchases(gsResult.purchases));
