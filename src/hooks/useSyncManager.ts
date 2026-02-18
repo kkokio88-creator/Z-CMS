@@ -36,6 +36,7 @@ import { getDateRange } from '../utils/dateRange';
 import type { DateRangeOption } from '../utils/dateRange';
 import { loadCache, saveCache } from './useDataCache';
 import { generateInventoryFromPurchases } from '../services/inventoryFallbackService';
+import { toShippingDateBasis, toShippingDatePurchases } from '../utils/shippingDateTransform';
 
 export function useSyncManager(dateRange: DateRangeOption) {
   // --- Memoized config values (computed once, stable across renders) ---
@@ -129,10 +130,10 @@ export function useSyncManager(dateRange: DateRangeOption) {
       // Google Sheet 데이터 적용 (매출, 생산, 구매 등)
       if (gsResult && (gsResult.profitTrend?.length > 0 || gsResult.production?.length > 0)) {
         hasGsData = true;
-        setGsDailySales(gsResult.dailySales);
+        setGsDailySales(toShippingDateBasis(gsResult.dailySales));
         setGsSalesDetail(gsResult.salesDetail);
         setGsProduction(gsResult.production);
-        setGsPurchases(gsResult.purchases);
+        setGsPurchases(toShippingDatePurchases(gsResult.purchases));
         setGsUtilities(gsResult.utilities);
         setGsLabor(gsResult.labor || []);
         setGsBom(gsResult.bom || []);
@@ -309,10 +310,10 @@ export function useSyncManager(dateRange: DateRangeOption) {
     const cached = loadCache();
     if (cached) {
       // 캐시에서 즉시 로드 → 화면 즉시 표시
-      const ds = cached.dailySales || [];
+      const ds = toShippingDateBasis(cached.dailySales || []);
       const sd = cached.salesDetail || [];
       const prod = cached.production || [];
-      const purch = cached.purchases || [];
+      const purch = toShippingDatePurchases(cached.purchases || []);
       const util = cached.utilities || [];
       const lab = cached.labor || [];
       const bom = cached.bom || [];
