@@ -337,6 +337,8 @@ function AppContent() {
               insights={insights}
               profitCenterScore={filteredProfitCenterScore}
               inventoryAdjustment={inventoryAdjustment}
+              bomData={gsBom}
+              materialMaster={gsMaterialMaster}
               onItemClick={handleItemClick}
               onTabChange={setActiveSubTab}
             />

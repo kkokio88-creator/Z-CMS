@@ -19,6 +19,7 @@ import type { InventorySafetyItem } from '../types';
 import { BusinessConfig, DEFAULT_BUSINESS_CONFIG, ProfitCenterGoal } from '../config/businessConfig';
 import type { ChannelCostSummary } from '../components/domain';
 import { interpolateBracket } from '../utils/costScoring';
+import { formatCurrency } from '../utils/format';
 
 // ==============================
 // 타입 정의
@@ -297,14 +298,16 @@ export interface LimitPriceInsight {
 export interface BomVarianceItem {
   productCode: string;
   productName: string;
-  standardPrice: number;     // 기준단가 (전체 평균)
-  actualPrice: number;       // 실제단가 (최근 기간)
-  standardQty: number;       // 기준 투입량 (생산 비례 기대치)
-  actualQty: number;         // 실제 투입량 (최근 기간)
+  standardPrice: number;     // 기준단가 (BOM materialMaster unitPrice)
+  actualPrice: number;       // 실제단가 (구매 평균단가)
+  standardQty: number;       // 기준 투입량 (BOM consumptionQty 기반)
+  actualQty: number;         // 실제 투입량 (구매량)
   priceVariance: number;     // 단가 차이 금액
   qtyVariance: number;       // 투입량 차이 금액
   totalVariance: number;     // 총 차이 금액
   unit: string;              // 단위 (kg, L, EA 등)
+  linkedMenus: { code: string; name: string }[];  // 이 자재를 사용하는 메뉴 목록
+  linkedMenuCount: number;   // 연결 메뉴 수
 }
 
 export interface BomVarianceInsight {
@@ -1808,43 +1811,111 @@ export function computeBomVariance(
   production: ProductionData[],
   bomData: BomItemData[] = [],
   materialMaster: MaterialMasterItem[] = [],
-  inventorySnapshots: InventorySnapshotData[] = []
+  _inventorySnapshots: InventorySnapshotData[] = []
 ): BomVarianceInsight {
-  if (purchases.length === 0 || production.length === 0) {
-    return { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
-  }
+  const emptyResult: BomVarianceInsight = { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
+  if (purchases.length === 0 || production.length === 0) return emptyResult;
 
-  // 총 생산량
   const totalProduction = production.reduce((s, p) => s + p.prodQtyTotal, 0);
-  if (totalProduction === 0) {
-    return { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
-  }
+  if (totalProduction === 0) return emptyResult;
 
-  // materialMaster → 이름/단위 매핑 (BOM 이름이 빈 문자열인 경우 보완)
+  // materialMaster → 이름/단위/단가 매핑
   const masterNameMap = new Map<string, string>();
   const masterUnitMap = new Map<string, string>();
+  const masterPriceMap = new Map<string, number>();
   for (const mm of materialMaster) {
     const code = mm.materialCode?.trim();
-    if (code && mm.materialName) masterNameMap.set(code, mm.materialName);
-    if (code && mm.unit) masterUnitMap.set(code, mm.unit);
+    if (!code) continue;
+    if (mm.materialName) masterNameMap.set(code, mm.materialName);
+    if (mm.unit) masterUnitMap.set(code, mm.unit);
+    if (mm.unitPrice > 0) masterPriceMap.set(code, mm.unitPrice);
   }
 
-  // BOM에 포함된 자재코드 집합 (BOM 관련 자재만 표시하기 위해)
-  const bomMaterialCodes = new Set<string>();
+  // BOM 기준 소모량 계산: 자재코드별 Σ(consumptionQty × 총생산량 / productionQty)
+  // + 연결 메뉴 목록
+  const bomStandardQty = new Map<string, number>();
+  const bomLinkedMenus = new Map<string, { code: string; name: string }[]>();
+
   for (const bom of bomData) {
     const matCode = bom.materialCode?.trim();
-    if (matCode) bomMaterialCodes.add(matCode);
+    if (!matCode || !bom.consumptionQty || !bom.productionQty) continue;
+
+    // 기준 소모량 = consumptionQty × (총생산량 / productionQty)
+    const stdQty = bom.consumptionQty * (totalProduction / bom.productionQty);
+    bomStandardQty.set(matCode, (bomStandardQty.get(matCode) || 0) + stdQty);
+
+    // 연결 메뉴
+    const menus = bomLinkedMenus.get(matCode) || [];
+    const menuCode = bom.productCode?.trim() || '';
+    const menuName = bom.productName || menuCode;
+    if (!menus.some(m => m.code === menuCode)) {
+      menus.push({ code: menuCode, name: menuName });
+    }
+    bomLinkedMenus.set(matCode, menus);
   }
 
-  // 재고 잔량 (자재코드별)
-  const inventoryBalance = new Map<string, number>();
-  for (const inv of inventorySnapshots) {
-    const code = inv.productCode?.trim();
-    if (!code) continue;
-    inventoryBalance.set(code, (inventoryBalance.get(code) || 0) + inv.balanceQty);
+  // BOM 데이터가 있는 경우: BOM 기준 로직
+  if (bomStandardQty.size > 0) {
+    // 실제 소모량 = 구매량 by materialCode
+    const purchaseAgg = new Map<string, { qty: number; total: number; name: string }>();
+    for (const p of purchases) {
+      const code = p.productCode?.trim();
+      if (!code || p.quantity === 0) continue;
+      const existing = purchaseAgg.get(code) || { qty: 0, total: 0, name: p.productName };
+      existing.qty += p.quantity;
+      existing.total += p.total;
+      purchaseAgg.set(code, existing);
+    }
+
+    let totalPriceVar = 0;
+    let totalQtyVar = 0;
+    const items: BomVarianceItem[] = [];
+
+    for (const [code, stdQty] of bomStandardQty) {
+      const purchase = purchaseAgg.get(code);
+      const actualQty = purchase ? purchase.qty : 0;
+      if (actualQty === 0 && stdQty === 0) continue;
+
+      const standardQty = Math.round(stdQty);
+      const standardPrice = masterPriceMap.get(code) || 0;
+      const actualPrice = purchase && purchase.qty > 0 ? Math.round(purchase.total / purchase.qty) : standardPrice;
+      const name = masterNameMap.get(code) || purchase?.name || code;
+      const linkedMenus = bomLinkedMenus.get(code) || [];
+
+      // 가격차이 = (실제단가 - 기준단가) × 실제수량
+      const priceVariance = (actualPrice - standardPrice) * actualQty;
+      // 수량차이 = (실제수량 - 기준수량) × 기준단가
+      const qtyVariance = (actualQty - standardQty) * standardPrice;
+      const totalVariance = priceVariance + qtyVariance;
+
+      totalPriceVar += priceVariance;
+      totalQtyVar += qtyVariance;
+
+      items.push({
+        productCode: code,
+        productName: name,
+        standardPrice, actualPrice,
+        standardQty, actualQty,
+        priceVariance, qtyVariance, totalVariance,
+        unit: masterUnitMap.get(code) || '개',
+        linkedMenus,
+        linkedMenuCount: linkedMenus.length,
+      });
+    }
+
+    items.sort((a, b) => Math.abs(b.totalVariance) - Math.abs(a.totalVariance));
+
+    return {
+      items,
+      totalPriceVariance: totalPriceVar,
+      totalQtyVariance: totalQtyVar,
+      totalVariance: totalPriceVar + totalQtyVar,
+      favorableCount: items.filter(i => i.totalVariance < 0).length,
+      unfavorableCount: items.filter(i => i.totalVariance > 0).length,
+    };
   }
 
-  // 기간 분할: 전반기(기준) vs 후반기(실제)
+  // Fallback: BOM 데이터 없을 때 — 전반기/후반기 비교 (레거시)
   const sortedPurchases = [...purchases].sort((a, b) => a.date.localeCompare(b.date));
   const midIdx = Math.floor(sortedPurchases.length / 2);
   const basePeriod = sortedPurchases.slice(0, midIdx);
@@ -1858,7 +1929,6 @@ export function computeBomVariance(
   const baseProdTotal = baseProd.reduce((s, p) => s + p.prodQtyTotal, 0) || 1;
   const recentProdTotal = recentProd.reduce((s, p) => s + p.prodQtyTotal, 0) || 1;
 
-  // 품목별 기준 기간 집계
   type PeriodAgg = { qty: number; total: number; name: string };
   const aggregate = (data: PurchaseData[]) => {
     const map = new Map<string, PeriodAgg>();
@@ -1874,44 +1944,30 @@ export function computeBomVariance(
 
   const baseAgg = aggregate(basePeriod);
   const recentAgg = aggregate(recentPeriod);
-
-  // 양쪽 모두 데이터가 있는 품목만 비교
   const allCodes = new Set([...baseAgg.keys(), ...recentAgg.keys()]);
   let totalPriceVar = 0;
   let totalQtyVar = 0;
-
   const items: BomVarianceItem[] = [];
+
   allCodes.forEach(code => {
     const base = baseAgg.get(code);
     const recent = recentAgg.get(code);
     if (!base || !recent || base.qty === 0 || recent.qty === 0) return;
 
-    // BOM 자재만 필터 (BOM 데이터가 있을 때)
-    if (bomMaterialCodes.size > 0 && !bomMaterialCodes.has(code)) return;
-
     const standardPrice = Math.round(base.total / base.qty);
     const actualPrice = Math.round(recent.total / recent.qty);
-
-    // 기준 수량 = (기준 기간 투입량 / 기준 기간 생산량) × 최근 기간 생산량
     const standardRatio = base.qty / baseProdTotal;
     const standardQty = Math.round(standardRatio * recentProdTotal);
+    const actualQty = recent.qty;
 
-    // 실제수량: 구매량 - 재고 잔량 보정 (후반기 구매 중 미소진분)
-    const balance = inventoryBalance.get(code) || 0;
-    const actualQty = balance > 0 ? Math.max(0, recent.qty - balance) : recent.qty;
-
-    // 가격차이 = (실제단가 - 기준단가) × 실제수량
     const priceVariance = (actualPrice - standardPrice) * actualQty;
-    // 수량차이 = (실제수량 - 기준수량) × 기준단가
     const qtyVariance = (actualQty - standardQty) * standardPrice;
     const totalVariance = priceVariance + qtyVariance;
 
     totalPriceVar += priceVariance;
     totalQtyVar += qtyVariance;
 
-    // 이름: materialMaster 우선 → 구매 데이터 이름
     const name = masterNameMap.get(code) || base.name || recent.name;
-
     items.push({
       productCode: code,
       productName: name,
@@ -1919,6 +1975,8 @@ export function computeBomVariance(
       standardQty, actualQty,
       priceVariance, qtyVariance, totalVariance,
       unit: masterUnitMap.get(code) || '개',
+      linkedMenus: [],
+      linkedMenuCount: 0,
     });
   });
 
@@ -2886,4 +2944,208 @@ export function computeProfitCenterScore(
   const overallScore = Math.round(scores.reduce((s, m) => s + m.score, 0) / scores.length);
 
   return { activeBracket, monthlyRevenue, calendarDays, scores, overallScore, deemedInputTaxCredit };
+}
+
+// ==============================
+// 원가 초과 원인 분석 (Cost Variance Breakdown)
+// ==============================
+
+export interface CostVarianceDetailItem {
+  code: string;
+  name: string;
+  amount: number;       // 양수=초과, 음수=절감
+  description?: string; // 세부설명
+}
+
+export interface CostVarianceCategory {
+  category: string;     // 카테고리명 (e.g., '원재료 단가 상승', 'BOM 미준수')
+  icon: string;         // material icon
+  color: string;        // css color
+  amount: number;       // 합산 금액
+  items: CostVarianceDetailItem[];
+}
+
+export interface CostVarianceBreakdown {
+  totalExcess: number;           // 총 초과금액 (양수=초과, 음수=절감)
+  targetTotal: number;           // 목표 총원가
+  actualTotal: number;           // 실제 총원가
+  categories: CostVarianceCategory[];
+  reconciled: boolean;           // 카테고리합 ≈ totalExcess 여부
+}
+
+/**
+ * 원가 초과 원인 분석
+ * profitCenterScore의 목표/실적 차이를 카테고리별로 분해
+ * bomVariance가 있으면 원재료를 단가차이/수량차이로 세분화
+ */
+export function computeCostVarianceBreakdown(
+  profitCenterScore: ProfitCenterScoreInsight,
+  bomVariance: BomVarianceInsight | null,
+): CostVarianceBreakdown {
+  const categories: CostVarianceCategory[] = [];
+  let targetTotal = 0;
+  let actualTotal = 0;
+
+  // 금액 기반 항목만 처리 (폐기율 제외 — 비율 지표)
+  const costMetrics = profitCenterScore.scores.filter(
+    s => s.targetAmount != null && s.actualAmount != null && s.unit === '배'
+  );
+
+  for (const metric of costMetrics) {
+    const target = metric.targetAmount!;
+    const actual = metric.actualAmount!;
+    targetTotal += target;
+    actualTotal += actual;
+  }
+
+  const totalExcess = actualTotal - targetTotal;
+
+  // 원재료: bomVariance가 있으면 단가/수량 분해, 없으면 단일 카테고리
+  const rawMetric = costMetrics.find(m => m.metric === '원재료');
+  if (rawMetric) {
+    const rawExcess = rawMetric.actualAmount! - rawMetric.targetAmount!;
+
+    if (bomVariance && bomVariance.items.length > 0) {
+      // BOM 데이터 기반: 단가 상승 vs BOM 미준수(수량차이) 분해
+      const priceItems: CostVarianceDetailItem[] = [];
+      const qtyItems: CostVarianceDetailItem[] = [];
+
+      for (const item of bomVariance.items) {
+        if (item.priceVariance !== 0) {
+          priceItems.push({
+            code: item.productCode,
+            name: item.productName,
+            amount: item.priceVariance,
+            description: `단가 ${formatCurrency(item.standardPrice)} → ${formatCurrency(item.actualPrice)} (${item.actualQty.toLocaleString()}${item.unit})`,
+          });
+        }
+        if (item.qtyVariance !== 0) {
+          qtyItems.push({
+            code: item.productCode,
+            name: item.productName,
+            amount: item.qtyVariance,
+            description: `기준 ${item.standardQty.toLocaleString()} → 실제 ${item.actualQty.toLocaleString()} ${item.unit}`,
+          });
+        }
+      }
+
+      // BOM 분석 총합
+      const bomPriceTotal = priceItems.reduce((s, i) => s + i.amount, 0);
+      const bomQtyTotal = qtyItems.reduce((s, i) => s + i.amount, 0);
+      const bomTotal = bomPriceTotal + bomQtyTotal;
+
+      // BOM이 원재료 전체를 커버하지 못하면 나머지를 '기타 원재료' 로 할당
+      const residual = rawExcess - bomTotal;
+
+      priceItems.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+      qtyItems.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+
+      if (priceItems.length > 0 || bomPriceTotal !== 0) {
+        categories.push({
+          category: '원재료 단가 변동',
+          icon: 'trending_up',
+          color: '#3B82F6',
+          amount: bomPriceTotal,
+          items: priceItems,
+        });
+      }
+      if (qtyItems.length > 0 || bomQtyTotal !== 0) {
+        categories.push({
+          category: 'BOM 미준수 (수량 차이)',
+          icon: 'science',
+          color: '#8B5CF6',
+          amount: bomQtyTotal,
+          items: qtyItems,
+        });
+      }
+      if (Math.abs(residual) > 1000) {
+        categories.push({
+          category: '기타 원재료 차이',
+          icon: 'inventory_2',
+          color: '#6B7280',
+          amount: residual,
+          items: [{
+            code: 'residual',
+            name: 'BOM 미매핑 자재 등',
+            amount: residual,
+            description: '목표와의 차이 중 BOM 분석 외 잔여분',
+          }],
+        });
+      }
+    } else {
+      // BOM 없이 원재료 단일 카테고리
+      categories.push({
+        category: '원재료비 차이',
+        icon: 'inventory_2',
+        color: '#3B82F6',
+        amount: rawExcess,
+        items: [{
+          code: 'raw_total',
+          name: '원재료비 (목표 대비)',
+          amount: rawExcess,
+          description: `목표 ${formatCurrency(rawMetric.targetAmount!)} / 실적 ${formatCurrency(rawMetric.actualAmount!)}`,
+        }],
+      });
+    }
+  }
+
+  // 부재료
+  const subMetric = costMetrics.find(m => m.metric === '부재료');
+  if (subMetric) {
+    const subExcess = subMetric.actualAmount! - subMetric.targetAmount!;
+    categories.push({
+      category: '부재료비 차이',
+      icon: 'category',
+      color: '#10B981',
+      amount: subExcess,
+      items: [{
+        code: 'sub_total',
+        name: '부재료비 (목표 대비)',
+        amount: subExcess,
+        description: `목표 ${formatCurrency(subMetric.targetAmount!)} / 실적 ${formatCurrency(subMetric.actualAmount!)}`,
+      }],
+    });
+  }
+
+  // 노무비
+  const laborMetric = costMetrics.find(m => m.metric === '노무비');
+  if (laborMetric) {
+    const laborExcess = laborMetric.actualAmount! - laborMetric.targetAmount!;
+    categories.push({
+      category: '노무비 차이',
+      icon: 'groups',
+      color: '#F59E0B',
+      amount: laborExcess,
+      items: [{
+        code: 'labor_total',
+        name: '노무비 (목표 대비)',
+        amount: laborExcess,
+        description: `목표 ${formatCurrency(laborMetric.targetAmount!)} / 실적 ${formatCurrency(laborMetric.actualAmount!)}`,
+      }],
+    });
+  }
+
+  // 수도광열전력
+  const overheadMetric = costMetrics.find(m => m.metric === '수도광열전력');
+  if (overheadMetric) {
+    const ohExcess = overheadMetric.actualAmount! - overheadMetric.targetAmount!;
+    categories.push({
+      category: '수도광열전력 차이',
+      icon: 'bolt',
+      color: '#EF4444',
+      amount: ohExcess,
+      items: [{
+        code: 'overhead_total',
+        name: '수도광열전력 (목표 대비)',
+        amount: ohExcess,
+        description: `목표 ${formatCurrency(overheadMetric.targetAmount!)} / 실적 ${formatCurrency(overheadMetric.actualAmount!)}`,
+      }],
+    });
+  }
+
+  // 카테고리합 vs 총초과 정합성 확인
+  const categorySum = categories.reduce((s, c) => s + c.amount, 0);
+  const reconciled = Math.abs(categorySum - totalExcess) < 10000; // 1만원 이내 오차 허용
+
+  return { totalExcess, targetTotal, actualTotal, categories, reconciled };
 }

@@ -5,9 +5,9 @@ import {
 } from 'recharts';
 import { SubTabLayout, Pagination } from '../layout';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../../utils/format';
-import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData, SalesDetailData } from '../../services/googleSheetService';
+import type { PurchaseData, UtilityData, ProductionData, DailySalesData, LaborDailyData, SalesDetailData, BomItemData, MaterialMasterItem } from '../../services/googleSheetService';
 import type { DashboardInsights, CostRecommendation, ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../../services/insightService';
-import { isSubMaterial, computeCostBreakdown, computeMaterialPrices, computeUtilityCosts, computeLimitPrice, computeChannelRevenue, type InventoryAdjustment } from '../../services/insightService';
+import { isSubMaterial, computeCostBreakdown, computeMaterialPrices, computeUtilityCosts, computeLimitPrice, computeChannelRevenue, computeBomVariance, computeCostVarianceBreakdown, type InventoryAdjustment } from '../../services/insightService';
 import { getChannelCostSummaries } from '../domain';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
 // getLaborMonthlySummaries 수동입력 대신 labor prop(Google Sheets 실데이터) 사용
@@ -30,6 +30,8 @@ interface Props {
   insights: DashboardInsights | null;
   profitCenterScore?: ProfitCenterScoreInsight | null;
   inventoryAdjustment?: InventoryAdjustment | null;
+  bomData?: BomItemData[];
+  materialMaster?: MaterialMasterItem[];
   onItemClick: (item: import('../../types').ModalItem) => void;
   onTabChange?: (tab: string) => void;
 }
@@ -113,6 +115,8 @@ export const CostManagementView: React.FC<Props> = ({
   insights,
   profitCenterScore = null,
   inventoryAdjustment = null,
+  bomData = [],
+  materialMaster = [],
   onItemClick,
   onTabChange,
 }) => {
@@ -173,11 +177,34 @@ export const CostManagementView: React.FC<Props> = ({
       : insights?.limitPrice ?? null,
     [filteredPurchases, insights?.limitPrice]);
 
+  // BOM 오차 분석 (원가 초과 원인 분해용)
+  const bomVariance = useMemo(
+    () => (filteredPurchases.length > 0 && filteredProduction.length > 0)
+      ? computeBomVariance(filteredPurchases, filteredProduction, bomData, materialMaster)
+      : null,
+    [filteredPurchases, filteredProduction, bomData, materialMaster]
+  );
+
+  // 원가 초과 원인 분석
+  const costVarianceBreakdown = useMemo(
+    () => profitCenterScore ? computeCostVarianceBreakdown(profitCenterScore, bomVariance) : null,
+    [profitCenterScore, bomVariance]
+  );
+
   const [rawFilter, setRawFilter] = useState('all');
   const [subFilter, setSubFilter] = useState('all');
   const [overheadFilter, setOverheadFilter] = useState('all');
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [rawPage, setRawPage] = useState(1);
+  // 원가 초과 원인 분석 토글 상태
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const toggleCategory = (cat: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      next.has(cat) ? next.delete(cat) : next.add(cat);
+      return next;
+    });
+  };
   const RAW_PAGE_SIZE = 20;
 
   const laborByDept = useMemo(() => {
@@ -428,7 +455,7 @@ export const CostManagementView: React.FC<Props> = ({
                         </span>
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        월 정산매출 {formatCurrency(sc.monthlyRevenue)} 추정 ({sc.calendarDays}일 기준)
+                        월 정산매출 {formatCurrency(sc.monthlyRevenue)} 추정 ({sc.calendarDays}일 기준) | 보간 기준매출 {formatCurrency(sc.activeBracket.revenueBracket)}
                       </div>
                     </div>
 
@@ -450,9 +477,14 @@ export const CostManagementView: React.FC<Props> = ({
                                `${formatCurrency(item.actual)} / ${formatCurrency(item.target)}`}
                             </div>
                             {item.targetAmount != null && item.actualAmount != null && (
-                              <div className={`text-xs font-bold mt-0.5 ${(item.actualAmount - item.targetAmount) <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                실적: {formatCurrency(item.actualAmount)}
-                              </div>
+                              <>
+                                <div className="text-[10px] text-gray-400 mt-1">
+                                  목표 {formatCurrency(item.targetAmount)} / 실적 {formatCurrency(item.actualAmount)}
+                                </div>
+                                <div className={`text-xs font-bold ${(item.actualAmount - item.targetAmount) <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {(item.actualAmount - item.targetAmount) <= 0 ? '절감 ' : '초과 +'}{formatCurrency(Math.abs(item.actualAmount - item.targetAmount))}
+                                </div>
+                              </>
                             )}
                           </div>
                         );
@@ -464,6 +496,137 @@ export const CostManagementView: React.FC<Props> = ({
                       </p>
                     )}
                   </div>
+
+                  {/* 원가 초과 원인 분석 — 전체 차이를 카테고리별로 분해, 토글 드릴다운 */}
+                  {costVarianceBreakdown && (
+                    <div className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <span className="material-icons-outlined text-orange-500">analytics</span>
+                          원가 초과 원인 분석
+                        </h3>
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="text-gray-500">목표 {formatCurrency(costVarianceBreakdown.targetTotal)}</span>
+                          <span className="text-gray-400">→</span>
+                          <span className="text-gray-700 dark:text-gray-200 font-bold">실적 {formatCurrency(costVarianceBreakdown.actualTotal)}</span>
+                        </div>
+                      </div>
+
+                      {/* 총 차이 헤더 */}
+                      <div className={`rounded-lg p-4 mb-4 ${
+                        costVarianceBreakdown.totalExcess > 0
+                          ? 'bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800'
+                          : 'bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm font-medium ${costVarianceBreakdown.totalExcess > 0 ? 'text-red-700 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}>
+                            목표 대비 총 {costVarianceBreakdown.totalExcess > 0 ? '초과' : '절감'} 금액
+                          </span>
+                          <span className={`text-2xl font-black ${costVarianceBreakdown.totalExcess > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {costVarianceBreakdown.totalExcess > 0 ? '+' : ''}{formatCurrency(costVarianceBreakdown.totalExcess)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 카테고리별 분해 — 바 시각화 + 토글 */}
+                      <div className="space-y-2">
+                        {costVarianceBreakdown.categories
+                          .filter(cat => Math.abs(cat.amount) >= 1000)
+                          .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+                          .map(cat => {
+                            const isExpanded = expandedCategories.has(cat.category);
+                            const pct = costVarianceBreakdown.totalExcess !== 0
+                              ? Math.round(cat.amount / costVarianceBreakdown.totalExcess * 100)
+                              : 0;
+                            const barWidth = Math.min(100, Math.abs(pct));
+
+                            return (
+                              <div key={cat.category} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                {/* 카테고리 헤더 (클릭 → 토글) */}
+                                <button
+                                  onClick={() => toggleCategory(cat.category)}
+                                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                                >
+                                  <span className={`material-icons-outlined text-base transition-transform ${isExpanded ? 'rotate-90' : ''}`} style={{ color: cat.color }}>
+                                    chevron_right
+                                  </span>
+                                  <span className="material-icons-outlined text-base" style={{ color: cat.color }}>{cat.icon}</span>
+                                  <span className="text-sm font-bold text-gray-800 dark:text-gray-200 flex-1">{cat.category}</span>
+
+                                  {/* 비율 바 */}
+                                  <div className="hidden sm:flex items-center gap-2 w-32">
+                                    <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full"
+                                        style={{ width: `${barWidth}%`, backgroundColor: cat.amount > 0 ? '#EF4444' : '#10B981' }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-gray-400 w-8 text-right">{pct}%</span>
+                                  </div>
+
+                                  <span className={`text-sm font-bold whitespace-nowrap ${cat.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {cat.amount > 0 ? '+' : ''}{formatCurrency(cat.amount)}
+                                  </span>
+                                </button>
+
+                                {/* 세부 내역 (토글) */}
+                                {isExpanded && (
+                                  <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30 px-4 py-3">
+                                    <table className="w-full text-xs">
+                                      <thead>
+                                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                                          <th className="text-left py-1.5 px-2 text-gray-500 font-medium">항목</th>
+                                          <th className="text-left py-1.5 px-2 text-gray-500 font-medium">상세</th>
+                                          <th className="text-right py-1.5 px-2 text-gray-500 font-medium">금액</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {cat.items.slice(0, 15).map(item => (
+                                          <tr key={item.code} className="border-b border-gray-100 dark:border-gray-700/50">
+                                            <td className="py-1.5 px-2 text-gray-700 dark:text-gray-300 font-medium">{item.name}</td>
+                                            <td className="py-1.5 px-2 text-gray-500">{item.description || '-'}</td>
+                                            <td className={`py-1.5 px-2 text-right font-bold ${item.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                              {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                        {cat.items.length > 15 && (
+                                          <tr>
+                                            <td colSpan={3} className="py-1.5 px-2 text-center text-gray-400">
+                                              ... 외 {cat.items.length - 15}건
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </tbody>
+                                      <tfoot>
+                                        <tr className="border-t-2 border-gray-300 dark:border-gray-600">
+                                          <td className="py-1.5 px-2 font-bold text-gray-700 dark:text-gray-200" colSpan={2}>소계</td>
+                                          <td className={`py-1.5 px-2 text-right font-black ${cat.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                            {cat.amount > 0 ? '+' : ''}{formatCurrency(cat.amount)}
+                                          </td>
+                                        </tr>
+                                      </tfoot>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+
+                      {/* 정합성 표시 */}
+                      <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                        <span>
+                          카테고리 합계: {formatCurrency(costVarianceBreakdown.categories.reduce((s, c) => s + c.amount, 0))}
+                          {' '}/ 총 차이: {formatCurrency(costVarianceBreakdown.totalExcess)}
+                        </span>
+                        {costVarianceBreakdown.reconciled
+                          ? <span className="text-green-500 flex items-center gap-1"><span className="material-icons-outlined text-xs">check_circle</span>정합</span>
+                          : <span className="text-orange-500 flex items-center gap-1"><span className="material-icons-outlined text-xs">warning</span>오차 있음</span>
+                        }
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="bg-yellow-50 dark:bg-yellow-900/10 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">

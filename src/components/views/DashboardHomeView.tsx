@@ -175,7 +175,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   const kpis = useMemo(() => {
     // 정산매출 = salesDetail 공급가액 직접 합산 (가장 정확한 원천 데이터)
     const calcSettlement = (sales: DailySalesData[], detail: SalesDetailData[]) => {
-      if (detail.length > 0) return detail.reduce((s, d) => s + (d.supplyAmount || 0), 0);
+      if (detail.length > 0) return detail.filter(d => d.customer).reduce((s, d) => s + (d.supplyAmount || 0), 0);
       return sales.reduce((s, d) => s + d.totalRevenue, 0);
     };
     const totalRevenue = calcSettlement(filteredSales, filteredSalesDetail);
@@ -319,7 +319,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-medium">
                 {profitCenterScore.activeBracket.label} 구간
               </span>
-              <span>월 정산매출 {formatCurrency(profitCenterScore.monthlyRevenue)} 추정 ({profitCenterScore.calendarDays}일 기준)</span>
+              <span>월 정산매출 {formatCurrency(profitCenterScore.monthlyRevenue)} 추정 ({profitCenterScore.calendarDays}일 기준) | 보간 기준매출 {formatCurrency(profitCenterScore.activeBracket.revenueBracket)}</span>
             </div>
           </div>
 

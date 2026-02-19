@@ -69,8 +69,8 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
     [filteredProduction]
   );
   const bomVariance = useMemo(
-    () => (filteredPurchases.length > 0 && filteredProduction.length > 0) ? computeBomVariance(filteredPurchases, filteredProduction) : null,
-    [filteredPurchases, filteredProduction]
+    () => (filteredPurchases.length > 0 && filteredProduction.length > 0) ? computeBomVariance(filteredPurchases, filteredProduction, bomData, materialMaster) : null,
+    [filteredPurchases, filteredProduction, bomData, materialMaster]
   );
   const yieldTracking = useMemo(
     () => (filteredProduction.length > 0 && filteredPurchases.length > 0) ? computeYieldTracking(filteredProduction, filteredPurchases, config) : null,
@@ -86,8 +86,10 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
 
   // BOM 오차 드릴다운 상태
   const [selectedMaterial, setSelectedMaterial] = useState<BomVarianceItem | null>(null);
+  // BOM 오차 정렬: 기본=|차이금액| 내림차순, 토글=연결메뉴수 오름차순
+  const [bomSortByMenu, setBomSortByMenu] = useState(false);
 
-  // 선택된 자재의 메뉴별 상세 데이터
+  // 선택된 자재의 메뉴별 상세 데이터 (BOM 기준)
   const materialDrilldown = useMemo(() => {
     if (!selectedMaterial || bomData.length === 0) return null;
     const code = selectedMaterial.productCode;
@@ -96,36 +98,29 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
     const relatedBom = bomData.filter(b => b.materialCode?.trim() === code);
     if (relatedBom.length === 0) return null;
 
-    // 후반기 생산 데이터
-    const sortedProd = [...filteredProduction].sort((a, b) => a.date.localeCompare(b.date));
-    const prodMidIdx = Math.floor(sortedProd.length / 2);
-    const recentProd = sortedProd.slice(prodMidIdx);
+    // 총 생산량
+    const totalProdQty = filteredProduction.reduce((s, p) => s + p.prodQtyTotal, 0);
 
-    // 후반기 구매량 (해당 자재)
-    const sortedPurch = [...filteredPurchases].sort((a, b) => a.date.localeCompare(b.date));
-    const purchMidIdx = Math.floor(sortedPurch.length / 2);
-    const recentPurch = sortedPurch.slice(purchMidIdx);
-    const actualPurchaseQty = recentPurch
+    // 전체 구매량 (해당 자재)
+    const actualPurchaseQty = filteredPurchases
       .filter(p => p.productCode === code)
       .reduce((s, p) => s + p.quantity, 0);
 
-    // 메뉴별 분석
+    // 메뉴별 분석 (BOM consumptionQty 기준)
     const menuDetails = relatedBom.map(bom => {
-      const menuCode = bom.productCode?.trim();
+      const menuCode = bom.productCode?.trim() || '';
       const menuName = bom.productName || menuCode;
-      const recipeQty = bom.consumptionQty || 0; // 생산 1회당 기준 투입량
+      const recipeQty = bom.consumptionQty || 0;
+      const batchSize = bom.productionQty || 1;
 
-      // 후반기 해당 메뉴 생산횟수 (prodQtyTotal에서 비례 추정은 어려우므로 일수 기반)
-      const prodDays = recentProd.length;
-
-      // 기준 소모량 = 레시피 기준 × 생산일수
-      const standardConsumption = recipeQty * prodDays;
+      // 기준 소모량 = consumptionQty × (총생산량 / productionQty)
+      const standardConsumption = Math.round(recipeQty * (totalProdQty / batchSize));
 
       return {
         menuCode,
-        menuName,
+        menuName: menuCode ? `[${menuCode}] ${menuName}` : menuName,
         recipeQty,
-        prodDays,
+        batchSize,
         standardConsumption,
       };
     });
@@ -1038,7 +1033,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
               {bomVariance && bomVariance.items.length > 0 && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">상위/하위 5 품목 (차이 금액)</h3>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">상위/하위 5 품목 (차이 금액) <span className="text-xs font-normal text-gray-400">클릭 → 드릴다운</span></h3>
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
@@ -1049,16 +1044,23 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                             return [...top5, ...bot5].map(item => ({
                               name: item.productName.length > 8 ? item.productName.slice(0, 8) + '..' : item.productName,
                               차이금액: item.totalVariance,
+                              _item: item,
                             }));
                           })()}
                           layout="vertical"
                           margin={{ left: 10, right: 20 }}
+                          onClick={(data: any) => {
+                            if (data?.activePayload?.[0]?.payload?._item) {
+                              const clicked = data.activePayload[0].payload._item as BomVarianceItem;
+                              setSelectedMaterial(selectedMaterial?.productCode === clicked.productCode ? null : clicked);
+                            }
+                          }}
                         >
                           <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                           <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
                           <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 10 }} />
                           <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                          <Bar dataKey="차이금액" radius={[0, 4, 4, 0]}>
+                          <Bar dataKey="차이금액" radius={[0, 4, 4, 0]} className="cursor-pointer">
                             {(() => {
                               const sorted = [...bomVariance.items].sort((a, b) => b.totalVariance - a.totalVariance);
                               const combined = [...sorted.slice(0, 5), ...sorted.slice(-5).reverse()];
@@ -1109,9 +1111,24 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   <span className="material-icons-outlined text-purple-500">compare_arrows</span>
                   레시피 대비 투입 오차 분석
                 </h3>
-                <p className="text-xs text-gray-500 mb-4">
-                  전반기 평균을 기준(Standard)으로 후반기 실제(Actual) 비교 | 양수=불리(초과), 음수=유리(절감)
-                </p>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-xs text-gray-500">
+                    BOM 레시피 기준 대비 실제 투입 비교 | 양수=불리(초과사용), 음수=유리(절감)
+                  </p>
+                  {bomVariance && bomVariance.items.some(i => i.linkedMenuCount > 0) && (
+                    <button
+                      onClick={() => setBomSortByMenu(!bomSortByMenu)}
+                      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full border transition-colors ${
+                        bomSortByMenu
+                          ? 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700'
+                          : 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'
+                      }`}
+                    >
+                      <span className="material-icons-outlined text-xs">sort</span>
+                      {bomSortByMenu ? '연결 메뉴수순' : '차이금액순'}
+                    </button>
+                  )}
+                </div>
 
                 {bomVariance && bomVariance.items.length > 0 ? (
                   <div className="overflow-x-auto">
@@ -1119,6 +1136,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           <th className="text-left py-2 px-3 text-gray-500">자재명</th>
+                          <th className="text-left py-2 px-3 text-gray-500">연결 메뉴</th>
                           <th className="text-right py-2 px-3 text-gray-500">기준단가</th>
                           <th className="text-right py-2 px-3 text-gray-500">실제단가</th>
                           <th className="text-right py-2 px-3 text-gray-500">기준 투입량</th>
@@ -1129,7 +1147,12 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                         </tr>
                       </thead>
                       <tbody>
-                        {bomVariance.items.slice(0, 20).map(item => (
+                        {[...bomVariance.items]
+                          .sort(bomSortByMenu
+                            ? (a, b) => a.linkedMenuCount - b.linkedMenuCount || Math.abs(b.totalVariance) - Math.abs(a.totalVariance)
+                            : (a, b) => Math.abs(b.totalVariance) - Math.abs(a.totalVariance)
+                          )
+                          .slice(0, 20).map(item => (
                           <React.Fragment key={item.productCode}>
                             <tr
                               className={`border-b border-gray-100 dark:border-gray-800 ${
@@ -1145,6 +1168,18 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                                     </span>
                                   )}
                                   {item.productName}
+                                </div>
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {item.linkedMenus.length > 0 ? item.linkedMenus.slice(0, 3).map(m => (
+                                    <span key={m.code} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400 whitespace-nowrap">
+                                      {m.code ? `${m.code}` : m.name.slice(0, 6)}
+                                    </span>
+                                  )) : <span className="text-[10px] text-gray-400">-</span>}
+                                  {item.linkedMenus.length > 3 && (
+                                    <span className="text-[10px] text-gray-400">+{item.linkedMenus.length - 3}</span>
+                                  )}
                                 </div>
                               </td>
                               <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.standardPrice)}</td>
@@ -1170,7 +1205,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                             {/* 드릴다운 패널 */}
                             {selectedMaterial?.productCode === item.productCode && (
                               <tr>
-                                <td colSpan={8} className="p-0">
+                                <td colSpan={9} className="p-0">
                                   <div className="bg-gray-50 dark:bg-gray-800 border-l-4 border-blue-500 p-4">
                                     <div className="flex items-center justify-between mb-3">
                                       <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200">
@@ -1190,7 +1225,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                                           <thead>
                                             <tr className="border-b border-gray-300 dark:border-gray-600">
                                               <th className="text-left py-1.5 px-2 text-gray-500">메뉴명</th>
-                                              <th className="text-right py-1.5 px-2 text-gray-500">생산일수</th>
+                                              <th className="text-right py-1.5 px-2 text-gray-500">배치크기</th>
                                               <th className="text-right py-1.5 px-2 text-gray-500">레시피 기준({item.unit})</th>
                                               <th className="text-right py-1.5 px-2 text-gray-500">기준 소모합({item.unit})</th>
                                               <th className="text-right py-1.5 px-2 text-gray-500">구매 비례({item.unit})</th>
@@ -1201,7 +1236,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                                             {materialDrilldown.items.map(m => (
                                               <tr key={m.menuCode} className="border-b border-gray-200 dark:border-gray-700">
                                                 <td className="py-1.5 px-2 text-gray-700 dark:text-gray-300">{m.menuName}</td>
-                                                <td className="py-1.5 px-2 text-right text-gray-500">{m.prodDays}일</td>
+                                                <td className="py-1.5 px-2 text-right text-gray-500">{m.batchSize.toLocaleString('ko-KR')}</td>
                                                 <td className="py-1.5 px-2 text-right text-gray-500">{m.recipeQty.toLocaleString('ko-KR')}</td>
                                                 <td className="py-1.5 px-2 text-right text-gray-500">{m.standardConsumption.toLocaleString('ko-KR')}</td>
                                                 <td className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-300">{m.allocatedActual.toLocaleString('ko-KR')}</td>
