@@ -2807,15 +2807,15 @@ export function computeProfitCenterScore(
     ? Math.max(1, Math.round((new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000) + 1)
     : channelRevenue.dailyTrend.length || 1;
 
-  // 매출구간 결정: 권장판매 매출(월환산) 기준 선형 보간
+  // 정산매출 = 공급가액 직접 합산 (promotionDiscount는 이미 공급가액에 반영됨)
   const settlementRevenue = channelRevenue.totalRawSupplyAmount > 0
-    ? channelRevenue.totalRawSupplyAmount - channelRevenue.totalPromotionDiscountAmount
+    ? channelRevenue.totalRawSupplyAmount
     : channelRevenue.totalRevenue;
   const monthlySettlement = Math.round(settlementRevenue * 30 / calendarDays);
 
   // 점수 계산용: 생산매출 (= 권장판매가 × 50%)
   const revenue = channelRevenue.totalProductionRevenue;
-  const monthlyRevenue = monthlySettlement; // UI 표시용 = 정산매출 기준 월매출
+  const monthlyRevenue = monthlySettlement; // UI 표시용 = 정산매출(공급가액) 기준 월매출
 
   // 권장판매 매출 기준 선형 보간 (두 구간 사이 목표를 비례 산출)
   const monthlyRecommendedRevenue = Math.round(channelRevenue.totalRecommendedRevenue * 30 / calendarDays);
