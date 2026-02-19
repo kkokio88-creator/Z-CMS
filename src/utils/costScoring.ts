@@ -3,6 +3,7 @@
  * 매출/원가 배수 기반으로 4개 항목(원재료/부재료/노무비/수도광열전력)을 점수화
  */
 import type { ProfitCenterGoal, BusinessConfig } from '../config/businessConfig';
+import { deriveMultipliersFromTargets } from '../config/businessConfig';
 import type { DailySalesData, PurchaseData, UtilityData, ProductionData, LaborDailyData, SalesDetailData } from '../services/googleSheetService';
 import type { ChannelCostSummary } from '../components/domain';
 import { isSubMaterial, computeChannelRevenue, type InventoryAdjustment } from '../services/insightService';
@@ -63,6 +64,74 @@ function findActiveBracket(goals: ProfitCenterGoal[], monthlyRevenue: number): P
     }
   }
   return active;
+}
+
+/**
+ * 권장판매 매출 기준 선형 보간 — 두 구간 사이 목표를 비례 산출
+ * @exported — insightService.computeProfitCenterScore에서도 사용
+ * 실제 권장판매 매출(월환산)이 두 구간의 targetRecommendedRevenue 사이에 있으면
+ * 모든 목표금액을 선형 보간하고, 배수는 보간된 금액에서 재계산
+ */
+export function interpolateBracket(goals: ProfitCenterGoal[], monthlyRecommendedRevenue: number): ProfitCenterGoal {
+  const sorted = [...goals]
+    .filter(g => g.targets.targetRecommendedRevenue != null && g.targets.targetRecommendedRevenue > 0)
+    .sort((a, b) => (a.targets.targetRecommendedRevenue || 0) - (b.targets.targetRecommendedRevenue || 0));
+
+  // targetRecommendedRevenue 데이터가 없으면 기존 방식 폴백
+  if (sorted.length === 0) return findActiveBracket(goals, monthlyRecommendedRevenue);
+
+  // 최하 구간 미만 → 최하 구간 그대로
+  const first = sorted[0];
+  if (monthlyRecommendedRevenue <= (first.targets.targetRecommendedRevenue || 0)) return first;
+
+  // 최상 구간 초과 → 최상 구간 그대로
+  const last = sorted[sorted.length - 1];
+  if (monthlyRecommendedRevenue >= (last.targets.targetRecommendedRevenue || 0)) return last;
+
+  // 상/하 구간 결정
+  let lower = sorted[0];
+  let upper = sorted[1];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (monthlyRecommendedRevenue >= (sorted[i].targets.targetRecommendedRevenue || 0) &&
+        monthlyRecommendedRevenue < (sorted[i + 1].targets.targetRecommendedRevenue || 0)) {
+      lower = sorted[i];
+      upper = sorted[i + 1];
+      break;
+    }
+  }
+
+  const lowerRev = lower.targets.targetRecommendedRevenue || 0;
+  const upperRev = upper.targets.targetRecommendedRevenue || 0;
+  const ratio = upperRev > lowerRev
+    ? (monthlyRecommendedRevenue - lowerRev) / (upperRev - lowerRev)
+    : 0;
+
+  const lerp = (a?: number, b?: number): number | undefined => {
+    if (a == null && b == null) return undefined;
+    return Math.round((a || 0) + ratio * ((b || 0) - (a || 0)));
+  };
+
+  const lt = lower.targets;
+  const ut = upper.targets;
+
+  // 모든 절대 목표금액을 보간
+  const interpolated: ProfitCenterGoal = {
+    revenueBracket: Math.round(lower.revenueBracket + ratio * (upper.revenueBracket - lower.revenueBracket)),
+    label: `${lower.label}~${upper.label}`,
+    targets: {
+      ...lt,
+      targetRecommendedRevenue: lerp(lt.targetRecommendedRevenue, ut.targetRecommendedRevenue),
+      targetProductionRevenue: lerp(lt.targetProductionRevenue, ut.targetProductionRevenue),
+      targetRawMaterialCost: lerp(lt.targetRawMaterialCost, ut.targetRawMaterialCost),
+      targetSubMaterialCost: lerp(lt.targetSubMaterialCost, ut.targetSubMaterialCost),
+      targetLaborCost: lerp(lt.targetLaborCost, ut.targetLaborCost),
+      targetOverheadCost: lerp(lt.targetOverheadCost, ut.targetOverheadCost),
+      wasteRateTarget: Math.round((lt.wasteRateTarget + ratio * (ut.wasteRateTarget - lt.wasteRateTarget)) * 10) / 10,
+    },
+  };
+
+  // 보간된 금액에서 배수 재계산 (deriveMultipliersFromTargets 활용)
+  return deriveMultipliersFromTargets(interpolated);
 }
 
 function computeItem(
@@ -132,12 +201,13 @@ export function computeCostScores(params: ComputeParams): CostScoringResult | nu
   const filteredRevenue = cr.totalProductionRevenue; // 점수 계산용 = 생산매출
   if (filteredRevenue === 0) return null;
 
-  // 매출구간 결정: 정산매출(공급가액 - 프로모할인) 기준, salesDetail 없으면 dailySales 폴백
+  // 매출구간 결정: 권장판매 매출(월환산) 기준 선형 보간
   const settlementRev = cr.totalRawSupplyAmount > 0
     ? cr.totalRawSupplyAmount - cr.totalPromotionDiscountAmount
     : cr.totalRevenue;
   const monthlyRevenue = Math.round(settlementRev * 30 / rangeDays);
-  const activeBracket = findActiveBracket(goals, monthlyRevenue);
+  const monthlyRecommendedRevenue = Math.round(cr.totalRecommendedRevenue * 30 / rangeDays);
+  const activeBracket = interpolateBracket(goals, monthlyRecommendedRevenue);
   const targets = activeBracket.targets;
 
   // 원가 계산: 매입액 (공급가액 기준, VAT 제외)
@@ -217,9 +287,9 @@ export function computeWeeklyCostScores(params: ComputeParams): WeeklyCostScore[
     : overallCR.totalRevenue;
   const prodRatio = weeklySettlement > 0 ? overallCR.totalProductionRevenue / weeklySettlement : 0.5;
   const rangeDays = Math.max(1, fSales.length);
-  // 매출구간 결정: 정산매출 기준
-  const monthlyRevenue = Math.round(weeklySettlement * 30 / rangeDays);
-  const activeBracket = findActiveBracket(goals, monthlyRevenue);
+  // 매출구간 결정: 권장판매 매출(월환산) 기준 선형 보간
+  const monthlyRecommendedRevenue = Math.round(overallCR.totalRecommendedRevenue * 30 / rangeDays);
+  const activeBracket = interpolateBracket(goals, monthlyRecommendedRevenue);
   const targets = activeBracket.targets;
 
   // 주간 그룹핑

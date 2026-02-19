@@ -18,6 +18,7 @@ import { getZScore } from './orderingService';
 import type { InventorySafetyItem } from '../types';
 import { BusinessConfig, DEFAULT_BUSINESS_CONFIG, ProfitCenterGoal } from '../config/businessConfig';
 import type { ChannelCostSummary } from '../components/domain';
+import { interpolateBracket } from '../utils/costScoring';
 
 // ==============================
 // 타입 정의
@@ -2806,7 +2807,7 @@ export function computeProfitCenterScore(
     ? Math.max(1, Math.round((new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000) + 1)
     : channelRevenue.dailyTrend.length || 1;
 
-  // 매출구간 결정: 정산매출(공급가액 - 프로모할인) 기준, salesDetail 없으면 dailySales 폴백
+  // 매출구간 결정: 권장판매 매출(월환산) 기준 선형 보간
   const settlementRevenue = channelRevenue.totalRawSupplyAmount > 0
     ? channelRevenue.totalRawSupplyAmount - channelRevenue.totalPromotionDiscountAmount
     : channelRevenue.totalRevenue;
@@ -2816,16 +2817,9 @@ export function computeProfitCenterScore(
   const revenue = channelRevenue.totalProductionRevenue;
   const monthlyRevenue = monthlySettlement; // UI 표시용 = 정산매출 기준 월매출
 
-  // 가장 가까운 하위 구간 선택 (정산매출 기준)
-  const sorted = [...goals].sort((a, b) => a.revenueBracket - b.revenueBracket);
-  let activeBracket = sorted[0];
-  for (const goal of sorted) {
-    if (monthlySettlement >= goal.revenueBracket) {
-      activeBracket = goal;
-    } else {
-      break;
-    }
-  }
+  // 권장판매 매출 기준 선형 보간 (두 구간 사이 목표를 비례 산출)
+  const monthlyRecommendedRevenue = Math.round(channelRevenue.totalRecommendedRevenue * 30 / calendarDays);
+  const activeBracket = interpolateBracket(goals, monthlyRecommendedRevenue);
 
   const targets = activeBracket.targets;
   const comp = costBreakdown.composition;
