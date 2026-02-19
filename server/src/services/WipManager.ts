@@ -6,7 +6,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { DebateRecord, DebatePhase, WipFileMetadata, InsightDomain, DomainTeam } from '../types';
+import { DebateRecord, DebatePhase, WipFileMetadata, InsightDomain, DomainTeam } from '../types/index.js';
 
 export class WipManager {
   private wipPath: string;

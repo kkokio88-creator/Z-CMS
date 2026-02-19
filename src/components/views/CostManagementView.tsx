@@ -409,6 +409,20 @@ export const CostManagementView: React.FC<Props> = ({
   const utilityRecs = recommendations.filter(r => r.type === 'utility');
   const marginRecs = recommendations.filter(r => r.type === 'margin' || r.type === 'waste');
 
+  // 우측 인사이트 패널 상태
+  const [insightPanelOpen, setInsightPanelOpen] = useState(false);
+
+  // 탭별 인사이트 매핑
+  const getTabInsights = (tab: string): CostRecommendation[] => {
+    switch (tab) {
+      case 'raw': return materialRecs;
+      case 'sub': return materialRecs;
+      case 'labor': return marginRecs;
+      case 'overhead': return utilityRecs;
+      default: return recommendations.slice(0, 5);
+    }
+  };
+
   const tabs = [
     { key: 'overview', label: '원가 총괄', icon: 'account_balance' },
     { key: 'raw', label: '원재료', icon: 'inventory_2' },
@@ -417,8 +431,70 @@ export const CostManagementView: React.FC<Props> = ({
     { key: 'overhead', label: '수도광열전력', icon: 'bolt' },
   ];
 
+  // 현재 활성 탭 추적 (인사이트 필터링용)
+  const [currentTab, setCurrentTab] = useState('overview');
+  const currentInsights = getTabInsights(currentTab);
+
   return (
-    <SubTabLayout title="원가 관리" tabs={tabs} onTabChange={onTabChange}>
+    <>
+    {/* 우측 인사이트 토글 버튼 */}
+    {currentInsights.length > 0 && (
+      <button
+        onClick={() => setInsightPanelOpen(!insightPanelOpen)}
+        className={`fixed right-0 top-1/3 z-40 flex items-center gap-1 px-2 py-3 rounded-l-lg shadow-lg border transition-all ${
+          insightPanelOpen
+            ? 'bg-yellow-500 text-white border-yellow-600'
+            : 'bg-white dark:bg-gray-800 text-yellow-600 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+        }`}
+        style={{ writingMode: 'vertical-rl' }}
+      >
+        <span className="material-icons-outlined text-sm">{insightPanelOpen ? 'close' : 'lightbulb'}</span>
+        <span className="text-xs font-bold">인사이트 {currentInsights.length}</span>
+      </button>
+    )}
+
+    {/* 슬라이드 인사이트 패널 */}
+    {insightPanelOpen && currentInsights.length > 0 && (
+      <div className="fixed right-0 top-16 bottom-0 w-80 z-30 bg-white dark:bg-surface-dark border-l border-gray-200 dark:border-gray-700 shadow-2xl overflow-y-auto animate-fade-in">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <span className="material-icons-outlined text-yellow-500 text-base">lightbulb</span>
+              비용 절감 인사이트
+            </h3>
+            <button onClick={() => setInsightPanelOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <span className="material-icons-outlined text-sm">close</span>
+            </button>
+          </div>
+          <div className="space-y-3">
+            {currentInsights.map(rec => (
+              <div key={rec.id} className={`p-3 rounded-lg border-l-4 ${
+                rec.priority === 'high' ? 'bg-red-50 dark:bg-red-900/10 border-red-500'
+                : rec.priority === 'medium' ? 'bg-orange-50 dark:bg-orange-900/10 border-orange-500'
+                : 'bg-blue-50 dark:bg-blue-900/10 border-blue-500'
+              }`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      rec.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      : rec.priority === 'medium' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                    }`}>
+                      {rec.priority === 'high' ? '긴급' : rec.priority === 'medium' ? '주의' : '참고'}
+                    </span>
+                    <p className="text-xs font-medium text-gray-800 dark:text-gray-200 mt-1.5">{rec.title}</p>
+                    <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{rec.description}</p>
+                  </div>
+                  <span className="text-xs font-bold text-green-600 whitespace-nowrap">{formatCurrency(rec.estimatedSaving)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+
+    <SubTabLayout title="원가 관리" tabs={tabs} onTabChange={(tab) => { setCurrentTab(tab); onTabChange?.(tab); }}>
       {(activeTab) => {
         try {
         // ========== 원가 총괄 ==========
@@ -527,6 +603,60 @@ export const CostManagementView: React.FC<Props> = ({
                           </span>
                         </div>
                       </div>
+
+                      {/* 폭포(Waterfall) 차트 — 목표→요인별 증감→실제 */}
+                      {(() => {
+                        const cats = costVarianceBreakdown.categories.filter(c => Math.abs(c.amount) >= 1000);
+                        if (cats.length === 0) return null;
+                        // waterfall 데이터 구성: 시작(목표), 각 변동요인, 끝(실제)
+                        let running = costVarianceBreakdown.targetTotal;
+                        const waterfallData: { name: string; base: number; delta: number; color: string; total?: number }[] = [
+                          { name: '목표 원가', base: 0, delta: costVarianceBreakdown.targetTotal, color: '#6B7280', total: costVarianceBreakdown.targetTotal },
+                        ];
+                        for (const cat of cats.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))) {
+                          const shortName = cat.category.replace(' (수량 차이)', '').replace('비 차이', '').replace(' 변동', '');
+                          waterfallData.push({
+                            name: shortName,
+                            base: cat.amount >= 0 ? running : running + cat.amount,
+                            delta: Math.abs(cat.amount),
+                            color: cat.amount > 0 ? '#EF4444' : '#10B981',
+                          });
+                          running += cat.amount;
+                        }
+                        waterfallData.push({
+                          name: '실제 원가',
+                          base: 0,
+                          delta: costVarianceBreakdown.actualTotal,
+                          color: '#374151',
+                          total: costVarianceBreakdown.actualTotal,
+                        });
+
+                        return (
+                          <div className="h-56 mb-4">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={waterfallData} margin={{ top: 15, right: 10, left: 10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                                <YAxis tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
+                                <Tooltip
+                                  formatter={(value: number, name: string, props: any) => {
+                                    const d = props.payload;
+                                    if (d.total != null) return [formatCurrency(d.total), '금액'];
+                                    return [formatCurrency(d.delta), d.color === '#EF4444' ? '초과' : '절감'];
+                                  }}
+                                />
+                                {/* 투명 base */}
+                                <Bar dataKey="base" stackId="a" fill="transparent" />
+                                <Bar dataKey="delta" stackId="a" radius={[3, 3, 0, 0]}>
+                                  {waterfallData.map((d, i) => (
+                                    <Cell key={i} fill={d.color} />
+                                  ))}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        );
+                      })()}
 
                       {/* 카테고리별 분해 — 바 시각화 + 토글 */}
                       <div className="space-y-2">
@@ -691,9 +821,6 @@ export const CostManagementView: React.FC<Props> = ({
                 </p>
               </div>
 
-              {recommendations.length > 0 && (
-                <InsightCards items={recommendations.slice(0, 3)} />
-              )}
             </div>
             </InsightSection>
           );
@@ -910,8 +1037,6 @@ export const CostManagementView: React.FC<Props> = ({
                   </div>
                 </div>
               )}
-
-              <InsightCards items={materialRecs} />
             </div>
             </InsightSection>
           );
@@ -1020,7 +1145,6 @@ export const CostManagementView: React.FC<Props> = ({
                 )}
               </div>
 
-              <InsightCards items={materialRecs} />
             </div>
             </InsightSection>
           );
@@ -1273,7 +1397,6 @@ export const CostManagementView: React.FC<Props> = ({
                 </div>
               )}
 
-              <InsightCards items={marginRecs} />
             </div>
             </InsightSection>
           );
@@ -1478,7 +1601,6 @@ export const CostManagementView: React.FC<Props> = ({
               ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
             </div>
 
-            <InsightCards items={utilityRecs} />
           </div>
           </InsightSection>
         );
@@ -1494,5 +1616,6 @@ export const CostManagementView: React.FC<Props> = ({
         }
       }}
     </SubTabLayout>
+    </>
   );
 };

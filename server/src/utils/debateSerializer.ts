@@ -3,7 +3,7 @@
  * DebateRecord ↔ DB row 변환 유틸리티
  */
 
-import type { DebateRecord, DebateRound, GovernanceReview, FinalDecision, DebatePhase, DomainTeam, InsightDomain } from '../types';
+import type { DebateRecord, DebateRound, GovernanceReview, FinalDecision, DebatePhase, DomainTeam, InsightDomain } from '../types/index.js';
 
 export interface DebateRow {
   id: string;

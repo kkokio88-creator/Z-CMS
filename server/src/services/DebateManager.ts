@@ -19,10 +19,10 @@ import {
   DebateEvent,
   DebateStatistics,
   MessagePriority,
-} from '../types';
-import { WipManager } from './WipManager';
-import type { SupabaseAdapter } from '../adapters/SupabaseAdapter';
-import { debateRecordToRow, debateRowToRecord } from '../utils/debateSerializer';
+} from '../types/index.js';
+import { WipManager } from './WipManager.js';
+import type { SupabaseAdapter } from '../adapters/SupabaseAdapter.js';
+import { debateRecordToRow, debateRowToRecord } from '../utils/debateSerializer.js';
 
 // 팀 -> 도메인 매핑
 const TEAM_TO_DOMAIN: Record<DomainTeam, InsightDomain> = {

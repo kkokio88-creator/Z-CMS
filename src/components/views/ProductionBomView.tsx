@@ -98,8 +98,10 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
     const relatedBom = bomData.filter(b => b.materialCode?.trim() === code);
     if (relatedBom.length === 0) return null;
 
-    // 총 생산량
+    // 총 생산량 → BOM 제품수로 균등 분배
     const totalProdQty = filteredProduction.reduce((s, p) => s + p.prodQtyTotal, 0);
+    const uniqueBomProducts = new Set(bomData.map(b => b.productCode?.trim()).filter(Boolean));
+    const perProductProd = totalProdQty / (uniqueBomProducts.size || 1);
 
     // 전체 구매량 (해당 자재)
     const actualPurchaseQty = filteredPurchases
@@ -113,8 +115,8 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
       const recipeQty = bom.consumptionQty || 0;
       const batchSize = bom.productionQty || 1;
 
-      // 기준 소모량 = consumptionQty × (총생산량 / productionQty)
-      const standardConsumption = Math.round(recipeQty * (totalProdQty / batchSize));
+      // 기준 소모량 = consumptionQty × (제품별 균등생산량 / 배치크기)
+      const standardConsumption = Math.round(recipeQty * (perProductProd / batchSize));
 
       return {
         menuCode,
