@@ -173,10 +173,19 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
 
   // KPI 계산
   const kpis = useMemo(() => {
-    // 정산매출 = salesDetail 공급가액 직접 합산 (가장 정확한 원천 데이터)
+    // 3대 채널(자사몰/쿠팡/컬리)에 해당하는 거래처만 필터 — 채널분석과 동일 기준
+    const isKnownChannel = (c: string) => {
+      if (!c) return false;
+      const l = c.toLowerCase();
+      return l.includes('자사') || l.includes('고도몰') || l.includes('집반찬')
+        || l.includes('쿠팡') || l.includes('포워드')
+        || l.includes('컬리');
+    };
+    // 정산매출 = salesDetail에서 3대 채널 공급가액 합산 (채널분석과 동일)
     const calcSettlement = (sales: DailySalesData[], detail: SalesDetailData[]) => {
-      if (detail.length > 0) return detail.filter(d => d.customer).reduce((s, d) => s + (d.supplyAmount || 0), 0);
-      return sales.reduce((s, d) => s + d.totalRevenue, 0);
+      if (detail.length > 0) return detail.filter(d => isKnownChannel(d.customer)).reduce((s, d) => s + (d.supplyAmount || 0), 0);
+      // DailySalesData 폴백: 3채널 합산 (totalRevenue는 비채널 포함 가능)
+      return sales.reduce((s, d) => s + (d.jasaPrice || 0) + (d.coupangPrice || 0) + (d.kurlyPrice || 0), 0);
     };
     const totalRevenue = calcSettlement(filteredSales, filteredSalesDetail);
     const prevRevenue = calcSettlement(prevSales, prevSalesDetail);
@@ -204,7 +213,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   const revenueTrend = useMemo(
     () => [...filteredSales]
       .sort((a, b) => a.date.localeCompare(b.date))
-      .map(d => ({ value: d.totalRevenue })),
+      .map(d => ({ value: (d.jasaPrice || 0) + (d.coupangPrice || 0) + (d.kurlyPrice || 0) })),
     [filteredSales]
   );
   const wasteTrend = useMemo(
