@@ -14,6 +14,11 @@ import { useUI } from '../../contexts/UIContext';
 import { getDateRange, filterByDate } from '../../utils/dateRange';
 import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../../utils/weeklyAggregation';
 import { getChannelPricingSettings } from '../domain/ChannelCostAdmin';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Button } from '../ui/button';
 
 
 interface Props {
@@ -351,26 +356,26 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">정산매출</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalRevenue)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">일 평균 매출</p>
                   <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(avgDailyRevenue)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">거래 건수</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{totalTxCount.toLocaleString()}건</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">취급 품목 수</p>
                   <p className="text-2xl font-bold text-purple-600 mt-1">{uniqueProducts}개</p>
-                </div>
+                </Card>
               </div>
 
               {/* 주간 매출 추이 + 전주대비 성장률 */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 매출 추이</h3>
                 {weeklyRevenue.length > 0 ? (
                   <div className="h-72">
@@ -388,11 +393,11 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                     </ResponsiveContainer>
                   </div>
                 ) : <p className="text-gray-400 text-center py-10">매출 데이터 없음</p>}
-              </div>
+              </Card>
 
               {/* 채널별 주간 추이 + 요일별 패턴 */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널별 주간 매출</h3>
                   {weeklyRevenue.length > 0 ? (
                     <div className="h-56">
@@ -410,9 +415,9 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
-                </div>
+                </Card>
 
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">요일별 평균 매출</h3>
                   <div className="h-56">
                     <ResponsiveContainer width="100%" height="100%">
@@ -430,7 +435,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                     </ResponsiveContainer>
                   </div>
                   <p className="text-xs text-gray-400 text-center mt-2">주말(빨강) / 평일(파랑)</p>
-                </div>
+                </Card>
               </div>
             </div>
           );
@@ -472,27 +477,27 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">취급 품목 수</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{productAgg.length}개</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">매출 집중도 (상위 20%)</p>
                   <p className="text-2xl font-bold text-purple-600 mt-1">{top20pctShare}%</p>
                   <p className="text-xs text-gray-400 mt-1">{top20pctCount}개 품목</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">1위 품목 매출 비중</p>
                   <p className="text-2xl font-bold text-green-600 mt-1">
                     {totalRev > 0 ? formatPercent(Math.round((top10Revenue[0]?.revenue || 0) / totalRev * 1000) / 10) : '0%'}
                   </p>
                   <p className="text-xs text-gray-400 mt-1 truncate">{top10Revenue[0]?.name || '-'}</p>
-                </div>
+                </Card>
               </div>
 
               {/* 매출액 TOP 10 + 판매량 TOP 10 */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">매출액 TOP 10</h3>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
@@ -510,9 +515,9 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </Card>
 
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">판매량 TOP 10</h3>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
@@ -530,12 +535,12 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </Card>
               </div>
 
               {/* 파레토 분석 (매출 집중도) */}
               {paretoData.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">매출 집중도 (파레토 분석)</h3>
                   <p className="text-xs text-gray-500 mb-4">상위 품목이 전체 매출에서 차지하는 누적 비중</p>
                   <div className="h-64">
@@ -552,16 +557,16 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 채널별 TOP 5 */}
               {channelTops.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널별 인기 품목 TOP 5</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {channelTops.map(ct => (
-                      <div key={ct.channel} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                      <Card key={ct.channel} className="p-4">
                         <h4 className="font-bold text-sm mb-3 flex items-center gap-1.5">
                           <span className="w-3 h-3 rounded-full" style={{ backgroundColor: CHANNEL_COLORS[ct.channel] || '#6B7280' }} />
                           {ct.channel}
@@ -579,10 +584,10 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                             ))}
                           </div>
                         ) : <p className="text-xs text-gray-400">데이터 없음</p>}
-                      </div>
+                      </Card>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
             </div>
           );
@@ -657,70 +662,70 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
           })();
 
           const SurgeTable = ({ items, type }: { items: typeof surgeAnalysis.surge; type: 'surge' | 'decline' }) => (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-2 px-3 text-gray-500">품목명</th>
-                    <th className="text-right py-2 px-3 text-gray-500">전반기 수량</th>
-                    <th className="text-right py-2 px-3 text-gray-500">후반기 수량</th>
-                    <th className="text-right py-2 px-3 text-gray-500">수량 변화율</th>
-                    <th className="text-right py-2 px-3 text-gray-500">전반기 매출</th>
-                    <th className="text-right py-2 px-3 text-gray-500">후반기 매출</th>
-                    <th className="text-right py-2 px-3 text-gray-500">매출 변화율</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-left">품목명</TableHead>
+                    <TableHead className="text-right">전반기 수량</TableHead>
+                    <TableHead className="text-right">후반기 수량</TableHead>
+                    <TableHead className="text-right">수량 변화율</TableHead>
+                    <TableHead className="text-right">전반기 매출</TableHead>
+                    <TableHead className="text-right">후반기 매출</TableHead>
+                    <TableHead className="text-right">매출 변화율</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {items.slice(0, 15).map(item => (
-                    <tr key={item.code} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.name}</td>
-                      <td className="py-2 px-3 text-right text-gray-500">{item.prevQty.toLocaleString()}</td>
-                      <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{item.recentQty.toLocaleString()}</td>
-                      <td className={`py-2 px-3 text-right font-bold ${type === 'surge' ? 'text-green-600' : 'text-red-600'}`}>
+                    <TableRow key={item.code}>
+                      <TableCell className="text-gray-800 dark:text-gray-200">{item.name}</TableCell>
+                      <TableCell className="text-right text-gray-500">{item.prevQty.toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-gray-700 dark:text-gray-300">{item.recentQty.toLocaleString()}</TableCell>
+                      <TableCell className={`text-right font-bold ${type === 'surge' ? 'text-green-600' : 'text-red-600'}`}>
                         {item.qtyChangeRate > 0 ? '+' : ''}{item.qtyChangeRate}%
-                      </td>
-                      <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.prevRev)}</td>
-                      <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.recentRev)}</td>
-                      <td className={`py-2 px-3 text-right font-medium ${item.revChangeRate > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      </TableCell>
+                      <TableCell className="text-right text-gray-500">{formatCurrency(item.prevRev)}</TableCell>
+                      <TableCell className="text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.recentRev)}</TableCell>
+                      <TableCell className={`text-right font-medium ${item.revChangeRate > 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {item.revChangeRate > 0 ? '+' : ''}{item.revChangeRate}%
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               {items.length === 0 && <p className="text-gray-400 text-center py-6">해당 품목 없음</p>}
-            </div>
+            </>
           );
 
           return (
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">급상승 품목</p>
                   <p className="text-2xl font-bold text-green-600 mt-1">{surgeAnalysis.surge.length}개</p>
                   <p className="text-xs text-gray-400 mt-1">판매량 +20% 이상</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">급하락 품목</p>
                   <p className="text-2xl font-bold text-red-600 mt-1">{surgeAnalysis.decline.length}개</p>
                   <p className="text-xs text-gray-400 mt-1">판매량 -20% 이상</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">신규 등장 품목</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{surgeAnalysis.newProducts.length}개</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">소멸 품목</p>
                   <p className="text-2xl font-bold text-orange-600 mt-1">{surgeAnalysis.disappeared.length}개</p>
-                </div>
+                </Card>
               </div>
 
               {/* 급상승 TOP 차트 */}
               {surgeAnalysis.surge.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                    <span className="material-icons-outlined text-green-500">trending_up</span>
+                    <DynamicIcon name="trending_up" size={20} className="text-green-500" />
                     급상승 품목 (판매량 +20% 이상)
                   </h3>
                   <p className="text-xs text-gray-500 mb-4">기간 전반기 대비 후반기 판매량 증가율 기준</p>
@@ -742,27 +747,27 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                     </ResponsiveContainer>
                   </div>
                   <SurgeTable items={surgeAnalysis.surge} type="surge" />
-                </div>
+                </Card>
               )}
 
               {/* 급하락 */}
               {surgeAnalysis.decline.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                    <span className="material-icons-outlined text-red-500">trending_down</span>
+                    <DynamicIcon name="trending_down" size={20} className="text-red-500" />
                     급하락 품목 (판매량 -20% 이상)
                   </h3>
                   <p className="text-xs text-gray-500 mb-4">기간 전반기 대비 후반기 판매량 감소율 기준</p>
                   <SurgeTable items={surgeAnalysis.decline} type="decline" />
-                </div>
+                </Card>
               )}
 
               {/* 신규 + 소멸 */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {surgeAnalysis.newProducts.length > 0 && (
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <Card className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                      <span className="material-icons-outlined text-blue-500">fiber_new</span>
+                      <DynamicIcon name="fiber_new" size={20} className="text-blue-500" />
                       신규 등장 품목
                     </h3>
                     <div className="space-y-2">
@@ -776,13 +781,13 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </Card>
                 )}
 
                 {surgeAnalysis.disappeared.length > 0 && (
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <Card className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                      <span className="material-icons-outlined text-orange-500">remove_circle_outline</span>
+                      <DynamicIcon name="remove_circle_outline" size={20} className="text-orange-500" />
                       소멸 품목
                     </h3>
                     <div className="space-y-2">
@@ -796,7 +801,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </Card>
                 )}
               </div>
 
@@ -816,39 +821,39 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
               {/* 4사분면 KPI */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {quadrantKeys.map(q => (
-                  <div key={q} className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <Card key={q} className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="material-icons-outlined text-sm" style={{ color: QUADRANT_COLORS[q] }}>{QUADRANT_ICONS[q]}</span>
+                      <DynamicIcon name={QUADRANT_ICONS[q]} size={16} className="" style={{ color: QUADRANT_COLORS[q] }} />
                       <p className="text-xs text-gray-500 dark:text-gray-400">{QUADRANT_LABELS[q]}</p>
                     </div>
                     <p className="text-2xl font-bold mt-1" style={{ color: QUADRANT_COLORS[q] }}>{matrixData.stats[q]}개</p>
                     <p className="text-xs text-gray-400 mt-1">{QUADRANT_DESC[q]}</p>
-                  </div>
+                  </Card>
                 ))}
               </div>
 
               {/* 차트/테이블 토글 */}
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant={matrixView === 'chart' ? 'default' : 'secondary'}
+                  size="sm"
                   onClick={() => setMatrixView('chart')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    matrixView === 'chart' ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  }`}
+                  className="text-xs"
                 >
                   매트릭스 차트
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant={matrixView === 'table' ? 'default' : 'secondary'}
+                  size="sm"
                   onClick={() => setMatrixView('table')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    matrixView === 'table' ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  }`}
+                  className="text-xs"
                 >
                   상세 테이블
-                </button>
+                </Button>
               </div>
 
               {matrixView === 'chart' ? (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">수익성 매트릭스</h3>
                   <p className="text-xs text-gray-500 mb-4">X축: 판매량, Y축: 마진율 | 중앙값 기준 4사분면 분류</p>
                   {matrixData.items.length > 0 ? (
@@ -888,7 +893,7 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">수익성 데이터가 없습니다.</p>}
-                </div>
+                </Card>
               ) : (
                 /* 상세 테이블 뷰 */
                 <div className="space-y-6">
@@ -896,46 +901,44 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                     const items = matrixData.items.filter(i => i.quadrant === q);
                     if (items.length === 0) return null;
                     return (
-                      <div key={q} className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                      <Card key={q} className="p-6">
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: QUADRANT_COLORS[q] }}>
-                          <span className="material-icons-outlined">{QUADRANT_ICONS[q]}</span>
+                          <DynamicIcon name={QUADRANT_ICONS[q]} size={20} style={{ color: QUADRANT_COLORS[q] }} />
                           {QUADRANT_LABELS[q]} — {QUADRANT_DESC[q]} ({items.length}개)
                         </h3>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b border-gray-200 dark:border-gray-700">
-                                <th className="text-left py-2 px-3 text-gray-500">품목명</th>
-                                <th className="text-right py-2 px-3 text-gray-500">판매량</th>
-                                <th className="text-right py-2 px-3 text-gray-500">권장판매매출</th>
-                                <th className="text-right py-2 px-3 text-gray-500">정산매출</th>
-                                <th className="text-right py-2 px-3 text-gray-500">수수료율</th>
-                                <th className="text-right py-2 px-3 text-gray-500">원가</th>
-                                <th className="text-right py-2 px-3 text-gray-500">마진</th>
-                                <th className="text-right py-2 px-3 text-gray-500">마진율</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {items.sort((a, b) => b.revenue - a.revenue).slice(0, 15).map(item => (
-                                <tr key={item.productCode} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                  <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
-                                  <td className="py-2 px-3 text-right text-gray-500">{item.quantity.toLocaleString()}</td>
-                                  <td className="py-2 px-3 text-right text-blue-600">{item.recommendedRevenue > 0 ? formatCurrency(item.recommendedRevenue) : '-'}</td>
-                                  <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.revenue)}</td>
-                                  <td className="py-2 px-3 text-right text-orange-600">{item.commissionRate > 0 ? `${item.commissionRate}%` : '-'}</td>
-                                  <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.cost)}</td>
-                                  <td className={`py-2 px-3 text-right font-medium ${item.margin > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {formatCurrency(item.margin)}
-                                  </td>
-                                  <td className={`py-2 px-3 text-right font-bold ${item.marginRate >= 20 ? 'text-green-600' : item.marginRate >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
-                                    {formatPercent(item.marginRate)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-left">품목명</TableHead>
+                              <TableHead className="text-right">판매량</TableHead>
+                              <TableHead className="text-right">권장판매매출</TableHead>
+                              <TableHead className="text-right">정산매출</TableHead>
+                              <TableHead className="text-right">수수료율</TableHead>
+                              <TableHead className="text-right">원가</TableHead>
+                              <TableHead className="text-right">마진</TableHead>
+                              <TableHead className="text-right">마진율</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {items.sort((a, b) => b.revenue - a.revenue).slice(0, 15).map(item => (
+                              <TableRow key={item.productCode}>
+                                <TableCell className="text-gray-800 dark:text-gray-200">{item.productName}</TableCell>
+                                <TableCell className="text-right text-gray-500">{item.quantity.toLocaleString()}</TableCell>
+                                <TableCell className="text-right text-blue-600">{item.recommendedRevenue > 0 ? formatCurrency(item.recommendedRevenue) : '-'}</TableCell>
+                                <TableCell className="text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.revenue)}</TableCell>
+                                <TableCell className="text-right text-orange-600">{item.commissionRate > 0 ? `${item.commissionRate}%` : '-'}</TableCell>
+                                <TableCell className="text-right text-gray-500">{formatCurrency(item.cost)}</TableCell>
+                                <TableCell className={`text-right font-medium ${item.margin > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {formatCurrency(item.margin)}
+                                </TableCell>
+                                <TableCell className={`text-right font-bold ${item.marginRate >= 20 ? 'text-green-600' : item.marginRate >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                  {formatPercent(item.marginRate)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </Card>
                     );
                   })}
                 </div>
@@ -943,9 +946,9 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
 
               {/* 볼륨드라이버 경고 (잘팔리는데 마진 낮은 품목) */}
               {matrixData.items.filter(i => i.quadrant === 'volumeDriver').length > 0 && (
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-6 border border-yellow-200 dark:border-yellow-800">
+                <Card className="p-6 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
                   <h3 className="text-lg font-bold text-yellow-800 dark:text-yellow-200 mb-2 flex items-center gap-2">
-                    <span className="material-icons-outlined">lightbulb</span>
+                    <DynamicIcon name="lightbulb" size={20} className="text-yellow-800 dark:text-yellow-200" />
                     마케팅 인사이트: 볼륨드라이버 개선 기회
                   </h3>
                   <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
@@ -957,12 +960,12 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       .sort((a, b) => b.revenue - a.revenue)
                       .slice(0, 5)
                       .map(item => (
-                        <span key={item.productCode} className="px-3 py-1.5 bg-yellow-100 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200 rounded-full text-xs font-medium">
+                        <Badge key={item.productCode} className="bg-yellow-100 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200 border-transparent">
                           {item.productName} (마진율 {formatPercent(item.marginRate)})
-                        </span>
+                        </Badge>
                       ))}
                   </div>
-                </div>
+                </Card>
               )}
             </div>
           );
@@ -1001,27 +1004,29 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
           return (
             <div className="space-y-6">
               {/* 매출 유형 선택 + KPI 요약 */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
+              <Card className="p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">채널별 일자별 매출</h3>
                   <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                     {(['settlement', 'recommended', 'independent'] as const).map(type => (
-                      <button
+                      <Button
                         key={type}
+                        variant={revenueType === type ? 'default' : 'ghost'}
+                        size="sm"
                         onClick={() => setRevenueType(type)}
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                        className={`rounded-none text-xs ${
                           revenueType === type
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : ''
                         }`}
                       >
                         {REVENUE_TYPE_LABELS[type]}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                  <span className="material-icons-outlined text-xs align-middle mr-1">info</span>
+                  <DynamicIcon name="info" size={14} className="inline-block align-middle mr-1" />
                   {REVENUE_TYPE_DESC[revenueType]}
                 </p>
 
@@ -1066,22 +1071,22 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                     </ResponsiveContainer>
                   </div>
                 ) : <p className="text-gray-400 text-center py-6">일별 매출 데이터가 없습니다.</p>}
-              </div>
+              </Card>
 
               {/* 채널별 KPI 카드 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {channelMetrics.map(c => (
-                  <div key={c.channel} className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
+                  <Card key={c.channel} className="p-5">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full" style={{ backgroundColor: CHANNEL_COLORS[c.channel] || '#6B7280' }} />
                         {c.channel}
                       </h4>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        c.growthRate > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : c.growthRate < 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-500'
-                      }`}>
+                      <Badge className={
+                        c.growthRate > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-transparent' : c.growthRate < 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-transparent' : 'bg-gray-100 text-gray-500 border-transparent'
+                      }>
                         {c.growthRate > 0 ? '+' : ''}{c.growthRate}%
-                      </span>
+                      </Badge>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
@@ -1105,13 +1110,13 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       <p className="text-xs text-gray-400">주력 품목</p>
                       <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{c.topProduct}</p>
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
 
               {/* 매출 비중 + 다각화 지수 */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널별 매출 비중</h3>
                   {channelPie.length > 0 ? (
                     <div className="h-56">
@@ -1125,9 +1130,9 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
-                </div>
+                </Card>
 
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널 다각화 지수</h3>
                   <div className="flex flex-col items-center justify-center h-56">
                     <p className="text-5xl font-bold text-blue-600">{diversification}</p>
@@ -1150,41 +1155,39 @@ export const SalesAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, pu
                       </div>
                     </div>
                   </div>
-                </div>
+                </Card>
               </div>
 
               {/* 채널별 품목 교차 분석 */}
               {channelProductComparison.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">채널별 품목 매출 비교 (TOP 15)</h3>
                   <p className="text-xs text-gray-500 mb-4">각 채널에서 해당 품목이 차지하는 매출</p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">품목명</th>
-                          {channelList.map(ch => (
-                            <th key={ch} className="text-right py-2 px-3 text-gray-500">{ch}</th>
-                          ))}
-                          <th className="text-right py-2 px-3 text-gray-500">합계</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {channelProductComparison.map(row => (
-                          <tr key={row.code} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200 truncate max-w-[200px]">{row.name}</td>
-                            {channelList.map(ch => (
-                              <td key={ch} className="py-2 px-3 text-right text-gray-500">
-                                {row[ch] > 0 ? formatCurrency(row[ch]) : <span className="text-gray-300">-</span>}
-                              </td>
-                            ))}
-                            <td className="py-2 px-3 text-right font-medium text-gray-700 dark:text-gray-300">{formatCurrency(row.totalRevenue)}</td>
-                          </tr>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-left">품목명</TableHead>
+                        {channelList.map(ch => (
+                          <TableHead key={ch} className="text-right">{ch}</TableHead>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                        <TableHead className="text-right">합계</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {channelProductComparison.map(row => (
+                        <TableRow key={row.code}>
+                          <TableCell className="text-gray-800 dark:text-gray-200 truncate max-w-[200px]">{row.name}</TableCell>
+                          {channelList.map(ch => (
+                            <TableCell key={ch} className="text-right text-gray-500">
+                              {row[ch] > 0 ? formatCurrency(row[ch]) : <span className="text-gray-300">-</span>}
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-right font-medium text-gray-700 dark:text-gray-300">{formatCurrency(row.totalRevenue)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
               )}
 
               {channelMetrics.length === 0 && (

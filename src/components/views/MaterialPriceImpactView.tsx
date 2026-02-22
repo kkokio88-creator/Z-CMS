@@ -15,6 +15,11 @@ import {
 } from 'recharts';
 import { MaterialPriceHistory, MaterialCostImpact, AnomalyLevel } from '../../types';
 import { formatCurrency } from '../../utils/format';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Button } from '../ui/button';
 
 interface Props {
   priceHistory?: MaterialPriceHistory[];
@@ -164,7 +169,9 @@ const MaterialPriceImpactView: React.FC<Props> = ({
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setTimeRange('week')}
               className={`px-3 py-1 text-sm rounded-md transition-colors ${
                 timeRange === 'week'
@@ -173,8 +180,10 @@ const MaterialPriceImpactView: React.FC<Props> = ({
               }`}
             >
               전주 대비
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setTimeRange('month')}
               className={`px-3 py-1 text-sm rounded-md transition-colors ${
                 timeRange === 'month'
@@ -183,7 +192,7 @@ const MaterialPriceImpactView: React.FC<Props> = ({
               }`}
             >
               전월 대비
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -192,7 +201,7 @@ const MaterialPriceImpactView: React.FC<Props> = ({
       {kpis.criticalCount > 0 && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <div className="flex items-center gap-3">
-            <span className="material-icons-outlined text-red-500 text-2xl">trending_up</span>
+            <DynamicIcon name="trending_up" size={24} className="text-red-500" />
             <div className="flex-1">
               <p className="font-semibold text-red-800 dark:text-red-200">
                 {kpis.criticalCount}개 자재 가격 급등 감지
@@ -202,19 +211,19 @@ const MaterialPriceImpactView: React.FC<Props> = ({
                 {formatCurrency(kpis.totalImpact)}
               </p>
             </div>
-            <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
+            <Button variant="destructive" size="sm" className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
               대응 방안 검토
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* KPI 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">급등 자재 수</span>
-            <span className="material-icons-outlined text-red-500">arrow_upward</span>
+            <DynamicIcon name="arrow_upward" size={20} className="text-red-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.topIncreases.length}개
@@ -222,46 +231,46 @@ const MaterialPriceImpactView: React.FC<Props> = ({
           <p className="text-xs text-gray-500 mt-1">
             {timeRange === 'week' ? '전주' : '전월'} 대비 상승
           </p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">평균 상승률</span>
-            <span className="material-icons-outlined text-orange-500">percent</span>
+            <DynamicIcon name="percent" size={20} className="text-orange-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             +{kpis.avgIncrease.toFixed(1)}%
           </p>
           <p className="text-xs text-gray-500 mt-1">Top 5 평균</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">총 원가 영향</span>
-            <span className="material-icons-outlined text-blue-500">payments</span>
+            <DynamicIcon name="payments" size={20} className="text-blue-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             ₩{formatCurrency(kpis.totalImpact)}
           </p>
           <p className="text-xs text-gray-500 mt-1">예상 추가 비용</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">영향 제품 수</span>
-            <span className="material-icons-outlined text-purple-500">inventory_2</span>
+            <DynamicIcon name="inventory_2" size={20} className="text-purple-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.affectedProductCount}개
           </p>
           <p className="text-xs text-gray-500 mt-1">BOM 연결 제품</p>
-        </div>
+        </Card>
       </div>
 
       {/* 차트 영역 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 단가 추이 차트 */}
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               자재별 단가 추이
@@ -306,10 +315,10 @@ const MaterialPriceImpactView: React.FC<Props> = ({
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
 
         {/* Top 5 급등 자재 */}
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
             가격 급등 자재 Top 5
           </h3>
@@ -353,97 +362,95 @@ const MaterialPriceImpactView: React.FC<Props> = ({
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* 원가 영향 상세 테이블 */}
-      <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+      <Card className="p-4">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
           원가 영향 분석 상세
         </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-4 py-3 text-left text-gray-600 dark:text-gray-300">자재명</th>
-                <th className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">단가 상승</th>
-                <th className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">상승률</th>
-                <th className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">영향 제품</th>
-                <th className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
-                  총 원가 영향
-                </th>
-                <th className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">긴급도</th>
-                <th className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">조치</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {impacts.slice(0, 10).map(item => (
-                <tr
-                  key={item.materialCode}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
-                  onClick={() => onItemClick?.(item)}
-                >
-                  <td className="px-4 py-3 text-gray-900 dark:text-white font-medium">
-                    {item.materialName}
-                  </td>
-                  <td className="px-4 py-3 text-right text-red-600">
-                    +₩{item.priceIncrease.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-right text-red-600">
-                    +{item.priceIncreasePercent.toFixed(1)}%
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
-                    {item.affectedProducts.length}개
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900 dark:text-white">
-                    ₩{formatCurrency(item.totalDeltaCost)}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs ${getUrgencyBadgeClass(item.urgencyLevel)}`}
+        <Table>
+          <TableHeader className="bg-gray-50 dark:bg-gray-800">
+            <TableRow>
+              <TableHead className="text-left">자재명</TableHead>
+              <TableHead className="text-right">단가 상승</TableHead>
+              <TableHead className="text-right">상승률</TableHead>
+              <TableHead className="text-right">영향 제품</TableHead>
+              <TableHead className="text-right">총 원가 영향</TableHead>
+              <TableHead className="text-center">긴급도</TableHead>
+              <TableHead className="text-center">조치</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {impacts.slice(0, 10).map(item => (
+              <TableRow
+                key={item.materialCode}
+                className="cursor-pointer"
+                onClick={() => onItemClick?.(item)}
+              >
+                <TableCell className="text-gray-900 dark:text-white font-medium">
+                  {item.materialName}
+                </TableCell>
+                <TableCell className="text-right text-red-600">
+                  +₩{item.priceIncrease.toLocaleString()}
+                </TableCell>
+                <TableCell className="text-right text-red-600">
+                  +{item.priceIncreasePercent.toFixed(1)}%
+                </TableCell>
+                <TableCell className="text-right text-gray-600 dark:text-gray-400">
+                  {item.affectedProducts.length}개
+                </TableCell>
+                <TableCell className="text-right font-semibold text-gray-900 dark:text-white">
+                  ₩{formatCurrency(item.totalDeltaCost)}
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge
+                    className={`${getUrgencyBadgeClass(item.urgencyLevel)} border-transparent`}
+                  >
+                    {item.urgencyLevel === 'critical'
+                      ? '긴급'
+                      : item.urgencyLevel === 'warning'
+                        ? '주의'
+                        : '정상'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  <div className="flex justify-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="px-2 py-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 rounded hover:bg-blue-200"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onItemClick?.(item);
+                      }}
                     >
-                      {item.urgencyLevel === 'critical'
-                        ? '긴급'
-                        : item.urgencyLevel === 'warning'
-                          ? '주의'
-                          : '정상'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex justify-center gap-1">
-                      <button
-                        className="px-2 py-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 rounded hover:bg-blue-200"
-                        onClick={e => {
-                          e.stopPropagation();
-                          onItemClick?.(item);
-                        }}
-                      >
-                        상세
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                      상세
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
 
       {/* 권장 조치 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-icons-outlined text-blue-500">edit_note</span>
+            <DynamicIcon name="edit_note" size={20} className="text-blue-500" />
             <span className="font-semibold text-blue-800 dark:text-blue-200">BOM 레시피 수정</span>
           </div>
           <p className="text-sm text-blue-600 dark:text-blue-300">
             대체 원자재로 레시피를 조정하여 원가 상승을 완화할 수 있습니다.
           </p>
-        </div>
+        </Card>
 
-        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+        <Card className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-icons-outlined text-orange-500">sell</span>
+            <DynamicIcon name="sell" size={20} className="text-orange-500" />
             <span className="font-semibold text-orange-800 dark:text-orange-200">
               판매가 인상 검토
             </span>
@@ -451,17 +458,17 @@ const MaterialPriceImpactView: React.FC<Props> = ({
           <p className="text-sm text-orange-600 dark:text-orange-300">
             원가 상승분을 반영하여 판매가 조정을 검토해보세요.
           </p>
-        </div>
+        </Card>
 
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+        <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-icons-outlined text-green-500">shopping_cart</span>
+            <DynamicIcon name="shopping_cart" size={20} className="text-green-500" />
             <span className="font-semibold text-green-800 dark:text-green-200">구매처 다변화</span>
           </div>
           <p className="text-sm text-green-600 dark:text-green-300">
             대체 공급처를 발굴하여 구매 단가를 낮출 수 있습니다.
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );

@@ -40,6 +40,11 @@ import {
   exportToCSV,
   groupByCategory,
 } from '../../services/orderingService';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Button } from '../ui/button';
 
 // 상태별 색상
 const STATUS_COLORS = {
@@ -73,17 +78,18 @@ const TabButton = ({
   children: React.ReactNode;
   icon?: string;
 }) => (
-  <button
+  <Button
+    variant="ghost"
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg rounded-b-none border-b-2 transition-colors ${
       active
         ? 'border-primary text-primary dark:text-green-400 dark:border-green-400 bg-white dark:bg-surface-dark'
         : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
     }`}
   >
-    {icon && <span className="material-icons-outlined text-lg">{icon}</span>}
+    {icon && <DynamicIcon name={icon} size={18} className="" />}
     {children}
-  </button>
+  </Button>
 );
 
 // KPI 카드 컴포넌트
@@ -108,7 +114,7 @@ const KPICard = ({
   };
 
   return (
-    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+    <Card className="p-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-gray-500 dark:text-gray-400">{title}</p>
@@ -116,10 +122,10 @@ const KPICard = ({
           {subValue && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subValue}</p>}
         </div>
         <div className={`p-3 rounded-full ${colorClasses[color]}`}>
-          <span className="material-icons-outlined">{icon}</span>
+          <DynamicIcon name={icon} size={24} />
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
 
@@ -234,7 +240,7 @@ const StatisticalOrderingView: React.FC = () => {
       {recommendation && recommendation.shortageItems > 0 && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <div className="flex items-center gap-3">
-            <span className="material-icons-outlined text-red-500 text-2xl">warning</span>
+            <DynamicIcon name="warning" size={28} className="text-red-500" />
             <div>
               <h4 className="font-bold text-red-800 dark:text-red-200">
                 긴급 발주 필요: {recommendation.shortageItems}건
@@ -280,7 +286,7 @@ const StatisticalOrderingView: React.FC = () => {
       {/* 차트 섹션 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 카테고리별 발주 금액 */}
-        <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <Card className="p-6">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
             카테고리별 발주 금액
           </h3>
@@ -298,10 +304,10 @@ const StatisticalOrderingView: React.FC = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
 
         {/* 상태별 분포 */}
-        <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <Card className="p-6">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">발주 상태 분포</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -324,11 +330,11 @@ const StatisticalOrderingView: React.FC = () => {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* 발주 권고 테이블 */}
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
           <h3 className="font-bold text-gray-900 dark:text-white">발주 권고 목록</h3>
           <div className="flex items-center gap-2">
@@ -345,110 +351,108 @@ const StatisticalOrderingView: React.FC = () => {
                 </option>
               ))}
             </select>
-            <button
+            <Button
+              size="sm"
               onClick={handleExport}
-              className="flex items-center gap-1 px-3 py-1 text-sm bg-primary text-white rounded hover:bg-primary-hover"
+              className="flex items-center gap-1"
             >
-              <span className="material-icons-outlined text-sm">download</span>
+              <DynamicIcon name="download" size={14} />
               CSV 내보내기
-            </button>
+            </Button>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  상태
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  품목명
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  분류
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  총소요량
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  안전재고
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  현재고
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  입고예정
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  발주수량
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  예상금액
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-surface-dark divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredItems.slice(0, 20).map((item, idx) => (
-                <tr
-                  key={idx}
-                  className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
-                    item.status === 'shortage'
-                      ? 'bg-red-50/50 dark:bg-red-900/10'
-                      : item.status === 'urgent'
-                        ? 'bg-orange-50/50 dark:bg-orange-900/10'
-                        : ''
-                  }`}
-                >
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColorClass(item.status)}`}
-                    >
-                      <span className="material-icons-outlined text-sm">
-                        {getStatusIcon(item.status)}
-                      </span>
-                      {getStatusLabel(item.status)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {item.ingredientName}
-                      </p>
-                      <p className="text-xs text-gray-500">{item.ingredientCode}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                    {item.category}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">
-                    {formatCurrency(item.grossRequirement)} {item.unit}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">
-                    {formatCurrency(item.safetyStock)}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">
-                    {formatCurrency(item.currentStock)}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-right text-blue-600 dark:text-blue-400">
-                    {formatCurrency(item.inTransit)}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-right font-bold text-primary dark:text-green-400">
-                    {item.orderQty > 0 ? formatCurrency(item.orderQty) : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">
-                    {item.estimatedCost > 0 ? `₩${formatCurrency(item.estimatedCost)}` : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader className="bg-gray-50 dark:bg-gray-800">
+            <TableRow>
+              <TableHead className="text-xs uppercase">
+                상태
+              </TableHead>
+              <TableHead className="text-xs uppercase">
+                품목명
+              </TableHead>
+              <TableHead className="text-xs uppercase">
+                분류
+              </TableHead>
+              <TableHead className="text-xs text-right uppercase">
+                총소요량
+              </TableHead>
+              <TableHead className="text-xs text-right uppercase">
+                안전재고
+              </TableHead>
+              <TableHead className="text-xs text-right uppercase">
+                현재고
+              </TableHead>
+              <TableHead className="text-xs text-right uppercase">
+                입고예정
+              </TableHead>
+              <TableHead className="text-xs text-right uppercase">
+                발주수량
+              </TableHead>
+              <TableHead className="text-xs text-right uppercase">
+                예상금액
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredItems.slice(0, 20).map((item, idx) => (
+              <TableRow
+                key={idx}
+                className={
+                  item.status === 'shortage'
+                    ? 'bg-red-50/50 dark:bg-red-900/10'
+                    : item.status === 'urgent'
+                      ? 'bg-orange-50/50 dark:bg-orange-900/10'
+                      : ''
+                }
+              >
+                <TableCell className="py-3">
+                  <Badge
+                    variant="outline"
+                    className={`inline-flex items-center gap-1 ${getStatusColorClass(item.status)}`}
+                  >
+                    <DynamicIcon name={getStatusIcon(item.status)} size={14} />
+                    {getStatusLabel(item.status)}
+                  </Badge>
+                </TableCell>
+                <TableCell className="py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {item.ingredientName}
+                    </p>
+                    <p className="text-xs text-gray-500">{item.ingredientCode}</p>
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 text-sm text-gray-600 dark:text-gray-300">
+                  {item.category}
+                </TableCell>
+                <TableCell className="py-3 text-sm text-right text-gray-900 dark:text-white">
+                  {formatCurrency(item.grossRequirement)} {item.unit}
+                </TableCell>
+                <TableCell className="py-3 text-sm text-right text-gray-600 dark:text-gray-300">
+                  {formatCurrency(item.safetyStock)}
+                </TableCell>
+                <TableCell className="py-3 text-sm text-right text-gray-900 dark:text-white">
+                  {formatCurrency(item.currentStock)}
+                </TableCell>
+                <TableCell className="py-3 text-sm text-right text-blue-600 dark:text-blue-400">
+                  {formatCurrency(item.inTransit)}
+                </TableCell>
+                <TableCell className="py-3 text-sm text-right font-bold text-primary dark:text-green-400">
+                  {item.orderQty > 0 ? formatCurrency(item.orderQty) : '-'}
+                </TableCell>
+                <TableCell className="py-3 text-sm text-right text-gray-900 dark:text-white">
+                  {item.estimatedCost > 0 ? `₩${formatCurrency(item.estimatedCost)}` : '-'}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
         {filteredItems.length > 20 && (
           <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/50 text-center text-sm text-gray-500">
             외 {filteredItems.length - 20}건 더 있음 (CSV로 전체 내보내기 가능)
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 
@@ -465,7 +469,7 @@ const StatisticalOrderingView: React.FC = () => {
 
     return (
       <div className="space-y-6">
-        <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">
               미래 식단 계획 (D+{recommendation?.leadTimeDays || 2} ~ D+
@@ -478,7 +482,7 @@ const StatisticalOrderingView: React.FC = () => {
 
           {mealPlan.length === 0 ? (
             <div className="text-center py-10 text-gray-500">
-              <span className="material-icons-outlined text-4xl mb-2">calendar_today</span>
+              <DynamicIcon name="calendar_today" size={40} className="mx-auto mb-2" />
               <p>식단 계획 데이터가 없습니다.</p>
               <p className="text-sm mt-1">
                 Google Sheets의 &apos;식단_히스토리&apos; 시트를 확인해주세요.
@@ -487,12 +491,12 @@ const StatisticalOrderingView: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {Array.from(mealsByDate.entries()).map(([date, meals]) => (
-                <div
+                <Card
                   key={date}
-                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                  className="p-4"
                 >
                   <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100 dark:border-gray-700">
-                    <span className="material-icons-outlined text-primary">event</span>
+                    <DynamicIcon name="event" size={20} className="text-primary" />
                     <span className="font-bold text-gray-900 dark:text-white">{date}</span>
                     <span className="text-sm text-gray-500">({meals[0]?.dayOfWeek})</span>
                   </div>
@@ -506,11 +510,11 @@ const StatisticalOrderingView: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           )}
-        </div>
+        </Card>
       </div>
     );
   };
@@ -532,7 +536,7 @@ const StatisticalOrderingView: React.FC = () => {
     return (
       <div className="space-y-6">
         {/* 요일별 Top 메뉴 */}
-        <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <Card className="p-6">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
             요일별 인기 메뉴 (최근 {recommendation?.forecastWeeks || 4}주 평균)
           </h3>
@@ -562,70 +566,70 @@ const StatisticalOrderingView: React.FC = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
 
         {/* 전체 통계 테이블 */}
-        <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <Card className="overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
             <h3 className="font-bold text-gray-900 dark:text-white">요일별 메뉴 판매 통계</h3>
           </div>
-          <div className="overflow-x-auto max-h-96">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+          <div className="max-h-96 overflow-auto">
+            <Table>
+              <TableHeader className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                <TableRow>
+                  <TableHead className="text-xs uppercase">
                     요일
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  </TableHead>
+                  <TableHead className="text-xs uppercase">
                     메뉴
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  </TableHead>
+                  <TableHead className="text-xs text-right uppercase">
                     평균
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  </TableHead>
+                  <TableHead className="text-xs text-right uppercase">
                     표준편차
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  </TableHead>
+                  <TableHead className="text-xs text-right uppercase">
                     최소
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  </TableHead>
+                  <TableHead className="text-xs text-right uppercase">
                     최대
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  </TableHead>
+                  <TableHead className="text-xs text-right uppercase">
                     샘플수
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {salesStats.slice(0, 50).map((stat, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
+                  <TableRow key={idx}>
+                    <TableCell className="py-2 text-sm text-gray-900 dark:text-white">
                       {stat.dayOfWeek}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
+                    </TableCell>
+                    <TableCell className="py-2 text-sm text-gray-900 dark:text-white">
                       {stat.menuName}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-right font-medium text-gray-900 dark:text-white">
+                    </TableCell>
+                    <TableCell className="py-2 text-sm text-right font-medium text-gray-900 dark:text-white">
                       {stat.avgSales}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-gray-400">
+                    </TableCell>
+                    <TableCell className="py-2 text-sm text-right text-gray-600 dark:text-gray-400">
                       ±{stat.stdDev}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-gray-400">
+                    </TableCell>
+                    <TableCell className="py-2 text-sm text-right text-gray-600 dark:text-gray-400">
                       {stat.minSales}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-gray-400">
+                    </TableCell>
+                    <TableCell className="py-2 text-sm text-right text-gray-600 dark:text-gray-400">
                       {stat.maxSales}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-500">
+                    </TableCell>
+                    <TableCell className="py-2 text-sm text-right text-gray-500">
                       {stat.sampleCount}주
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-        </div>
+        </Card>
       </div>
     );
   };
@@ -633,7 +637,7 @@ const StatisticalOrderingView: React.FC = () => {
   // 설정 탭
   const renderConfigTab = () => (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <Card className="p-6">
         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">발주 시스템 설정</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -729,7 +733,7 @@ const StatisticalOrderingView: React.FC = () => {
             </li>
           </ul>
         </div>
-      </div>
+      </Card>
     </div>
   );
 
@@ -742,16 +746,14 @@ const StatisticalOrderingView: React.FC = () => {
             발주일: {recommendation?.orderDate} | 입고예정: {recommendation?.deliveryDate}
           </p>
         </div>
-        <button
+        <Button
           onClick={loadData}
           disabled={isLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
+          className="flex items-center gap-2"
         >
-          <span className={`material-icons-outlined ${isLoading ? 'animate-spin' : ''}`}>
-            refresh
-          </span>
+          <DynamicIcon name="refresh" size={18} className={isLoading ? 'animate-spin' : ''} />
           새로고침
-        </button>
+        </Button>
       </div>
 
       {/* 탭 네비게이션 */}

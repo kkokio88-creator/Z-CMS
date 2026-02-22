@@ -9,6 +9,8 @@ const ProductionBomView = React.lazy(() => import('../components/views/Productio
 const InventoryOrderView = React.lazy(() => import('../components/views/InventoryOrderView').then(m => ({ default: m.InventoryOrderView })));
 const SalesAnalysisView = React.lazy(() => import('../components/views/SalesAnalysisView').then(m => ({ default: m.SalesAnalysisView })));
 import { AIAssistButton, InsightCardsProvider, InsightStatusBar } from '../components/insight';
+import { Button } from '../components/ui/button';
+import { DynamicIcon } from '../components/ui/icon';
 import { countDangerInsights, generatePageInsights } from '../utils/pageInsightGenerator';
 import { SettingsProvider } from '../contexts/SettingsContext.tsx';
 import { DataProvider, DataContextType } from '../contexts/DataContext.tsx';
@@ -252,7 +254,7 @@ function AppContent() {
     if (initialLoadDone && !hasData && activeView !== 'settings') {
       return (
         <div className="flex flex-col items-center justify-center h-full p-10 text-center">
-          <span className="material-icons-outlined text-6xl text-gray-300 mb-4">cloud_off</span>
+          <DynamicIcon name="cloud_off" size={64} className="text-gray-300 mb-4" />
           <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300">
             표시할 데이터가 없습니다
           </h3>
@@ -260,18 +262,15 @@ function AppContent() {
             ECOUNT ERP에서 최근 3개월간의 판매/재고/생산 이력을 찾을 수 없습니다.
           </p>
           <div className="mt-6 flex gap-3">
-            <button
-              onClick={() => handleEcountSync()}
-              className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-hover"
-            >
+            <Button onClick={() => handleEcountSync()}>
               다시 시도
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => handleSetActiveView('settings')}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
             >
               설정으로 이동
-            </button>
+            </Button>
           </div>
         </div>
       );
@@ -484,25 +483,19 @@ function AppContent() {
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm mx-4">
               <div className="flex items-center mb-4">
-                <span className="material-icons-outlined text-amber-500 mr-2">warning</span>
+                <DynamicIcon name="warning" size={20} className="text-amber-500 mr-2" />
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">저장하지 않은 변경사항</h3>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
                 설정 페이지에 저장하지 않은 변경사항이 있습니다. 페이지를 이동하면 변경 내용이 사라집니다.
               </p>
               <div className="flex justify-end gap-3">
-                <button
-                  onClick={cancelNavigateAway}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
-                >
+                <Button variant="secondary" onClick={cancelNavigateAway}>
                   돌아가기
-                </button>
-                <button
-                  onClick={confirmNavigateAway}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
-                >
+                </Button>
+                <Button variant="destructive" onClick={confirmNavigateAway}>
                   저장 안 하고 이동
-                </button>
+                </Button>
               </div>
             </div>
           </div>

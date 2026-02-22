@@ -5,7 +5,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Users, ChevronUp, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { cn } from '../../lib/utils';
 
 export interface LaborMonthlyRecord {
   id: string;
@@ -160,23 +165,24 @@ export const LaborRecordAdmin: React.FC = () => {
     .find(s => s.month === editMonth);
 
   return (
-    <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+    <Card className="p-6">
       <div
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <span className="material-icons-outlined text-purple-500">groups</span>
+        <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+          <Users className="h-5 w-5 text-purple-500" />
           노무비 관리 (반별 생산성)
         </h3>
-        <span className="material-icons-outlined text-gray-400">
-          {expanded ? 'expand_less' : 'expand_more'}
-        </span>
+        {expanded
+          ? <ChevronUp className="h-5 w-5 text-muted-foreground" />
+          : <ChevronDown className="h-5 w-5 text-muted-foreground" />
+        }
       </div>
 
       {expanded && (
         <div className="mt-4 space-y-4">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             반별 근무 기록을 입력하면 실제 노무비로 원가를 계산합니다. 미입력 시 기존 추정비율({Math.round(config.laborCostRatio * 100)}%)이 적용됩니다.
           </p>
 
@@ -187,103 +193,105 @@ export const LaborRecordAdmin: React.FC = () => {
               type="month"
               value={editMonth}
               onChange={e => setEditMonth(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-foreground text-sm"
             />
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={addShift}
-              className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded-md text-sm font-medium flex items-center gap-1"
+              className="bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-0 gap-1"
             >
-              <span className="material-icons-outlined text-sm">add</span>
+              <Plus className="h-3.5 w-3.5" />
               반 추가
-            </button>
+            </Button>
           </div>
 
           {/* 반별 기록 테이블 */}
           {currentMonthRecords.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-2 px-2 text-gray-500">반명</th>
-                    <th className="text-right py-2 px-2 text-gray-500">인원</th>
-                    <th className="text-right py-2 px-2 text-gray-500">근무일수</th>
-                    <th className="text-right py-2 px-2 text-gray-500">일 정규(h)</th>
-                    <th className="text-right py-2 px-2 text-gray-500">월 초과(h)</th>
-                    <th className="text-right py-2 px-2 text-gray-500">예상 노무비</th>
-                    <th className="py-2 px-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentMonthRecords.map(r => {
-                    const regHours = r.headcount * r.workDays * r.regularHoursPerDay;
-                    const regCost = Math.round(regHours * config.avgHourlyWage);
-                    const otCost = Math.round(r.overtimeHoursTotal * config.avgHourlyWage * config.overtimeMultiplier);
-                    const totalCost = regCost + otCost;
-                    return (
-                      <tr key={r.id} className="border-b border-gray-100 dark:border-gray-800">
-                        <td className="py-2 px-2">
-                          <input
-                            type="text"
-                            value={r.shiftName}
-                            onChange={e => updateRecord(r.id, 'shiftName', e.target.value)}
-                            className="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
-                          />
-                        </td>
-                        <td className="py-2 px-2">
-                          <input
-                            type="number"
-                            min="1"
-                            value={r.headcount}
-                            onChange={e => updateRecord(r.id, 'headcount', Number(e.target.value))}
-                            className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm text-right"
-                          />
-                        </td>
-                        <td className="py-2 px-2">
-                          <input
-                            type="number"
-                            min="1"
-                            max="31"
-                            value={r.workDays}
-                            onChange={e => updateRecord(r.id, 'workDays', Number(e.target.value))}
-                            className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm text-right"
-                          />
-                        </td>
-                        <td className="py-2 px-2">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            value={r.regularHoursPerDay}
-                            onChange={e => updateRecord(r.id, 'regularHoursPerDay', Number(e.target.value))}
-                            className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm text-right"
-                          />
-                        </td>
-                        <td className="py-2 px-2">
-                          <input
-                            type="number"
-                            min="0"
-                            value={r.overtimeHoursTotal}
-                            onChange={e => updateRecord(r.id, 'overtimeHoursTotal', Number(e.target.value))}
-                            className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm text-right"
-                          />
-                        </td>
-                        <td className="py-2 px-2 text-right font-medium text-gray-900 dark:text-white">
-                          {totalCost.toLocaleString()}원
-                        </td>
-                        <td className="py-2 px-2">
-                          <button
-                            onClick={() => removeRecord(r.id)}
-                            className="text-red-400 hover:text-red-600"
-                          >
-                            <span className="material-icons-outlined text-sm">delete</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                  <TableHead className="text-muted-foreground py-2 px-2">반명</TableHead>
+                  <TableHead className="text-right text-muted-foreground py-2 px-2">인원</TableHead>
+                  <TableHead className="text-right text-muted-foreground py-2 px-2">근무일수</TableHead>
+                  <TableHead className="text-right text-muted-foreground py-2 px-2">일 정규(h)</TableHead>
+                  <TableHead className="text-right text-muted-foreground py-2 px-2">월 초과(h)</TableHead>
+                  <TableHead className="text-right text-muted-foreground py-2 px-2">예상 노무비</TableHead>
+                  <TableHead className="py-2 px-2"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {currentMonthRecords.map(r => {
+                  const regHours = r.headcount * r.workDays * r.regularHoursPerDay;
+                  const regCost = Math.round(regHours * config.avgHourlyWage);
+                  const otCost = Math.round(r.overtimeHoursTotal * config.avgHourlyWage * config.overtimeMultiplier);
+                  const totalCost = regCost + otCost;
+                  return (
+                    <TableRow key={r.id} className="border-b border-gray-100 dark:border-gray-800">
+                      <TableCell className="py-2 px-2">
+                        <input
+                          type="text"
+                          value={r.shiftName}
+                          onChange={e => updateRecord(r.id, 'shiftName', e.target.value)}
+                          className="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-foreground text-sm"
+                        />
+                      </TableCell>
+                      <TableCell className="py-2 px-2">
+                        <input
+                          type="number"
+                          min="1"
+                          value={r.headcount}
+                          onChange={e => updateRecord(r.id, 'headcount', Number(e.target.value))}
+                          className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-foreground text-sm text-right"
+                        />
+                      </TableCell>
+                      <TableCell className="py-2 px-2">
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={r.workDays}
+                          onChange={e => updateRecord(r.id, 'workDays', Number(e.target.value))}
+                          className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-foreground text-sm text-right"
+                        />
+                      </TableCell>
+                      <TableCell className="py-2 px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={r.regularHoursPerDay}
+                          onChange={e => updateRecord(r.id, 'regularHoursPerDay', Number(e.target.value))}
+                          className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-foreground text-sm text-right"
+                        />
+                      </TableCell>
+                      <TableCell className="py-2 px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={r.overtimeHoursTotal}
+                          onChange={e => updateRecord(r.id, 'overtimeHoursTotal', Number(e.target.value))}
+                          className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-foreground text-sm text-right"
+                        />
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-right font-medium text-foreground">
+                        {totalCost.toLocaleString()}원
+                      </TableCell>
+                      <TableCell className="py-2 px-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeRecord(r.id)}
+                          className="h-6 w-6 text-red-400 hover:text-red-600"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           ) : (
             <p className="text-gray-400 text-center py-4 text-sm">
               {editMonth}월 노무 기록이 없습니다. "반 추가" 버튼으로 입력을 시작하세요.
@@ -296,26 +304,26 @@ export const LaborRecordAdmin: React.FC = () => {
               <h4 className="text-sm font-bold text-purple-700 dark:text-purple-300">{editMonth} 노무비 합계</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-gray-500">총 인원</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{monthSummary.totalHeadcount}명</p>
+                  <p className="text-xs text-muted-foreground">총 인원</p>
+                  <p className="font-medium text-foreground">{monthSummary.totalHeadcount}명</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">정규 시간</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{monthSummary.totalRegularHours.toLocaleString()}h</p>
+                  <p className="text-xs text-muted-foreground">정규 시간</p>
+                  <p className="font-medium text-foreground">{monthSummary.totalRegularHours.toLocaleString()}h</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">초과 시간</p>
+                  <p className="text-xs text-muted-foreground">초과 시간</p>
                   <p className="font-medium text-orange-600">{monthSummary.totalOvertimeHours.toLocaleString()}h</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">총 노무비</p>
+                  <p className="text-xs text-muted-foreground">총 노무비</p>
                   <p className="font-bold text-purple-700 dark:text-purple-300">{monthSummary.totalCost.toLocaleString()}원</p>
                 </div>
               </div>
               {monthSummary.shifts.length > 1 && (
                 <div className="flex gap-3 text-xs mt-1">
                   {monthSummary.shifts.map(s => (
-                    <span key={s.name} className="text-gray-500">{s.name}: {s.cost.toLocaleString()}원 ({s.headcount}명)</span>
+                    <span key={s.name} className="text-muted-foreground">{s.name}: {s.cost.toLocaleString()}원 ({s.headcount}명)</span>
                   ))}
                 </div>
               )}
@@ -323,6 +331,6 @@ export const LaborRecordAdmin: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+    </Card>
   );
 };

@@ -1,7 +1,25 @@
 import React, { useEffect, useMemo } from 'react';
+import {
+  Sparkles,
+  X,
+  CheckCircle,
+  AlertTriangle,
+  AlertCircle,
+  Info,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  BarChart3,
+  ListChecks,
+  ArrowRight,
+  Lightbulb,
+} from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import { useData } from '../../contexts/DataContext';
 import { generatePageInsights, AIInsightCard } from '../../utils/pageInsightGenerator';
+import { DynamicIcon } from '../ui/icon';
+import { Button } from '../ui/button';
+import { cn } from '../../lib/utils';
 
 interface Props {
   isOpen: boolean;
@@ -18,16 +36,16 @@ const VIEW_LABELS: Record<string, string> = {
 };
 
 const STATUS_CONFIG = {
-  good: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800', icon: 'check_circle', iconColor: 'text-green-500', label: '정상' },
-  warning: { bg: 'bg-yellow-50 dark:bg-yellow-900/20', border: 'border-yellow-200 dark:border-yellow-800', icon: 'warning', iconColor: 'text-yellow-500', label: '주의' },
-  danger: { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800', icon: 'error', iconColor: 'text-red-500', label: '위험' },
-  info: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800', icon: 'info', iconColor: 'text-blue-500', label: '정보' },
+  good: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800', Icon: CheckCircle, iconColor: 'text-green-500', label: '정상' },
+  warning: { bg: 'bg-yellow-50 dark:bg-yellow-900/20', border: 'border-yellow-200 dark:border-yellow-800', Icon: AlertTriangle, iconColor: 'text-yellow-500', label: '주의' },
+  danger: { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800', Icon: AlertCircle, iconColor: 'text-red-500', label: '위험' },
+  info: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800', Icon: Info, iconColor: 'text-blue-500', label: '정보' },
 };
 
 const TREND_ICON = {
-  up: { icon: 'trending_up', color: 'text-green-500' },
-  down: { icon: 'trending_down', color: 'text-red-500' },
-  flat: { icon: 'trending_flat', color: 'text-gray-400' },
+  up: { Icon: TrendingUp, color: 'text-green-500' },
+  down: { Icon: TrendingDown, color: 'text-red-500' },
+  flat: { Icon: Minus, color: 'text-gray-400' },
 };
 
 export const AIAssistOverlay: React.FC<Props> = ({ isOpen, onClose }) => {
@@ -68,53 +86,58 @@ export const AIAssistOverlay: React.FC<Props> = ({ isOpen, onClose }) => {
       />
 
       {/* panel */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] mx-4 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
+      <div className="relative w-full max-w-4xl max-h-[90vh] mx-4 bg-card rounded-2xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#0D5611' }}>
-              <span className="material-icons-outlined text-white text-xl">auto_awesome</span>
+              <Sparkles size={20} className="text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">AI 분석 도우미</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                현재 페이지: <span className="font-medium text-gray-700 dark:text-gray-300">{pageName}</span>
-                {activeSubTab && <span className="ml-1 text-gray-400">({activeSubTab})</span>}
+              <h2 className="text-lg font-bold text-foreground">AI 분석 도우미</h2>
+              <p className="text-xs text-muted-foreground">
+                현재 페이지: <span className="font-medium text-foreground">{pageName}</span>
+                {activeSubTab && <span className="ml-1 text-muted-foreground">({activeSubTab})</span>}
               </p>
             </div>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <span className="material-icons-outlined text-gray-500">close</span>
-          </button>
+            <X size={20} className="text-muted-foreground" />
+          </Button>
         </div>
 
         {/* 상태 요약 바 */}
-        <div className="flex gap-3 px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-          {(['danger', 'warning', 'good', 'info'] as const).map(status => (
-            <div
-              key={status}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${STATUS_CONFIG[status].bg} ${STATUS_CONFIG[status].border} border`}
-            >
-              <span className={`material-icons-outlined text-sm ${STATUS_CONFIG[status].iconColor}`}>
-                {STATUS_CONFIG[status].icon}
-              </span>
-              <span className="text-gray-700 dark:text-gray-300">
-                {STATUS_CONFIG[status].label}
-              </span>
-              <span className="font-bold text-gray-900 dark:text-white">{statusCounts[status]}</span>
-            </div>
-          ))}
+        <div className="flex gap-3 px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-border">
+          {(['danger', 'warning', 'good', 'info'] as const).map(status => {
+            const cfg = STATUS_CONFIG[status];
+            return (
+              <div
+                key={status}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border',
+                  cfg.bg, cfg.border
+                )}
+              >
+                <cfg.Icon size={14} className={cfg.iconColor} />
+                <span className="text-muted-foreground">
+                  {cfg.label}
+                </span>
+                <span className="font-bold text-foreground">{statusCounts[status]}</span>
+              </div>
+            );
+          })}
         </div>
 
         {/* 카드 리스트 */}
         <div className="flex-1 overflow-auto p-6 space-y-4">
           {cards.length === 0 ? (
             <div className="text-center py-12">
-              <span className="material-icons-outlined text-5xl text-gray-300 dark:text-gray-600">analytics</span>
-              <p className="mt-3 text-gray-500 dark:text-gray-400">
+              <BarChart3 size={48} className="mx-auto text-gray-300 dark:text-gray-600" />
+              <p className="mt-3 text-muted-foreground">
                 {activeView === 'settings' ? '설정 페이지에는 분석할 데이터가 없습니다.' : '분석할 데이터가 아직 없습니다. 데이터 동기화를 먼저 진행하세요.'}
               </p>
             </div>
@@ -127,20 +150,25 @@ export const AIAssistOverlay: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {/* 추천 업무 풋터 */}
         {actionCards.length > 0 && (
-          <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800/50">
-            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
-              <span className="material-icons-outlined text-base text-yellow-500">task_alt</span>
+          <div className="border-t border-border px-6 py-4 bg-gray-50 dark:bg-gray-800/50">
+            <h3 className="text-sm font-bold text-muted-foreground mb-2 flex items-center gap-1.5">
+              <ListChecks size={16} className="text-yellow-500" />
               추천 업무
             </h3>
             <div className="space-y-1.5">
-              {actionCards.slice(0, 5).map(card => (
-                <div key={`action-${card.id}`} className="flex items-start gap-2 text-sm">
-                  <span className={`material-icons-outlined text-sm mt-0.5 ${STATUS_CONFIG[card.status].iconColor}`}>
-                    {card.status === 'danger' ? 'priority_high' : 'arrow_right'}
-                  </span>
-                  <span className="text-gray-600 dark:text-gray-400">{card.action}</span>
-                </div>
-              ))}
+              {actionCards.slice(0, 5).map(card => {
+                const isUrgent = card.status === 'danger';
+                return (
+                  <div key={`action-${card.id}`} className="flex items-start gap-2 text-sm">
+                    {isUrgent ? (
+                      <AlertTriangle size={14} className={cn('mt-0.5', STATUS_CONFIG[card.status].iconColor)} />
+                    ) : (
+                      <ArrowRight size={14} className={cn('mt-0.5', STATUS_CONFIG[card.status].iconColor)} />
+                    )}
+                    <span className="text-muted-foreground">{card.action}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -155,46 +183,45 @@ const InsightCardComponent: React.FC<{ card: AIInsightCard; index: number }> = (
 
   return (
     <div
-      className={`rounded-xl border p-4 ${cfg.bg} ${cfg.border} animate-slide-up`}
+      className={cn('rounded-xl border p-4 animate-slide-up', cfg.bg, cfg.border)}
       style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
     >
       {/* 카드 헤더 */}
       <div className="flex items-start gap-3">
-        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${cfg.bg}`}>
-          <span className={`material-icons-outlined text-lg ${cfg.iconColor}`}>{card.icon}</span>
+        <div className={cn('flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center', cfg.bg)}>
+          <DynamicIcon name={card.icon} size={18} className={cfg.iconColor} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h4 className="font-bold text-gray-900 dark:text-white text-sm">{card.title}</h4>
-            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.iconColor}`}>
+            <h4 className="font-bold text-foreground text-sm">{card.title}</h4>
+            <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-medium', cfg.bg, cfg.iconColor)}>
               {cfg.label}
             </span>
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{card.explanation}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{card.explanation}</p>
         </div>
       </div>
 
       {/* 주요 지표 */}
       {card.keyMetrics.length > 0 && (
         <div className="flex flex-wrap gap-3 mt-3 ml-11">
-          {card.keyMetrics.map((m, i) => (
-            <div key={i} className="flex items-center gap-1 text-xs bg-white/60 dark:bg-gray-800/60 px-2.5 py-1.5 rounded-lg">
-              <span className="text-gray-500 dark:text-gray-400">{m.label}:</span>
-              <span className="font-bold text-gray-800 dark:text-gray-200">{m.value}</span>
-              {m.trend && (
-                <span className={`material-icons-outlined text-xs ${TREND_ICON[m.trend].color}`}>
-                  {TREND_ICON[m.trend].icon}
-                </span>
-              )}
-            </div>
-          ))}
+          {card.keyMetrics.map((m, i) => {
+            const trendEntry = m.trend ? TREND_ICON[m.trend] : null;
+            return (
+              <div key={i} className="flex items-center gap-1 text-xs bg-white/60 dark:bg-gray-800/60 px-2.5 py-1.5 rounded-lg">
+                <span className="text-muted-foreground">{m.label}:</span>
+                <span className="font-bold text-foreground">{m.value}</span>
+                {trendEntry && <trendEntry.Icon size={12} className={trendEntry.color} />}
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* 추천 업무 */}
       {card.action && (
-        <div className="mt-3 ml-11 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-          <span className="material-icons-outlined text-xs text-yellow-500">lightbulb</span>
+        <div className="mt-3 ml-11 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Lightbulb size={12} className="text-yellow-500" />
           {card.action}
         </div>
       )}

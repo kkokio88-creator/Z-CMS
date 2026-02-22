@@ -15,6 +15,11 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { BomYieldAnalysisItem, InventoryDiscrepancyItem, AnomalyLevel } from '../../types';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Button } from '../ui/button';
 
 interface Props {
   yieldData?: BomYieldAnalysisItem[];
@@ -94,11 +99,11 @@ const BomIntegrityAuditView: React.FC<Props> = ({
   const getAnomalyBadgeClass = (level: AnomalyLevel): string => {
     switch (level) {
       case 'critical':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-red-200 dark:border-red-800';
       case 'warning':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-orange-200 dark:border-orange-800';
       default:
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-200 dark:border-green-800';
     }
   };
 
@@ -108,6 +113,17 @@ const BomIntegrityAuditView: React.FC<Props> = ({
     if (absRate > 10) return '#F59E0B';
     if (absRate > 5) return '#FBBF24';
     return '#10B981';
+  };
+
+  const getActionBadgeClass = (status: string): string => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800';
+      case 'investigating':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800';
+      default:
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-200 dark:border-green-800';
+    }
   };
 
   // Scatter 데이터 변환
@@ -157,10 +173,10 @@ const BomIntegrityAuditView: React.FC<Props> = ({
 
       {/* KPI 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">심각 이상 항목</span>
-            <span className="material-icons-outlined text-red-500">error</span>
+            <DynamicIcon name="error" size={24} className="text-red-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.criticalYield + kpis.criticalDisc}건
@@ -168,71 +184,73 @@ const BomIntegrityAuditView: React.FC<Props> = ({
           <p className="text-xs text-gray-500 mt-1">
             Yield {kpis.criticalYield} + 괴리 {kpis.criticalDisc}
           </p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">평균 Yield 차이</span>
-            <span className="material-icons-outlined text-orange-500">trending_down</span>
+            <DynamicIcon name="trending_down" size={24} className="text-orange-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.avgYieldGap.toFixed(1)}%
           </p>
           <p className="text-xs text-gray-500 mt-1">목표 대비 실제 수율 차이</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">평균 괴리율</span>
-            <span className="material-icons-outlined text-blue-500">compare_arrows</span>
+            <DynamicIcon name="compare_arrows" size={24} className="text-blue-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.avgDiscrepancy.toFixed(1)}%
           </p>
           <p className="text-xs text-gray-500 mt-1">전표 vs 실사 차이</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">조치 대기</span>
-            <span className="material-icons-outlined text-yellow-500">pending_actions</span>
+            <DynamicIcon name="pending_actions" size={24} className="text-yellow-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.pendingActions}건
           </p>
           <p className="text-xs text-gray-500 mt-1">조사/수정 필요</p>
-        </div>
+        </Card>
       </div>
 
       {/* 탭 */}
       <div className="flex border-b border-gray-200 dark:border-gray-700">
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setActiveTab('yield')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`rounded-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === 'yield'
               ? 'border-blue-500 text-blue-600 dark:text-blue-400'
               : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
           }`}
         >
           BOM Yield 분석
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
           onClick={() => setActiveTab('discrepancy')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`rounded-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === 'discrepancy'
               ? 'border-blue-500 text-blue-600 dark:text-blue-400'
               : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
           }`}
         >
           재고 괴리 분석
-        </button>
+        </Button>
       </div>
 
       {/* 차트 영역 */}
       {activeTab === 'yield' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Yield 비교 차트 */}
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <Card className="p-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
               제품별 Yield 비교 (표준 vs 실제)
             </h3>
@@ -262,72 +280,73 @@ const BomIntegrityAuditView: React.FC<Props> = ({
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Card>
 
           {/* Yield 상세 테이블 */}
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <Card className="p-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
               Yield 이상 항목 상세
             </h3>
-            <div className="overflow-x-auto max-h-80">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-gray-600 dark:text-gray-300">제품</th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">표준</th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">실제</th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">차이</th>
-                    <th className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">상태</th>
-                    <th className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">조치</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            <div className="max-h-80 overflow-auto">
+              <Table>
+                <TableHeader className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                  <TableRow>
+                    <TableHead className="px-3 py-2 text-gray-600 dark:text-gray-300">제품</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">표준</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">실제</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">차이</TableHead>
+                    <TableHead className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">상태</TableHead>
+                    <TableHead className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">조치</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {filteredYield.slice(0, 10).map(item => (
-                    <tr
+                    <TableRow
                       key={item.id}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                       onClick={() => onItemClick?.(item)}
                     >
-                      <td className="px-3 py-2 text-gray-900 dark:text-white font-medium">
+                      <TableCell className="px-3 py-2 text-gray-900 dark:text-white font-medium">
                         {item.productName}
-                      </td>
-                      <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
                         {item.stdYield.toFixed(1)}%
-                      </td>
-                      <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
                         {item.actualYield.toFixed(1)}%
-                      </td>
-                      <td className="px-3 py-2 text-right">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right">
                         <span className={item.yieldGap < 0 ? 'text-red-600' : 'text-green-600'}>
                           {item.yieldGap > 0 ? '+' : ''}
                           {item.yieldGap.toFixed(1)}%
                         </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${getAnomalyBadgeClass(item.anomalyLevel)}`}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-center">
+                        <Badge
+                          variant="outline"
+                          className={getAnomalyBadgeClass(item.anomalyLevel)}
                         >
                           {item.anomalyLevel === 'critical'
                             ? '심각'
                             : item.anomalyLevel === 'warning'
                               ? '주의'
                               : '정상'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <button className="text-blue-600 hover:text-blue-800 text-xs">상세</button>
-                      </td>
-                    </tr>
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-center">
+                        <Button variant="link" size="sm" className="text-blue-600 hover:text-blue-800 text-xs h-auto p-0">상세</Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-          </div>
+          </Card>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 괴리 Scatter 차트 */}
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <Card className="p-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
               전표 수량 vs 실사 수량 (괴리 시각화)
             </h3>
@@ -389,89 +408,85 @@ const BomIntegrityAuditView: React.FC<Props> = ({
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
               점선 위: 실사 &gt; 전표 (과잉) | 점선 아래: 실사 &lt; 전표 (부족)
             </p>
-          </div>
+          </Card>
 
           {/* 괴리 상세 테이블 */}
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <Card className="p-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
               재고 괴리 항목 상세
             </h3>
-            <div className="overflow-x-auto max-h-80">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-gray-600 dark:text-gray-300">자재</th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">전표</th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">실사</th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
+            <div className="max-h-80 overflow-auto">
+              <Table>
+                <TableHeader className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                  <TableRow>
+                    <TableHead className="px-3 py-2 text-gray-600 dark:text-gray-300">자재</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">전표</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">실사</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
                       괴리율
-                    </th>
-                    <th className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">상태</th>
-                    <th className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">조치</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    </TableHead>
+                    <TableHead className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">상태</TableHead>
+                    <TableHead className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">조치</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {filteredDiscrepancy.slice(0, 10).map(item => (
-                    <tr
+                    <TableRow
                       key={item.id}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                       onClick={() => onItemClick?.(item)}
                     >
-                      <td className="px-3 py-2 text-gray-900 dark:text-white font-medium">
+                      <TableCell className="px-3 py-2 text-gray-900 dark:text-white font-medium">
                         {item.materialName}
-                      </td>
-                      <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
                         {item.transactionQty.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
                         {item.physicalQty.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <span
-                          className="px-2 py-1 rounded text-xs text-white"
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right">
+                        <Badge
+                          variant="outline"
+                          className="rounded text-xs text-white border-0"
                           style={{ backgroundColor: getDiscrepancyColor(item.discrepancyRate) }}
                         >
                           {item.discrepancyRate > 0 ? '+' : ''}
                           {item.discrepancyRate.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${
-                            item.actionStatus === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                              : item.actionStatus === 'investigating'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          }`}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-center">
+                        <Badge
+                          variant="outline"
+                          className={getActionBadgeClass(item.actionStatus)}
                         >
                           {item.actionStatus === 'pending'
                             ? '대기'
                             : item.actionStatus === 'investigating'
                               ? '조사중'
                               : '완료'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center space-x-1">
-                        <button className="text-blue-600 hover:text-blue-800 text-xs">수정</button>
-                        <button className="text-orange-600 hover:text-orange-800 text-xs">
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-center space-x-1">
+                        <Button variant="link" size="sm" className="text-blue-600 hover:text-blue-800 text-xs h-auto p-0">수정</Button>
+                        <Button variant="link" size="sm" className="text-orange-600 hover:text-orange-800 text-xs h-auto p-0">
                           조사
-                        </button>
-                      </td>
-                    </tr>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* 최대 이상 항목 경고 배너 */}
       {kpis.maxYieldItem && kpis.maxYieldItem.anomalyLevel === 'critical' && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+        <Card className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 p-4">
           <div className="flex items-center gap-3">
-            <span className="material-icons-outlined text-red-500">warning</span>
+            <DynamicIcon name="warning" size={24} className="text-red-500" />
             <div>
               <p className="font-semibold text-red-800 dark:text-red-200">
                 최대 Yield 이상 항목 감지
@@ -482,14 +497,16 @@ const BomIntegrityAuditView: React.FC<Props> = ({
                 파악이 필요합니다.
               </p>
             </div>
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => onItemClick?.(kpis.maxYieldItem!)}
-              className="ml-auto px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+              className="ml-auto"
             >
               상세 분석
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

@@ -73,17 +73,36 @@ ECOUNT raw types: `EcountSaleRaw`, `EcountInventoryRaw`, `EcountProductionRaw`, 
 - BOM diff items include `reasoning` field for AI-generated analysis
 - Deterministic random generation using seed-based hashing for mock data consistency
 
+## Multi-Agent Collaboration
+
+### Team Structure
+- **Opus** (Leader): 아키텍처 결정, 코드 리뷰, 태스크 분배
+- **Sonnet** (Executor): 구현, 리팩토링, 테스트
+
+### Workflow Rules
+1. 모든 태스크는 Leader가 TaskCreate로 생성하고 Executor에 할당
+2. Executor는 작업 완료 후 TaskUpdate(completed)로 보고
+3. 파일 충돌 방지: 동일 파일 동시 수정 금지
+4. 커밋은 Leader만 수행 (Executor는 코드 변경만)
+
+### Design System
+- **UI 프레임워크**: shadcn/ui (Radix UI + Tailwind CSS) — `src/components/ui/` 15개 프리미티브
+- **아이콘**: Lucide React — `src/lib/icons.ts` (100+ 매핑), `DynamicIcon` 컴포넌트
+- **테마**: CSS 변수 기반 HSL 컬러 시스템 (index.css)
+- **유틸리티**: `cn()` (clsx + tailwind-merge) — `src/lib/utils.ts`
+- **Material Icons**: 완전 제거 (CDN + 코드 모두 0건)
+
 ## [Progress]
 
-> 마지막 업데이트: 2026-02-18
+> 마지막 업데이트: 2026-02-22
 
-### 현재 상태: 코드 품질 개선 완료
+### 현재 상태: shadcn/ui 디자인 시스템 마이그레이션 완료
 
 - **종합 품질 점수**: ~80/100 (목표 80 달성)
-- **누적 진행률**: 54/54 항목 완료 (100%)
 - **계획 문서**: `docs/progress.md` 참조
 - **Phase 0** (긴급 보안): ✅ 완료
 - **Phase 1** (안정화): ✅ 완료
 - **Phase 2** (프론트 리팩터링): ✅ 완료
 - **Phase 3** (백엔드 개선): ✅ 완료 (13/13)
 - **Phase 4** (UI/UX 고도화): ✅ 완료 (10/10)
+- **Phase 5** (shadcn/ui 마이그레이션): ✅ 완료 — Material Icons 완전 제거, 15개 UI 프리미티브, 12개 뷰 + 20개 컴포넌트 전환

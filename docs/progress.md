@@ -269,6 +269,51 @@
 
 ---
 
+## Phase 5 — shadcn/ui 디자인 시스템 마이그레이션
+
+> 상태: ✅ 완료 (2026-02-22)
+> Material Icons CDN 제거, Lucide React + shadcn/ui 전면 전환
+
+### 5-A. 기반 구축 (Step 0~2)
+
+- [x] **UI-1** shadcn/ui 의존성 설치 (Radix UI, class-variance-authority, clsx, tailwind-merge, lucide-react)
+- [x] **UI-2** `src/lib/utils.ts` — `cn()` 유틸리티 함수
+- [x] **UI-3** 15개 shadcn/ui 프리미티브 생성 (button, card, input, label, badge, dialog, tabs, select, table, tooltip, avatar, sheet, switch, separator, scroll-area)
+- [x] **UI-4** `src/components/ui/icon.tsx` — DynamicIcon (Material Icon → Lucide 매핑)
+- [x] **UI-5** `src/lib/icons.ts` — 100+ Material Icon → Lucide 매핑 테이블
+- [x] **UI-6** Tailwind CSS 변수 기반 HSL 컬러 시스템 (index.css)
+- [x] **UI-7** tailwind.config.js — shadcn/ui 호환 확장
+
+### 5-B. 컴포넌트 마이그레이션 (Step 3~7)
+
+- [x] **MIG-1** common 컴포넌트 4개 (ErrorBoundary, FilterBar, FormulaTooltip, KPICard)
+- [x] **MIG-2** layout 컴포넌트 4개 (Header, Sidebar, SubTabLayout, Pagination)
+- [x] **MIG-3** domain 컴포넌트 6개 (BomDiffTable, WasteTrendChart, DebateMiniCard, DebateViewer, ChannelCostAdmin, LaborRecordAdmin)
+- [x] **MIG-4** insight 컴포넌트 3개 (InsightSection, AIAssistButton, AIAssistOverlay)
+- [x] **MIG-5** modal 컴포넌트 3개 (Modal, ModalManager, NotificationPanel)
+- [x] **MIG-6** 소형 뷰 6개 (DashboardHome, DailyPerformance, MaterialPriceImpact, BudgetExpense, BomIntegrityAudit, StatisticalOrdering)
+- [x] **MIG-7** 대형 뷰 6개 (ProfitAnalysis, SalesAnalysis, CostManagement, ProductionBom, InventoryOrder, Settings)
+
+### 5-C. 최종 정리 (Step 8)
+
+- [x] **CLN-1** App.tsx material-icons → DynamicIcon + Button 교체
+- [x] **CLN-2** index.html Material Icons CDN 링크 제거
+- [x] **CLN-3** 전체 src/ material-icons 0건 확인
+- [x] **CLN-4** TypeScript 에러 0건, 프로덕션 빌드 성공
+
+### 교체 통계
+
+| 항목 | 교체 수 |
+|------|---------|
+| material-icons → DynamicIcon | 121+ |
+| raw `<button>` → `<Button>` | 50+ |
+| raw `<table>` → `<Table>` | 44+ |
+| card-like div → `<Card>` | 200+ |
+| badge-like span → `<Badge>` | 30+ |
+| Material Icons CDN | 제거 완료 |
+
+---
+
 ## 긍정적 평가 (유지할 패턴)
 
 | 패턴 | 위치 | 평가 |
@@ -284,6 +329,14 @@
 ---
 
 ## 진행 기록
+
+### 2026-02-22 — Phase 5 shadcn/ui 디자인 시스템 마이그레이션 완료
+- 기반: shadcn/ui 15개 프리미티브 + DynamicIcon + Lucide 100+ 아이콘 매핑
+- common(4) + layout(4) + domain(6) + insight(3) + modal(3) 마이그레이션
+- 뷰 12개 전체 마이그레이션 (소형 6 + 대형 6)
+- App.tsx material-icons/button 교체, index.html CDN 제거
+- 전체 src/ material-icons 0건, TS 에러 0건, 빌드 성공
+- 교체: icons 121+, buttons 50+, tables 44+, cards 200+, badges 30+
 
 ### 2026-02-18 — Phase 4 UI/UX 고도화 (10/10 완료)
 - UX-1: 모바일 사이드바 토글 — UIContext + Header + Sidebar 연동

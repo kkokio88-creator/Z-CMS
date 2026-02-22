@@ -10,6 +10,10 @@ import { getDateRange, filterByDate, getRangeLabel } from '../../utils/dateRange
 import { FormulaTooltip } from '../common';
 import { FORMULAS } from '../../constants/formulaDescriptions';
 import { InsightSection } from '../insight';
+import { Button } from '../ui/button';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
 
 interface DashboardHomeViewProps {
   onSync: () => void;
@@ -243,21 +247,23 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           </div>
           <span className="text-[11px] text-gray-400">{lastSyncTime}</span>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onSync}
           disabled={isSyncing}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-full transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-full"
         >
-          <span className={`material-icons-outlined text-sm ${isSyncing ? 'animate-spin' : ''}`}>sync</span>
+          <DynamicIcon name="sync" size={14} className={isSyncing ? 'animate-spin' : ''} />
           {isSyncing ? '동기화 중...' : '동기화'}
-        </button>
+        </Button>
       </div>
 
       {/* 데이터 연동 요약 (테이블별 건수를 한 줄로) */}
       {syncStatus && totalRecords > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-xs text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300 font-medium">
-            <span className="material-icons-outlined text-sm text-green-500">cloud_done</span>
+            <DynamicIcon name="cloud_done" size={14} className="text-green-500" />
             {syncStatus.lastSyncTime
               ? new Date(syncStatus.lastSyncTime).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
               : '기록 없음'}
@@ -317,10 +323,10 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       {/* 독립채산제 성과 */}
       {profitCenterScore && (
       <InsightSection id="home-score">
-        <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <span className="material-icons-outlined text-purple-500">emoji_events</span>
+              <DynamicIcon name="emoji_events" size={20} className="text-purple-500" />
               독립채산제 성과
               <FormulaTooltip {...FORMULAS.costScore} />
             </h3>
@@ -401,7 +407,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               <ScoreCard key={s.metric} s={s} />
             ))}
           </div>
-        </div>
+        </Card>
       </InsightSection>
       )}
 
@@ -414,19 +420,19 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           { view: 'profit', icon: 'assessment', label: '수익 분석', desc: '채널/품목/트렌드', iconClass: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' },
           { view: 'cost', icon: 'account_balance', label: '원가 관리', desc: '4요소 분석', iconClass: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' },
         ].map(({ view, icon, label, desc, iconClass }) => (
-          <button
+          <Card
             key={view}
+            className="flex items-center gap-3 p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group"
             onClick={() => onNavigate?.(view)}
-            className="flex items-center gap-3 p-4 bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-primary/30 transition-all group"
           >
             <div className={`p-2.5 rounded-full ${iconClass} group-hover:scale-110 transition-transform`}>
-              <span className="material-icons-outlined text-lg">{icon}</span>
+              <DynamicIcon name={icon} size={18} />
             </div>
             <div className="text-left">
               <p className="text-sm font-bold text-gray-900 dark:text-white">{label}</p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">{desc}</p>
             </div>
-          </button>
+          </Card>
         ))}
       </div>
       </InsightSection>

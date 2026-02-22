@@ -19,6 +19,11 @@ import { FormulaTooltip } from '../common';
 import { FORMULAS } from '../../constants/formulaDescriptions';
 import { InsightSection } from '../insight';
 import { FilterBar } from '../common';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Button } from '../ui/button';
 
 interface Props {
   purchases: PurchaseData[];
@@ -42,9 +47,9 @@ const COST_COLORS = { rawMaterial: '#3B82F6', subMaterial: '#10B981', labor: '#F
 const InsightCards: React.FC<{ items: CostRecommendation[] }> = ({ items }) => {
   if (items.length === 0) return null;
   return (
-    <div className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
+    <Card className="p-5">
       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-        <span className="material-icons-outlined text-yellow-500 text-base">lightbulb</span>
+        <DynamicIcon name="lightbulb" size={16} className="text-yellow-500" />
         비용 절감 인사이트
       </h3>
       <div className="space-y-2">
@@ -56,13 +61,13 @@ const InsightCards: React.FC<{ items: CostRecommendation[] }> = ({ items }) => {
           }`}>
             <div className="flex items-start justify-between">
               <div>
-                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                <Badge className={`px-1.5 py-0.5 rounded text-xs font-medium ${
                   rec.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                   : rec.priority === 'medium' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
                   : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                 }`}>
                   {rec.priority === 'high' ? '긴급' : rec.priority === 'medium' ? '주의' : '참고'}
-                </span>
+                </Badge>
                 <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-1">{rec.title}</p>
                 <p className="text-xs text-gray-500 mt-1">{rec.description}</p>
               </div>
@@ -71,7 +76,7 @@ const InsightCards: React.FC<{ items: CostRecommendation[] }> = ({ items }) => {
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 };
 
@@ -439,18 +444,19 @@ export const CostManagementView: React.FC<Props> = ({
     <>
     {/* 우측 인사이트 토글 버튼 */}
     {currentInsights.length > 0 && (
-      <button
+      <Button
+        variant="ghost"
         onClick={() => setInsightPanelOpen(!insightPanelOpen)}
-        className={`fixed right-0 top-1/3 z-40 flex items-center gap-1 px-2 py-3 rounded-l-lg shadow-lg border transition-all ${
+        className={`fixed right-0 top-1/3 z-40 flex items-center gap-1 px-2 py-3 rounded-l-lg shadow-lg border transition-all h-auto ${
           insightPanelOpen
             ? 'bg-yellow-500 text-white border-yellow-600'
             : 'bg-white dark:bg-gray-800 text-yellow-600 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
         }`}
         style={{ writingMode: 'vertical-rl' }}
       >
-        <span className="material-icons-outlined text-sm">{insightPanelOpen ? 'close' : 'lightbulb'}</span>
+        <DynamicIcon name={insightPanelOpen ? 'close' : 'lightbulb'} size={14} />
         <span className="text-xs font-bold">인사이트 {currentInsights.length}</span>
-      </button>
+      </Button>
     )}
 
     {/* 슬라이드 인사이트 패널 */}
@@ -459,12 +465,12 @@ export const CostManagementView: React.FC<Props> = ({
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-              <span className="material-icons-outlined text-yellow-500 text-base">lightbulb</span>
+              <DynamicIcon name="lightbulb" size={16} className="text-yellow-500" />
               비용 절감 인사이트
             </h3>
-            <button onClick={() => setInsightPanelOpen(false)} className="text-gray-400 hover:text-gray-600">
-              <span className="material-icons-outlined text-sm">close</span>
-            </button>
+            <Button variant="ghost" size="icon" onClick={() => setInsightPanelOpen(false)} className="h-6 w-6 text-gray-400 hover:text-gray-600">
+              <DynamicIcon name="close" size={14} />
+            </Button>
           </div>
           <div className="space-y-3">
             {currentInsights.map(rec => (
@@ -475,13 +481,13 @@ export const CostManagementView: React.FC<Props> = ({
               }`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                    <Badge className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                       rec.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                       : rec.priority === 'medium' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
                       : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                     }`}>
                       {rec.priority === 'high' ? '긴급' : rec.priority === 'medium' ? '주의' : '참고'}
-                    </span>
+                    </Badge>
                     <p className="text-xs font-medium text-gray-800 dark:text-gray-200 mt-1.5">{rec.title}</p>
                     <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{rec.description}</p>
                   </div>
@@ -510,25 +516,25 @@ export const CostManagementView: React.FC<Props> = ({
               {/* 점수 카드 섹션 — 대시보드와 동일한 computeProfitCenterScore 기반 */}
               {sc ? (
                 <>
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
+                  <Card className="p-5">
                     <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                       <div className="flex items-center gap-3">
-                        <span className="px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-bold">
+                        <Badge className="px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-bold">
                           {sc.activeBracket.label} 구간
-                        </span>
+                        </Badge>
                         <span className={`text-4xl font-black ${
                           sc.overallScore >= 110 ? 'text-green-500' :
                           sc.overallScore >= 100 ? 'text-blue-500' :
                           sc.overallScore >= 90 ? 'text-orange-500' : 'text-red-500'
                         }`}>{sc.overallScore}<span className="text-lg font-bold text-gray-400">점</span></span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        <Badge className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                           sc.overallScore >= 110 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                           sc.overallScore >= 100 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
                           sc.overallScore >= 90 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
                           'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                         }`}>
                           {sc.overallScore >= 110 ? '우수' : sc.overallScore >= 100 ? '달성' : sc.overallScore >= 90 ? '주의' : '미달'}
-                        </span>
+                        </Badge>
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         월 정산매출 {formatCurrency(sc.monthlyRevenue)} 추정 ({sc.calendarDays}일 기준) | 보간 기준매출 {formatCurrency(sc.activeBracket.revenueBracket)}
@@ -571,14 +577,14 @@ export const CostManagementView: React.FC<Props> = ({
                         * 의제 매입세액 공제 {formatCurrency(sc.deemedInputTaxCredit)} 반영 (매입액의 {((sc.deemedInputTaxCredit / (sc.scores.reduce((s, m) => s + (m.metric === '원재료' || m.metric === '부재료' ? (m.actualAmount || 0) : 0), 0) + sc.deemedInputTaxCredit)) * 100).toFixed(1)}%)
                       </p>
                     )}
-                  </div>
+                  </Card>
 
                   {/* 원가 초과 원인 분석 — 전체 차이를 카테고리별로 분해, 토글 드릴다운 */}
                   {costVarianceBreakdown && (
-                    <div className="bg-white dark:bg-surface-dark rounded-lg p-5 border border-gray-200 dark:border-gray-700">
+                    <Card className="p-5">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                          <span className="material-icons-outlined text-orange-500">analytics</span>
+                          <DynamicIcon name="analytics" size={20} className="text-orange-500" />
                           원가 초과 원인 분석
                         </h3>
                         <div className="flex items-center gap-3 text-sm">
@@ -673,14 +679,13 @@ export const CostManagementView: React.FC<Props> = ({
                             return (
                               <div key={cat.category} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                 {/* 카테고리 헤더 (클릭 → 토글) */}
-                                <button
+                                <Button
+                                  variant="ghost"
                                   onClick={() => toggleCategory(cat.category)}
-                                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left h-auto justify-start"
                                 >
-                                  <span className={`material-icons-outlined text-base transition-transform ${isExpanded ? 'rotate-90' : ''}`} style={{ color: cat.color }}>
-                                    chevron_right
-                                  </span>
-                                  <span className="material-icons-outlined text-base" style={{ color: cat.color }}>{cat.icon}</span>
+                                  <DynamicIcon name="chevron_right" size={16} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} style={{ color: cat.color }} />
+                                  <DynamicIcon name={cat.icon} size={16} style={{ color: cat.color }} />
                                   <span className="text-sm font-bold text-gray-800 dark:text-gray-200 flex-1">{cat.category}</span>
 
                                   {/* 비율 바 */}
@@ -697,46 +702,45 @@ export const CostManagementView: React.FC<Props> = ({
                                   <span className={`text-sm font-bold whitespace-nowrap ${cat.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     {cat.amount > 0 ? '+' : ''}{formatCurrency(cat.amount)}
                                   </span>
-                                </button>
+                                </Button>
 
                                 {/* 세부 내역 (토글) */}
                                 {isExpanded && (
                                   <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30 px-4 py-3">
-                                    <table className="w-full text-xs">
-                                      <thead>
-                                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                                          <th className="text-left py-1.5 px-2 text-gray-500 font-medium">항목</th>
-                                          <th className="text-left py-1.5 px-2 text-gray-500 font-medium">상세</th>
-                                          <th className="text-right py-1.5 px-2 text-gray-500 font-medium">금액</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
+                                    <Table className="text-xs">
+                                      <TableHeader>
+                                        <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                                          <TableHead className="text-left py-1.5 px-2 h-auto text-gray-500 font-medium">항목</TableHead>
+                                          <TableHead className="text-left py-1.5 px-2 h-auto text-gray-500 font-medium">상세</TableHead>
+                                          <TableHead className="text-right py-1.5 px-2 h-auto text-gray-500 font-medium">금액</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
                                         {cat.items.slice(0, 15).map(item => (
-                                          <tr key={item.code} className="border-b border-gray-100 dark:border-gray-700/50">
-                                            <td className="py-1.5 px-2 text-gray-700 dark:text-gray-300 font-medium">{item.name}</td>
-                                            <td className="py-1.5 px-2 text-gray-500">{item.description || '-'}</td>
-                                            <td className={`py-1.5 px-2 text-right font-bold ${item.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                          <TableRow key={item.code} className="border-b border-gray-100 dark:border-gray-700/50">
+                                            <TableCell className="py-1.5 px-2 text-gray-700 dark:text-gray-300 font-medium">{item.name}</TableCell>
+                                            <TableCell className="py-1.5 px-2 text-gray-500">{item.description || '-'}</TableCell>
+                                            <TableCell className={`py-1.5 px-2 text-right font-bold ${item.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                               {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)}
-                                            </td>
-                                          </tr>
+                                            </TableCell>
+                                          </TableRow>
                                         ))}
                                         {cat.items.length > 15 && (
-                                          <tr>
-                                            <td colSpan={3} className="py-1.5 px-2 text-center text-gray-400">
+                                          <TableRow>
+                                            <TableCell colSpan={3} className="py-1.5 px-2 text-center text-gray-400">
                                               ... 외 {cat.items.length - 15}건
-                                            </td>
-                                          </tr>
+                                            </TableCell>
+                                          </TableRow>
                                         )}
-                                      </tbody>
-                                      <tfoot>
-                                        <tr className="border-t-2 border-gray-300 dark:border-gray-600">
-                                          <td className="py-1.5 px-2 font-bold text-gray-700 dark:text-gray-200" colSpan={2}>소계</td>
-                                          <td className={`py-1.5 px-2 text-right font-black ${cat.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                        {/* Footer row */}
+                                        <TableRow className="border-t-2 border-gray-300 dark:border-gray-600">
+                                          <TableCell className="py-1.5 px-2 font-bold text-gray-700 dark:text-gray-200" colSpan={2}>소계</TableCell>
+                                          <TableCell className={`py-1.5 px-2 text-right font-black ${cat.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                             {cat.amount > 0 ? '+' : ''}{formatCurrency(cat.amount)}
-                                          </td>
-                                        </tr>
-                                      </tfoot>
-                                    </table>
+                                          </TableCell>
+                                        </TableRow>
+                                      </TableBody>
+                                    </Table>
                                   </div>
                                 )}
                               </div>
@@ -751,17 +755,17 @@ export const CostManagementView: React.FC<Props> = ({
                           {' '}/ 총 차이: {formatCurrency(costVarianceBreakdown.totalExcess)}
                         </span>
                         {costVarianceBreakdown.reconciled
-                          ? <span className="text-green-500 flex items-center gap-1"><span className="material-icons-outlined text-xs">check_circle</span>정합</span>
-                          : <span className="text-orange-500 flex items-center gap-1"><span className="material-icons-outlined text-xs">warning</span>오차 있음</span>
+                          ? <span className="text-green-500 flex items-center gap-1"><DynamicIcon name="check_circle" size={12} />정합</span>
+                          : <span className="text-orange-500 flex items-center gap-1"><DynamicIcon name="warning" size={12} />오차 있음</span>
                         }
                       </div>
-                    </div>
+                    </Card>
                   )}
                 </>
               ) : (
                 <div className="bg-yellow-50 dark:bg-yellow-900/10 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
                   <p className="text-sm text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
-                    <span className="material-icons-outlined text-base">info</span>
+                    <DynamicIcon name="info" size={16} />
                     매출 데이터가 없어 점수를 계산할 수 없습니다. 구글시트에서 매출 데이터를 확인하세요.
                   </p>
                 </div>
@@ -769,7 +773,7 @@ export const CostManagementView: React.FC<Props> = ({
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 주간 점수 추이 */}
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 점수 추이 <FormulaTooltip {...FORMULAS.costScore} /></h3>
                   {weeklyScores.length > 0 ? (
                     <div className="h-72">
@@ -791,9 +795,9 @@ export const CostManagementView: React.FC<Props> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">주간 데이터 없음</p>}
-                </div>
+                </Card>
                 {/* 원가 구성비 Pie */}
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">원가 구성비 <FormulaTooltip {...FORMULAS.costOverview} /></h3>
                   {composition.length > 0 && totalCost > 0 ? (
                     <div className="h-72">
@@ -811,12 +815,12 @@ export const CostManagementView: React.FC<Props> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">구성비 데이터 없음</p>}
-                </div>
+                </Card>
               </div>
 
               <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
                 <p className="text-sm text-blue-800 dark:text-blue-300 flex items-center gap-2">
-                  <span className="material-icons-outlined text-base">info</span>
+                  <DynamicIcon name="info" size={16} />
                   점수 = (실적배수 / 목표배수) x 100 | 100점 이상 = 목표 달성 | 절감 = 목표원가 - 실제원가
                 </p>
               </div>
@@ -843,18 +847,18 @@ export const CostManagementView: React.FC<Props> = ({
             <div className="space-y-6">
               <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '원재료')} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 원재료비 <FormulaTooltip {...FORMULAS.rawMaterialTotal} /></p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(rawDetail?.total || 0)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">단가 {config.priceIncreaseThreshold}%↑ 품목</p>
                   <p className={`text-2xl font-bold mt-1 ${priceUpCount > 0 ? 'text-red-600' : 'text-green-600'}`}>{priceUpCount}건</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">필터 결과</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{filteredRawItems.length}개</p>
-                </div>
+                </Card>
               </div>
 
               <FilterBar
@@ -869,7 +873,7 @@ export const CostManagementView: React.FC<Props> = ({
               />
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 원재료비 추이</h3>
                   {weeklyRaw.length > 0 ? (
                     <div className="h-64">
@@ -884,8 +888,8 @@ export const CostManagementView: React.FC<Props> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                     {rawFilter === 'priceUp' ? '단가상승 품목' : rawFilter === 'priceDown' ? '단가하락 품목' : rawFilter === 'top10' ? '상위10 품목' : '품목별 구매액'}
                   </h3>
@@ -906,11 +910,11 @@ export const CostManagementView: React.FC<Props> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">해당 조건의 품목 없음</p>}
-                </div>
+                </Card>
               </div>
 
               {selectedItem && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{selectedItem.productName} 단가 이력</h3>
                   {selectedItem.priceHistory.length > 0 ? (
                     <div className="h-56">
@@ -925,43 +929,43 @@ export const CostManagementView: React.FC<Props> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">이력 없음</p>}
-                </div>
+                </Card>
               )}
 
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                   원재료 상세 내역 <span className="text-sm text-gray-400 font-normal">({filteredRawItems.length}건)</span>
                 </h3>
                 {filteredRawItems.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">품목</th>
-                          <th className="text-right py-2 px-3 text-gray-500">현재 단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">평균 단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">변동률</th>
-                          <th className="text-right py-2 px-3 text-gray-500">총 구매액</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table className="text-sm">
+                      <TableHeader>
+                        <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                          <TableHead className="text-left py-2 px-3 text-gray-500">품목</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">현재 단가</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">평균 단가</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">변동률</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">총 구매액</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {filteredRawItems.slice((rawPage - 1) * RAW_PAGE_SIZE, rawPage * RAW_PAGE_SIZE).map(item => (
-                          <tr
+                          <TableRow
                             key={item.productCode}
                             className={`border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${selectedMaterial === item.productCode ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                             onClick={() => setSelectedMaterial(item.productCode === selectedMaterial ? null : item.productCode)}
                           >
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
-                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">₩{item.currentPrice.toLocaleString()}</td>
-                            <td className="py-2 px-3 text-right text-gray-500">₩{item.avgPrice.toLocaleString()}</td>
-                            <td className={`py-2 px-3 text-right font-medium ${item.changeRate > 0 ? 'text-red-600' : item.changeRate < 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                            <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">₩{item.currentPrice.toLocaleString()}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-500">₩{item.avgPrice.toLocaleString()}</TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-medium ${item.changeRate > 0 ? 'text-red-600' : item.changeRate < 0 ? 'text-green-600' : 'text-gray-500'}`}>
                               {item.changeRate > 0 ? '+' : ''}{item.changeRate.toFixed(1)}%
-                            </td>
-                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(item.totalSpent)}</td>
-                          </tr>
+                            </TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(item.totalSpent)}</TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                     {filteredRawItems.length > RAW_PAGE_SIZE && (
                       <Pagination
                         currentPage={rawPage}
@@ -976,66 +980,66 @@ export const CostManagementView: React.FC<Props> = ({
                     )}
                   </div>
                 ) : <p className="text-gray-400 text-center py-6">해당 조건의 품목이 없습니다.</p>}
-              </div>
+              </Card>
 
               {limitPrice && limitPrice.items.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-red-500">price_change</span>
+                    <DynamicIcon name="price_change" size={20} className="text-red-500" />
                     한계단가 분석
                     <FormulaTooltip {...FORMULAS.limitPrice} />
                     {limitPrice.exceedCount > 0 && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                      <Badge className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
                         {limitPrice.exceedCount}건 초과
-                      </span>
+                      </Badge>
                     )}
                   </h3>
                   <p className="text-xs text-gray-500 mb-4">
                     한계단가 = 평균단가 + 1 표준편차 | 초과 품목은 가격 이상 징후
                   </p>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">품목</th>
-                          <th className="text-right py-2 px-3 text-gray-500">평균단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">한계단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">현재단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">초과율</th>
-                          <th className="text-center py-2 px-3 text-gray-500">상태</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table className="text-sm">
+                      <TableHeader>
+                        <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                          <TableHead className="text-left py-2 px-3 text-gray-500">품목</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">평균단가</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">한계단가</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">현재단가</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">초과율</TableHead>
+                          <TableHead className="text-center py-2 px-3 text-gray-500">상태</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {limitPrice.items.slice(0, 15).map(item => (
-                          <tr key={item.productCode} className={`border-b border-gray-100 dark:border-gray-800 ${
+                          <TableRow key={item.productCode} className={`border-b border-gray-100 dark:border-gray-800 ${
                             item.isExceeding ? 'bg-red-50/50 dark:bg-red-900/10' : ''
                           }`}>
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
-                            <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.avgUnitPrice)}</td>
-                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(item.limitPrice)}</td>
-                            <td className={`py-2 px-3 text-right font-medium ${item.isExceeding ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'}`}>
+                            <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.avgUnitPrice)}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(item.limitPrice)}</TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-medium ${item.isExceeding ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'}`}>
                               {formatCurrency(item.currentPrice)}
-                            </td>
-                            <td className={`py-2 px-3 text-right font-medium ${
+                            </TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-medium ${
                               item.exceedRate > 0 ? 'text-red-600' : item.exceedRate < -5 ? 'text-green-600' : 'text-gray-500'
                             }`}>
                               {item.exceedRate > 0 ? '+' : ''}{item.exceedRate.toFixed(1)}%
-                            </td>
-                            <td className="py-2 px-3 text-center">
-                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            </TableCell>
+                            <TableCell className="py-2 px-3 text-center">
+                              <Badge className={`px-2 py-0.5 rounded text-xs font-bold ${
                                 item.isExceeding
                                   ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                                   : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                               }`}>
                                 {item.isExceeding ? '초과' : '정상'}
-                              </span>
-                            </td>
-                          </tr>
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
-                </div>
+                </Card>
               )}
             </div>
             </InsightSection>
@@ -1056,14 +1060,14 @@ export const CostManagementView: React.FC<Props> = ({
             <div className="space-y-6">
               <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '부재료')} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 부재료비 <FormulaTooltip {...FORMULAS.subMaterialTotal} /></p>
                   <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(subDetail?.total || 0)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">필터 결과</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{filteredSubItems.length}개</p>
-                </div>
+                </Card>
               </div>
 
               <FilterBar
@@ -1076,7 +1080,7 @@ export const CostManagementView: React.FC<Props> = ({
               />
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 부재료비 추이</h3>
                   {weeklySub.length > 0 ? (
                     <div className="h-64">
@@ -1091,8 +1095,8 @@ export const CostManagementView: React.FC<Props> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">부재료 데이터 없음</p>}
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">품목별 부재료 지출</h3>
                   {filteredSubBarData.length > 0 ? (
                     <div className="h-64">
@@ -1107,35 +1111,35 @@ export const CostManagementView: React.FC<Props> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">부재료 품목 없음</p>}
-                </div>
+                </Card>
               </div>
 
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                   부재료 상세 내역 <span className="text-sm text-gray-400 font-normal">({filteredSubItems.length}건)</span>
                 </h3>
                 {filteredSubItems.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">품목</th>
-                          <th className="text-right py-2 px-3 text-gray-500">수량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">평균 단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">총 금액</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table className="text-sm">
+                      <TableHeader>
+                        <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                          <TableHead className="text-left py-2 px-3 text-gray-500">품목</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">수량</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">평균 단가</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">총 금액</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {filteredSubItems.map(item => (
-                          <tr key={item.productCode} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
-                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{item.quantity.toLocaleString()}</td>
-                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">₩{item.avgUnitPrice.toLocaleString()}</td>
-                            <td className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(item.totalSpent)}</td>
-                          </tr>
+                          <TableRow key={item.productCode} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{item.quantity.toLocaleString()}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">₩{item.avgUnitPrice.toLocaleString()}</TableCell>
+                            <TableCell className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(item.totalSpent)}</TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 ) : (
                   <div className="text-center py-6">
@@ -1143,7 +1147,7 @@ export const CostManagementView: React.FC<Props> = ({
                     <p className="text-xs text-gray-400 mt-1">포장재, 비닐, 라벨 등의 구매 데이터가 수집되면 표시됩니다.</p>
                   </div>
                 )}
-              </div>
+              </Card>
 
             </div>
             </InsightSection>
@@ -1182,43 +1186,43 @@ export const CostManagementView: React.FC<Props> = ({
 
               {/* KPI 카드 6개 */}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 노무비{hasLaborData ? '' : ' (추정)'}</p>
                   <p className="text-2xl font-bold text-yellow-600 mt-1">{formatCurrency(totalLaborCost)}</p>
                   <p className="text-xs text-gray-400 mt-1">노무비율 {laborRate}%</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 근로시간</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{Math.round(totalHours).toLocaleString()}h</p>
                   <p className="text-xs text-gray-400 mt-1">정규 {Math.round(totalRegularHours).toLocaleString()}h</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">초과근무</p>
                   <p className={`text-2xl font-bold mt-1 ${overtimeRate > 15 ? 'text-red-600' : 'text-orange-600'}`}>
                     {Math.round(totalOvertimeHours).toLocaleString()}h
                   </p>
                   <p className="text-xs text-gray-400 mt-1">비율 {overtimeRate}%</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">평균 인원/일</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{avgHeadcount}명</p>
                   <p className="text-xs text-gray-400 mt-1">{laborByDept.length}개 반</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">인당 생산성</p>
                   <p className="text-2xl font-bold text-green-600 mt-1">{prodPerPerson.toLocaleString()}</p>
                   <p className="text-xs text-gray-400 mt-1">개/인(기간합)</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">단위당 노무비</p>
                   <p className="text-2xl font-bold text-purple-600 mt-1">₩{laborCostPerUnit.toLocaleString()}</p>
                   <p className="text-xs text-gray-400 mt-1">원/개</p>
-                </div>
+                </Card>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 주간 노무비 & 노무비율 */}
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 노무비 & 노무비율</h3>
                   {weeklyLabor.length > 0 ? (
                     <div className="h-72">
@@ -1236,10 +1240,10 @@ export const CostManagementView: React.FC<Props> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
-                </div>
+                </Card>
 
                 {/* 반별 노무비 비교 — Google Sheets 실데이터 */}
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">반별 노무비 비교</h3>
                   {laborByDept.length > 0 ? (
                     <div className="h-72">
@@ -1263,16 +1267,16 @@ export const CostManagementView: React.FC<Props> = ({
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-10">
-                      <span className="material-icons-outlined text-4xl text-gray-300 mb-2">groups</span>
+                      <DynamicIcon name="groups" size={36} className="text-gray-300 mb-2" />
                       <p className="text-gray-400 text-sm">노무비 데이터가 없습니다</p>
                     </div>
                   )}
-                </div>
+                </Card>
               </div>
 
               {/* 주간 인당 생산성 차트 */}
               {weeklyLabor.length > 0 && avgHeadcount > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 생산량 & 인당 생산성</h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1288,29 +1292,29 @@ export const CostManagementView: React.FC<Props> = ({
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 반별 상세 분석 테이블 */}
               {laborByDept.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">반별 상세 분석</h3>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">반</th>
-                          <th className="text-right py-2 px-3 text-gray-500">평균인원</th>
-                          <th className="text-right py-2 px-3 text-gray-500">정규시간</th>
-                          <th className="text-right py-2 px-3 text-gray-500">초과시간</th>
-                          <th className="text-right py-2 px-3 text-gray-500">초과율</th>
-                          <th className="text-right py-2 px-3 text-gray-500">정규급여</th>
-                          <th className="text-right py-2 px-3 text-gray-500">초과급여</th>
-                          <th className="text-right py-2 px-3 text-gray-500">총 노무비</th>
-                          <th className="text-right py-2 px-3 text-gray-500">비율</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table className="text-sm">
+                      <TableHeader>
+                        <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                          <TableHead className="text-left py-2 px-3 text-gray-500">반</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">평균인원</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">정규시간</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">초과시간</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">초과율</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">정규급여</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">초과급여</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">총 노무비</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">비율</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {laborByDept.map((dept, i) => {
                           const avgHc = dept.dayCount > 0 ? Math.round(dept.headcountSum / dept.dayCount) : 0;
                           const regHrs = Math.round(dept.weekdayRegular + dept.holidayRegular);
@@ -1320,78 +1324,78 @@ export const CostManagementView: React.FC<Props> = ({
                           const otPay = dept.weekdayOvertimePay + dept.weekdayNightPay + dept.holidayOvertimePay + dept.holidayNightPay;
                           const share = totalLaborCost > 0 ? Math.round((dept.totalPay / totalLaborCost) * 1000) / 10 : 0;
                           return (
-                            <tr key={dept.name} className="border-b border-gray-100 dark:border-gray-800">
-                              <td className="py-2 px-3">
+                            <TableRow key={dept.name} className="border-b border-gray-100 dark:border-gray-800">
+                              <TableCell className="py-2 px-3">
                                 <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: DEPT_COLORS[i % DEPT_COLORS.length] }} />
                                 <span className="text-gray-800 dark:text-gray-200">{dept.name}</span>
-                              </td>
-                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{avgHc}명</td>
-                              <td className="py-2 px-3 text-right text-blue-600">{regHrs.toLocaleString()}h</td>
-                              <td className="py-2 px-3 text-right text-orange-600">{otHrs.toLocaleString()}h</td>
-                              <td className={`py-2 px-3 text-right font-medium ${otRate > 15 ? 'text-red-600' : 'text-gray-600'}`}>{otRate}%</td>
-                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(regPay)}</td>
-                              <td className="py-2 px-3 text-right text-orange-600">{formatCurrency(otPay)}</td>
-                              <td className="py-2 px-3 text-right font-bold text-yellow-600">{formatCurrency(dept.totalPay)}</td>
-                              <td className="py-2 px-3 text-right text-gray-600">{share}%</td>
-                            </tr>
+                              </TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{avgHc}명</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-blue-600">{regHrs.toLocaleString()}h</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-orange-600">{otHrs.toLocaleString()}h</TableCell>
+                              <TableCell className={`py-2 px-3 text-right font-medium ${otRate > 15 ? 'text-red-600' : 'text-gray-600'}`}>{otRate}%</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(regPay)}</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-orange-600">{formatCurrency(otPay)}</TableCell>
+                              <TableCell className="py-2 px-3 text-right font-bold text-yellow-600">{formatCurrency(dept.totalPay)}</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-600">{share}%</TableCell>
+                            </TableRow>
                           );
                         })}
-                        <tr className="border-t-2 border-gray-300 dark:border-gray-600 font-bold">
-                          <td className="py-2 px-3 text-gray-900 dark:text-white">합계</td>
-                          <td className="py-2 px-3 text-right">{avgHeadcount}명</td>
-                          <td className="py-2 px-3 text-right text-blue-600">{Math.round(totalRegularHours).toLocaleString()}h</td>
-                          <td className="py-2 px-3 text-right text-orange-600">{Math.round(totalOvertimeHours).toLocaleString()}h</td>
-                          <td className={`py-2 px-3 text-right ${overtimeRate > 15 ? 'text-red-600' : 'text-gray-600'}`}>{overtimeRate}%</td>
-                          <td className="py-2 px-3 text-right">{formatCurrency(laborByDept.reduce((s, d) => s + d.weekdayRegularPay + d.holidayRegularPay, 0))}</td>
-                          <td className="py-2 px-3 text-right text-orange-600">{formatCurrency(laborByDept.reduce((s, d) => s + d.weekdayOvertimePay + d.weekdayNightPay + d.holidayOvertimePay + d.holidayNightPay, 0))}</td>
-                          <td className="py-2 px-3 text-right text-yellow-600">{formatCurrency(totalLaborCost)}</td>
-                          <td className="py-2 px-3 text-right">100%</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                        <TableRow className="border-t-2 border-gray-300 dark:border-gray-600 font-bold">
+                          <TableCell className="py-2 px-3 text-gray-900 dark:text-white">합계</TableCell>
+                          <TableCell className="py-2 px-3 text-right">{avgHeadcount}명</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-blue-600">{Math.round(totalRegularHours).toLocaleString()}h</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-orange-600">{Math.round(totalOvertimeHours).toLocaleString()}h</TableCell>
+                          <TableCell className={`py-2 px-3 text-right ${overtimeRate > 15 ? 'text-red-600' : 'text-gray-600'}`}>{overtimeRate}%</TableCell>
+                          <TableCell className="py-2 px-3 text-right">{formatCurrency(laborByDept.reduce((s, d) => s + d.weekdayRegularPay + d.holidayRegularPay, 0))}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-orange-600">{formatCurrency(laborByDept.reduce((s, d) => s + d.weekdayOvertimePay + d.weekdayNightPay + d.holidayOvertimePay + d.holidayNightPay, 0))}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-yellow-600">{formatCurrency(totalLaborCost)}</TableCell>
+                          <TableCell className="py-2 px-3 text-right">100%</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 주간 노무비 상세 테이블 */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 노무비 추이</h3>
                 {weeklyLabor.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">주간</th>
-                          <th className="text-right py-2 px-3 text-gray-500">인원</th>
-                          <th className="text-right py-2 px-3 text-gray-500">생산량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">인당생산성</th>
-                          <th className="text-right py-2 px-3 text-gray-500">노무비</th>
-                          <th className="text-right py-2 px-3 text-gray-500">노무비율</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table className="text-sm">
+                      <TableHeader>
+                        <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                          <TableHead className="text-left py-2 px-3 text-gray-500">주간</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">인원</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">생산량</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">인당생산성</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">노무비</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-gray-500">노무비율</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {weeklyLabor.map(m => (
-                          <tr key={m.week} className="border-b border-gray-100 dark:border-gray-800">
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{m.week}</td>
-                            <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{m.인원}명</td>
-                            <td className="py-2 px-3 text-right text-blue-600">{m.생산량.toLocaleString()}</td>
-                            <td className="py-2 px-3 text-right text-green-600 font-medium">
+                          <TableRow key={m.week} className="border-b border-gray-100 dark:border-gray-800">
+                            <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{m.week}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{m.인원}명</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-blue-600">{m.생산량.toLocaleString()}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-green-600 font-medium">
                               {m.인당생산성 > 0 ? m.인당생산성.toLocaleString() : '-'}
-                            </td>
-                            <td className="py-2 px-3 text-right font-medium text-yellow-600">{formatCurrency(m.노무비)}</td>
-                            <td className={`py-2 px-3 text-right font-medium ${m.노무비율 > 30 ? 'text-red-600' : 'text-gray-600'}`}>{m.노무비율}%</td>
-                          </tr>
+                            </TableCell>
+                            <TableCell className="py-2 px-3 text-right font-medium text-yellow-600">{formatCurrency(m.노무비)}</TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-medium ${m.노무비율 > 30 ? 'text-red-600' : 'text-gray-600'}`}>{m.노무비율}%</TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
-              </div>
+              </Card>
 
               {!hasLaborData && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/10 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
                   <p className="text-sm text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
-                    <span className="material-icons-outlined text-base">info</span>
+                    <DynamicIcon name="info" size={16} />
                     노무비는 현재 추정값입니다. 구글시트 '노무비' 시트에 근태 데이터를 입력하면 반별 상세 분석이 가능합니다.
                   </p>
                 </div>
@@ -1458,19 +1462,19 @@ export const CostManagementView: React.FC<Props> = ({
             <ScoreHeader item={profitCenterScore?.scores?.find(s => s.metric === '수도광열전력')} />
             {/* KPI — B5: 생산매출/생산량 대비 추가 */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">총 수도광열전력</p>
                 <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(overheadDetail?.total || 0)}</p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">공과금</p>
                 <p className="text-2xl font-bold text-yellow-600 mt-1">{formatCurrency(overheadDetail?.utilities || 0)}</p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">기타 간접비</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatCurrency(overheadDetail?.other || 0)}</p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   단위당 {overheadFilter === 'electricity' ? '전기' : overheadFilter === 'water' ? '수도' : overheadFilter === 'gas' ? '가스' : '에너지'}비용
                 </p>
@@ -1478,21 +1482,21 @@ export const CostManagementView: React.FC<Props> = ({
                   {kpiPerUnit > 0 ? `₩${kpiPerUnit.toLocaleString()}` : '-'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">최근 주간 기준</p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">매출 대비 에너지</p>
                 <p className={`text-2xl font-bold mt-1 ${energyRevenueRatio > 5 ? 'text-red-600' : 'text-blue-600'}`}>
                   {energyRevenueRatio}%
                 </p>
                 <p className="text-xs text-gray-400 mt-1">에너지/생산매출</p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">평균 단위당 에너지</p>
                 <p className="text-2xl font-bold text-teal-600 mt-1">
                   {energyPerUnitTotal > 0 ? `₩${energyPerUnitTotal.toLocaleString()}` : '-'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">전체 기간 평균</p>
-              </div>
+              </Card>
             </div>
 
             <FilterBar
@@ -1507,7 +1511,7 @@ export const CostManagementView: React.FC<Props> = ({
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                   {overheadFilter === 'all' ? '주간 공과금 추이' : `주간 ${overheadFilter === 'electricity' ? '전기' : overheadFilter === 'water' ? '수도' : '가스'} 비용 추이`}
                 </h3>
@@ -1539,9 +1543,9 @@ export const CostManagementView: React.FC<Props> = ({
                     </ResponsiveContainer>
                   </div>
                 ) : <p className="text-gray-400 text-center py-10">공과금 데이터 없음</p>}
-              </div>
+              </Card>
               {/* B5: 단위당 에너지 비용 + 매출 대비 비율 (우축) */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                   단위당 {overheadFilter !== 'all' ? (overheadFilter === 'electricity' ? '전기' : overheadFilter === 'water' ? '수도' : '가스') : '에너지'} 비용
                 </h3>
@@ -1561,45 +1565,45 @@ export const CostManagementView: React.FC<Props> = ({
                     </ResponsiveContainer>
                   </div>
                 ) : <p className="text-gray-400 text-center py-10">생산량 데이터 필요</p>}
-              </div>
+              </Card>
             </div>
 
             {/* 주간 공과금 상세 테이블 */}
-            <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+            <Card className="p-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                 {overheadFilter === 'all' ? '주간 공과금 상세' : `주간 ${overheadFilter === 'electricity' ? '전기' : overheadFilter === 'water' ? '수도' : '가스'} 비용`}
               </h3>
               {weeklyUtility.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-2 px-3 text-gray-500">주간</th>
-                        {(overheadFilter === 'all' || overheadFilter === 'electricity') && <th className="text-right py-2 px-3 text-gray-500">전기</th>}
-                        {(overheadFilter === 'all' || overheadFilter === 'water') && <th className="text-right py-2 px-3 text-gray-500">수도</th>}
-                        {(overheadFilter === 'all' || overheadFilter === 'gas') && <th className="text-right py-2 px-3 text-gray-500">가스</th>}
-                        <th className="text-right py-2 px-3 text-gray-500">합계</th>
-                        <th className="text-right py-2 px-3 text-gray-500">생산량</th>
-                        <th className="text-right py-2 px-3 text-gray-500">단위당</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table className="text-sm">
+                    <TableHeader>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableHead className="text-left py-2 px-3 text-gray-500">주간</TableHead>
+                        {(overheadFilter === 'all' || overheadFilter === 'electricity') && <TableHead className="text-right py-2 px-3 text-gray-500">전기</TableHead>}
+                        {(overheadFilter === 'all' || overheadFilter === 'water') && <TableHead className="text-right py-2 px-3 text-gray-500">수도</TableHead>}
+                        {(overheadFilter === 'all' || overheadFilter === 'gas') && <TableHead className="text-right py-2 px-3 text-gray-500">가스</TableHead>}
+                        <TableHead className="text-right py-2 px-3 text-gray-500">합계</TableHead>
+                        <TableHead className="text-right py-2 px-3 text-gray-500">생산량</TableHead>
+                        <TableHead className="text-right py-2 px-3 text-gray-500">단위당</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {weeklyUtility.map(m => (
-                        <tr key={m.week} className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{m.week}</td>
-                          {(overheadFilter === 'all' || overheadFilter === 'electricity') && <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(m.전기)}</td>}
-                          {(overheadFilter === 'all' || overheadFilter === 'water') && <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(m.수도)}</td>}
-                          {(overheadFilter === 'all' || overheadFilter === 'gas') && <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(m.가스)}</td>}
-                          <td className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(m.합계)}</td>
-                          <td className="py-2 px-3 text-right text-gray-500">{m.생산량.toLocaleString()}</td>
-                          <td className="py-2 px-3 text-right text-gray-500">{m.perUnit > 0 ? `₩${m.perUnit.toLocaleString()}` : '-'}</td>
-                        </tr>
+                        <TableRow key={m.week} className="border-b border-gray-100 dark:border-gray-800">
+                          <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{m.week}</TableCell>
+                          {(overheadFilter === 'all' || overheadFilter === 'electricity') && <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(m.전기)}</TableCell>}
+                          {(overheadFilter === 'all' || overheadFilter === 'water') && <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(m.수도)}</TableCell>}
+                          {(overheadFilter === 'all' || overheadFilter === 'gas') && <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(m.가스)}</TableCell>}
+                          <TableCell className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(m.합계)}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-gray-500">{m.생산량.toLocaleString()}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-gray-500">{m.perUnit > 0 ? `₩${m.perUnit.toLocaleString()}` : '-'}</TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
-            </div>
+            </Card>
 
           </div>
           </InsightSection>
@@ -1608,7 +1612,7 @@ export const CostManagementView: React.FC<Props> = ({
           console.error('[CostManagementView] 렌더링 오류:', err);
           return (
             <div className="flex flex-col items-center justify-center p-10 text-center min-h-[300px]">
-              <span className="material-icons-outlined text-5xl text-red-400 mb-4">error_outline</span>
+              <DynamicIcon name="error_outline" size={48} className="text-red-400 mb-4" />
               <h3 className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">화면 로드 중 오류가 발생했습니다</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400">{err instanceof Error ? err.message : '알 수 없는 오류'}</p>
             </div>

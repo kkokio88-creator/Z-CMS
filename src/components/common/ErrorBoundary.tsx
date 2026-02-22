@@ -4,6 +4,8 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { AlertCircle } from 'lucide-react';
+import { Button } from '../ui/button';
 
 interface Props {
   children: ReactNode;
@@ -37,22 +39,19 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center p-10 text-center min-h-[300px]">
-          <span className="material-icons-outlined text-5xl text-red-400 mb-4">error_outline</span>
-          <h3 className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">
+          <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
+          <h3 className="text-lg font-bold text-foreground mb-2">
             {this.props.fallbackTitle || '화면 로드 중 오류가 발생했습니다'}
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 max-w-md">
+          <p className="text-sm text-muted-foreground mb-1 max-w-md">
             {this.state.error?.message || '알 수 없는 오류'}
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
+          <p className="text-xs text-muted-foreground mb-4">
             이 오류는 이 화면에만 영향을 줍니다. 다른 메뉴는 정상 사용 가능합니다.
           </p>
-          <button
-            onClick={this.handleReset}
-            className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-hover text-sm"
-          >
+          <Button onClick={this.handleReset} size="sm">
             다시 시도
-          </button>
+          </Button>
         </div>
       );
     }

@@ -4,6 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { cn } from '../../lib/utils';
 
 // 토론 관련 타입
 interface DebateRound {
@@ -110,12 +114,12 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
 
     return (
       <div
-        className={`
-          relative p-4 rounded-lg border-2 transition-all cursor-pointer
-          ${status === 'completed' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : ''}
-          ${status === 'active' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 animate-pulse' : ''}
-          ${status === 'pending' ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50' : ''}
-        `}
+        className={cn(
+          'relative p-4 rounded-lg border-2 transition-all cursor-pointer',
+          status === 'completed' && 'border-green-500 bg-green-50 dark:bg-green-900/20',
+          status === 'active' && 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 animate-pulse',
+          status === 'pending' && 'border-gray-300 dark:border-gray-600 bg-muted/50'
+        )}
         onClick={() => setExpandedRound(isExpanded ? null : phase)}
       >
         {/* 헤더 */}
@@ -124,23 +128,24 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
             <span className="text-2xl">{icon}</span>
             <span className="font-bold text-lg">{label}</span>
             {round && (
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span className="text-sm text-muted-foreground">
                 {roleLabels[round.role]}
               </span>
             )}
           </div>
           {round && (
             <div className="flex items-center gap-2">
-              <span
-                className={`
-                px-2 py-1 rounded text-sm font-medium
-                ${round.content.confidence >= 80 ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : ''}
-                ${round.content.confidence >= 60 && round.content.confidence < 80 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : ''}
-                ${round.content.confidence < 60 ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : ''}
-              `}
+              <Badge
+                variant="outline"
+                className={cn(
+                  'border-0',
+                  round.content.confidence >= 80 && 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+                  round.content.confidence >= 60 && round.content.confidence < 80 && 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+                  round.content.confidence < 60 && 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                )}
               >
                 신뢰도 {round.content.confidence}%
-              </span>
+              </Badge>
             </div>
           )}
         </div>
@@ -154,13 +159,13 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
             {isExpanded && (
               <div className="mt-4 space-y-3 text-sm">
                 <div>
-                  <h4 className="font-semibold text-gray-600 dark:text-gray-400 mb-1">추론</h4>
+                  <h4 className="font-semibold text-muted-foreground mb-1">추론</h4>
                   <p className="text-gray-700 dark:text-gray-300">{round.content.reasoning}</p>
                 </div>
 
                 {round.content.evidence.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-600 dark:text-gray-400 mb-1">근거</h4>
+                    <h4 className="font-semibold text-muted-foreground mb-1">근거</h4>
                     <ul className="list-disc list-inside space-y-1">
                       {round.content.evidence.map((e, i) => (
                         <li key={i} className="text-gray-700 dark:text-gray-300">
@@ -173,7 +178,7 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
 
                 {round.content.suggestedActions && round.content.suggestedActions.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                    <h4 className="font-semibold text-muted-foreground mb-1">
                       권장 조치
                     </h4>
                     <ul className="list-decimal list-inside space-y-1">
@@ -207,7 +212,7 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden max-w-2xl w-full">
+    <div className="bg-card rounded-xl shadow-lg overflow-hidden max-w-2xl w-full">
       {/* 헤더 */}
       <div className="p-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
         <div className="flex items-center justify-between">
@@ -228,12 +233,14 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
             </p>
           </div>
           {onClose && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+              className="text-white hover:bg-white/20"
             >
-              <span className="material-icons-outlined">close</span>
-            </button>
+              <X className="h-5 w-5" />
+            </Button>
           )}
         </div>
       </div>
@@ -252,24 +259,25 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🎯</span>
               <h3 className="font-bold text-indigo-800 dark:text-indigo-200">최종 결정</h3>
-              <span
-                className={`
-                px-2 py-0.5 rounded text-xs
-                ${debate.finalDecision.priority === 'critical' ? 'bg-red-500 text-white' : ''}
-                ${debate.finalDecision.priority === 'high' ? 'bg-orange-500 text-white' : ''}
-                ${debate.finalDecision.priority === 'medium' ? 'bg-yellow-500 text-white' : ''}
-                ${debate.finalDecision.priority === 'low' ? 'bg-gray-500 text-white' : ''}
-              `}
+              <Badge
+                variant="outline"
+                className={cn(
+                  'border-0 text-white',
+                  debate.finalDecision.priority === 'critical' && 'bg-red-500',
+                  debate.finalDecision.priority === 'high' && 'bg-orange-500',
+                  debate.finalDecision.priority === 'medium' && 'bg-yellow-500',
+                  debate.finalDecision.priority === 'low' && 'bg-gray-500'
+                )}
               >
                 {debate.finalDecision.priority}
-              </span>
+              </Badge>
             </div>
             <p className="text-gray-800 dark:text-gray-200 font-medium mb-2">
               {debate.finalDecision.recommendation}
             </p>
             {debate.finalDecision.actions.length > 0 && (
               <div className="mt-2">
-                <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                <h4 className="text-sm font-semibold text-muted-foreground">
                   실행 항목
                 </h4>
                 <ul className="mt-1 space-y-1">
@@ -289,25 +297,25 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
       {/* 거버넌스 검토 */}
       {debate.governanceReviews && debate.governanceReviews.length > 0 && (
         <div className="px-6 pb-4">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowGovernance(!showGovernance)}
-            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            className="gap-1 text-muted-foreground hover:text-foreground"
           >
-            <span className="material-icons-outlined text-base">
-              {showGovernance ? 'expand_less' : 'expand_more'}
-            </span>
+            {showGovernance ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             거버넌스 검토 ({debate.governanceReviews.length})
-          </button>
+          </Button>
 
           {showGovernance && (
             <div className="mt-2 space-y-2">
               {debate.governanceReviews.map(review => (
                 <div
                   key={review.id}
-                  className={`
-                    p-3 rounded-lg text-sm
-                    ${review.approved ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}
-                  `}
+                  className={cn(
+                    'p-3 rounded-lg text-sm',
+                    review.approved ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'
+                  )}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-medium">
@@ -316,7 +324,7 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
                         : 'Compliance Auditor'}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-500">{review.score}/100</span>
+                      <span className="text-muted-foreground">{review.score}/100</span>
                       <span className={review.approved ? 'text-green-600' : 'text-red-600'}>
                         {review.approved ? '✓ 승인' : '✗ 거부'}
                       </span>
@@ -339,18 +347,20 @@ export const DebateViewer: React.FC<DebateViewerProps> = ({ debate, onClose, onF
       {/* 피드백 버튼 */}
       {onFeedback && debate.finalDecision && (
         <div className="px-6 pb-6 flex gap-2">
-          <button
+          <Button
+            variant="outline"
             onClick={() => onFeedback(debate.id, 'helpful')}
-            className="flex-1 py-2 px-4 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+            className="flex-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 border-0"
           >
             👍 도움됨
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => onFeedback(debate.id, 'dismissed')}
-            className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border-0"
           >
             👎 관련없음
-          </button>
+          </Button>
         </div>
       )}
     </div>

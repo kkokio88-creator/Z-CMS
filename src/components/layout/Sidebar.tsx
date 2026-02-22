@@ -1,5 +1,13 @@
 import React from 'react';
 import { ViewType } from '../../contexts/UIContext';
+import { DynamicIcon } from '../ui/icon';
+import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
+import { ScrollArea } from '../ui/scroll-area';
+import { Separator } from '../ui/separator';
+import { Button } from '../ui/button';
+import { Sheet, SheetContent } from '../ui/sheet';
+import { ChevronDown, Settings } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
 interface DataAvailability {
   sales: boolean;
@@ -34,28 +42,30 @@ const NavItem = ({
 }) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md group transition-colors mb-1 ${
+    className={cn(
+      'w-full flex items-center px-3 py-2 text-sm font-medium rounded-md group transition-colors mb-1',
       isActive
         ? 'bg-primary/10 text-primary dark:text-green-400'
-        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-    }`}
+        : 'text-muted-foreground hover:bg-accent'
+    )}
     title={!hasData ? noDataMessage : undefined}
     aria-current={isActive ? 'page' : undefined}
   >
-    <span
-      className={`material-icons-outlined mr-3 ${
-        isActive ? 'text-primary dark:text-green-400' : 'text-gray-400 group-hover:text-gray-500'
-      }`}
-    >
-      {icon}
-    </span>
+    <DynamicIcon
+      name={icon}
+      size={18}
+      className={cn(
+        'mr-3',
+        isActive ? 'text-primary dark:text-green-400' : 'text-muted-foreground group-hover:text-foreground'
+      )}
+    />
     <span className="flex-1 text-left">{label}</span>
   </button>
 );
 
 const NavSection = ({ title, children }: { title: string; children?: React.ReactNode }) => (
   <div className="mt-4">
-    <div className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+    <div className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
       {title}
     </div>
     <div className="space-y-1">{children}</div>
@@ -69,17 +79,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, dataAv
   const hasProductionData = dataAvailability?.production ?? false;
 
   const sidebarContent = (
-    <aside className="w-64 bg-surface-light dark:bg-surface-dark border-r border-gray-200 dark:border-gray-700 flex flex-col shrink-0 transition-colors duration-200 h-full">
+    <aside className="w-64 bg-card border-r flex flex-col shrink-0 transition-colors duration-200 h-full">
       <div
-        className="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-700 cursor-pointer"
+        className="h-16 flex items-center px-6 border-b cursor-pointer"
         onClick={() => onNavigate('home')}
       >
-        <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-          Z-CMS <span className="material-icons-outlined text-sm text-gray-400">expand_more</span>
+        <span className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+          Z-CMS <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-3 no-scrollbar">
+      <ScrollArea className="flex-1 py-4 px-3">
         <NavSection title="메인">
           <NavItem
             icon="dashboard"
@@ -141,26 +151,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, dataAv
             onClick={() => onNavigate('settings')}
           />
         </NavSection>
-      </nav>
+      </ScrollArea>
 
-      <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+      <Separator />
+      <div className="p-4">
         <div className="flex items-center w-full">
-          <img
-            src="https://picsum.photos/100/100"
-            alt="User Avatar"
-            className="h-9 w-9 rounded-full object-cover border border-gray-200 dark:border-gray-600"
-          />
+          <Avatar className="h-9 w-9">
+            <AvatarImage src="https://picsum.photos/100/100" alt="User Avatar" />
+            <AvatarFallback>박</AvatarFallback>
+          </Avatar>
           <div className="ml-3 flex-1 overflow-hidden">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">박종철</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">생산 관리자</p>
+            <p className="text-sm font-medium text-foreground truncate">박종철</p>
+            <p className="text-xs text-muted-foreground truncate">생산 관리자</p>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => onNavigate('settings')}
-            className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
             aria-label="설정"
           >
-            <span className="material-icons-outlined">settings</span>
-          </button>
+            <Settings className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </aside>
@@ -171,13 +182,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, dataAv
       {/* Desktop sidebar */}
       <div className="hidden md:flex shrink-0">{sidebarContent}</div>
 
-      {/* Mobile overlay */}
-      {isOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="fixed inset-0 bg-gray-900/50" onClick={onClose} />
-          <div className="relative z-50 w-64">{sidebarContent}</div>
-        </div>
-      )}
+      {/* Mobile Sheet sidebar */}
+      <Sheet open={isOpen} onOpenChange={(open) => !open && onClose?.()}>
+        <SheetContent side="left" className="p-0 w-64">
+          {sidebarContent}
+        </SheetContent>
+      </Sheet>
     </>
   );
 };

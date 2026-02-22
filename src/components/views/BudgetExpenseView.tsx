@@ -14,6 +14,11 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { BudgetItem, ExpenseSummary, BudgetStatus, BudgetAlert } from '../../types';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Button } from '../ui/button';
 
 interface Props {
   budgets?: BudgetItem[];
@@ -133,9 +138,9 @@ const BudgetExpenseView: React.FC<Props> = ({
 
       {/* 경고 알림 배너 */}
       {summary?.overrunRisk && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+        <Card className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 p-4">
           <div className="flex items-center gap-3">
-            <span className="material-icons-outlined text-red-500 text-2xl">warning</span>
+            <DynamicIcon name="warning" size={24} className="text-red-500" />
             <div className="flex-1">
               <p className="font-semibold text-red-800 dark:text-red-200">예산 초과 위험 감지</p>
               <p className="text-sm text-red-600 dark:text-red-300">
@@ -143,11 +148,11 @@ const BudgetExpenseView: React.FC<Props> = ({
                 {formatCurrency(summary.projectedMonthEnd - summary.totalBudget)} 초과 예상됩니다.
               </p>
             </div>
-            <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
+            <Button variant="destructive" size="sm">
               예산 재배정
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* 개별 경고 알림 */}
@@ -155,22 +160,22 @@ const BudgetExpenseView: React.FC<Props> = ({
         .filter(a => !a.acknowledged)
         .slice(0, 3)
         .map(alert => (
-          <div
+          <Card
             key={alert.id}
-            className={`border rounded-lg p-3 ${
+            className={`p-3 ${
               alert.severity === 'critical'
                 ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800'
                 : 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800'
             }`}
           >
             <div className="flex items-center gap-2">
-              <span
-                className={`material-icons-outlined text-sm ${
+              <DynamicIcon
+                name={alert.alertType === 'exceeded' ? 'error' : 'warning'}
+                size={16}
+                className={
                   alert.severity === 'critical' ? 'text-red-500' : 'text-orange-500'
-                }`}
-              >
-                {alert.alertType === 'exceeded' ? 'error' : 'warning'}
-              </span>
+                }
+              />
               <span
                 className={`text-sm ${
                   alert.severity === 'critical'
@@ -181,26 +186,26 @@ const BudgetExpenseView: React.FC<Props> = ({
                 {alert.message}
               </span>
             </div>
-          </div>
+          </Card>
         ))}
 
       {/* KPI 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">총 예산</span>
-            <span className="material-icons-outlined text-blue-500">account_balance_wallet</span>
+            <DynamicIcon name="account_balance_wallet" size={20} className="text-blue-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             ₩{formatCurrency(summary?.totalBudget || 0)}
           </p>
           <p className="text-xs text-gray-500 mt-1">{summary?.period}</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">사용액</span>
-            <span className="material-icons-outlined text-orange-500">payments</span>
+            <DynamicIcon name="payments" size={20} className="text-orange-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             ₩{formatCurrency(summary?.totalUsed || 0)}
@@ -208,12 +213,12 @@ const BudgetExpenseView: React.FC<Props> = ({
           <p className="text-xs text-gray-500 mt-1">
             소진율 {summary?.overallBurnRate.toFixed(1) || 0}%
           </p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">잔액</span>
-            <span className="material-icons-outlined text-green-500">savings</span>
+            <DynamicIcon name="savings" size={20} className="text-green-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             ₩{formatCurrency(summary?.totalRemaining || 0)}
@@ -221,12 +226,12 @@ const BudgetExpenseView: React.FC<Props> = ({
           <p className="text-xs text-gray-500 mt-1">
             잔여 {(100 - (summary?.overallBurnRate || 0)).toFixed(1)}%
           </p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">월말 예상</span>
-            <span className="material-icons-outlined text-purple-500">trending_up</span>
+            <DynamicIcon name="trending_up" size={20} className="text-purple-500" />
           </div>
           <p
             className={`text-2xl font-bold mt-2 ${
@@ -238,16 +243,13 @@ const BudgetExpenseView: React.FC<Props> = ({
             ₩{formatCurrency(summary?.projectedMonthEnd || 0)}
           </p>
           <p className="text-xs text-gray-500 mt-1">예상 총액</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">건전성 점수</span>
-            <span
-              className="material-icons-outlined"
-              style={{ color: getHealthColor(summary?.healthScore || 0) }}
-            >
-              health_and_safety
+            <span style={{ color: getHealthColor(summary?.healthScore || 0) }}>
+              <DynamicIcon name="health_and_safety" size={20} />
             </span>
           </div>
           <p
@@ -257,37 +259,39 @@ const BudgetExpenseView: React.FC<Props> = ({
             {summary?.healthScore || 0}점
           </p>
           <p className="text-xs text-gray-500 mt-1">100점 만점</p>
-        </div>
+        </Card>
       </div>
 
       {/* 탭 */}
       <div className="flex border-b border-gray-200 dark:border-gray-700">
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium rounded-none border-b-2 transition-colors ${
             activeTab === 'overview'
               ? 'border-blue-500 text-blue-600 dark:text-blue-400'
               : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
           }`}
         >
           개요
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
           onClick={() => setActiveTab('detail')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium rounded-none border-b-2 transition-colors ${
             activeTab === 'detail'
               ? 'border-blue-500 text-blue-600 dark:text-blue-400'
               : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
           }`}
         >
           항목별 상세
-        </button>
+        </Button>
       </div>
 
       {activeTab === 'overview' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 고정비/변동비 파이 차트 */}
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <Card className="p-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
               비용 구성 (고정비 vs 변동비)
             </h3>
@@ -329,10 +333,10 @@ const BudgetExpenseView: React.FC<Props> = ({
                 </p>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* 항목별 예산 소진 바 차트 */}
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <Card className="p-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
               항목별 예산 소진 현황
             </h3>
@@ -380,128 +384,124 @@ const BudgetExpenseView: React.FC<Props> = ({
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Card>
         </div>
       ) : (
         /* 항목별 상세 테이블 */
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  <th className="px-4 py-3 text-left text-gray-600 dark:text-gray-300">계정과목</th>
-                  <th className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">구분</th>
-                  <th className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">예산</th>
-                  <th className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">사용액</th>
-                  <th className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">잔액</th>
-                  <th className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">소진율</th>
-                  <th className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
-                    월말 예상
-                  </th>
-                  <th className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">상태</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filteredBudgets.map(item => (
-                  <tr
-                    key={item.id}
-                    className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${
-                      item.status === 'critical' ? 'bg-red-50/50 dark:bg-red-900/10' : ''
-                    }`}
-                    onClick={() => onItemClick?.(item)}
-                  >
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {item.accountName}
-                        </p>
-                        {item.vendorName && (
-                          <p className="text-xs text-gray-500">{item.vendorName}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs ${
-                          item.category === 'fixed'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                            : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                        }`}
-                      >
-                        {item.category === 'fixed' ? '고정' : '변동'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
-                      ₩{formatCurrency(item.budgetAmount)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                      ₩{formatCurrency(item.usedAmount)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
-                      ₩{formatCurrency(item.remainingAmount)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${Math.min(100, item.burnRate)}%`,
-                              backgroundColor: getStatusColor(item.status),
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs text-gray-600 dark:text-gray-400 w-12">
-                          {item.burnRate.toFixed(0)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span
-                        className={
-                          item.projectedOverrun > 0
-                            ? 'text-red-600 font-medium'
-                            : 'text-gray-600 dark:text-gray-400'
-                        }
-                      >
-                        ₩{formatCurrency(item.projectedTotal)}
-                      </span>
-                      {item.projectedOverrun > 0 && (
-                        <p className="text-xs text-red-500">
-                          +₩{formatCurrency(item.projectedOverrun)}
-                        </p>
+        <Card className="p-4">
+          <Table>
+            <TableHeader className="bg-gray-50 dark:bg-gray-800">
+              <TableRow>
+                <TableHead className="text-left text-gray-600 dark:text-gray-300">계정과목</TableHead>
+                <TableHead className="text-center text-gray-600 dark:text-gray-300">구분</TableHead>
+                <TableHead className="text-right text-gray-600 dark:text-gray-300">예산</TableHead>
+                <TableHead className="text-right text-gray-600 dark:text-gray-300">사용액</TableHead>
+                <TableHead className="text-right text-gray-600 dark:text-gray-300">잔액</TableHead>
+                <TableHead className="text-center text-gray-600 dark:text-gray-300">소진율</TableHead>
+                <TableHead className="text-right text-gray-600 dark:text-gray-300">
+                  월말 예상
+                </TableHead>
+                <TableHead className="text-center text-gray-600 dark:text-gray-300">상태</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredBudgets.map(item => (
+                <TableRow
+                  key={item.id}
+                  className={`cursor-pointer ${
+                    item.status === 'critical' ? 'bg-red-50/50 dark:bg-red-900/10' : ''
+                  }`}
+                  onClick={() => onItemClick?.(item)}
+                >
+                  <TableCell>
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {item.accountName}
+                      </p>
+                      {item.vendorName && (
+                        <p className="text-xs text-gray-500">{item.vendorName}</p>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs ${getStatusBadgeClass(item.status)}`}
-                      >
-                        {getStatusText(item.status)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge
+                      className={
+                        item.category === 'fixed'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                          : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                      }
+                    >
+                      {item.category === 'fixed' ? '고정' : '변동'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-gray-600 dark:text-gray-400">
+                    ₩{formatCurrency(item.budgetAmount)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-gray-900 dark:text-white">
+                    ₩{formatCurrency(item.usedAmount)}
+                  </TableCell>
+                  <TableCell className="text-right text-gray-600 dark:text-gray-400">
+                    ₩{formatCurrency(item.remainingAmount)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(100, item.burnRate)}%`,
+                            backgroundColor: getStatusColor(item.status),
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs text-gray-600 dark:text-gray-400 w-12">
+                        {item.burnRate.toFixed(0)}%
                       </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span
+                      className={
+                        item.projectedOverrun > 0
+                          ? 'text-red-600 font-medium'
+                          : 'text-gray-600 dark:text-gray-400'
+                      }
+                    >
+                      ₩{formatCurrency(item.projectedTotal)}
+                    </span>
+                    {item.projectedOverrun > 0 && (
+                      <p className="text-xs text-red-500">
+                        +₩{formatCurrency(item.projectedOverrun)}
+                      </p>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge className={getStatusBadgeClass(item.status)}>
+                      {getStatusText(item.status)}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
       {/* 권장 조치 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-icons-outlined text-blue-500">swap_horiz</span>
+            <DynamicIcon name="swap_horiz" size={20} className="text-blue-500" />
             <span className="font-semibold text-blue-800 dark:text-blue-200">예산 재배정</span>
           </div>
           <p className="text-sm text-blue-600 dark:text-blue-300">
             여유 있는 항목에서 초과 예상 항목으로 예산을 재배정할 수 있습니다.
           </p>
-        </div>
+        </Card>
 
-        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+        <Card className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-icons-outlined text-orange-500">content_cut</span>
+            <DynamicIcon name="content_cut" size={20} className="text-orange-500" />
             <span className="font-semibold text-orange-800 dark:text-orange-200">
               불필요 지출 통제
             </span>
@@ -509,17 +509,17 @@ const BudgetExpenseView: React.FC<Props> = ({
           <p className="text-sm text-orange-600 dark:text-orange-300">
             소진율이 높은 항목의 추가 지출을 제한해보세요.
           </p>
-        </div>
+        </Card>
 
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+        <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-icons-outlined text-green-500">schedule</span>
+            <DynamicIcon name="schedule" size={20} className="text-green-500" />
             <span className="font-semibold text-green-800 dark:text-green-200">결산 전 점검</span>
           </div>
           <p className="text-sm text-green-600 dark:text-green-300">
             월말 결산 전 잔액 현황을 점검하고 이월 계획을 세워보세요.
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );

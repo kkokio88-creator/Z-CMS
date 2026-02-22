@@ -6,6 +6,7 @@
 import React from 'react';
 import type { DebateRecord, DebatePhase } from '../../agents/types';
 import { TEAM_NAMES, DOMAIN_NAMES } from '../../agents/types';
+import { cn } from '../../lib/utils';
 
 interface DebateMiniCardProps {
   debate: DebateRecord;
@@ -53,11 +54,12 @@ export const DebateMiniCard: React.FC<DebateMiniCardProps> = ({ debate, onClick 
 
   return (
     <div
-      className={`
-        p-3 rounded-lg border cursor-pointer transition-all
-        ${isActive ? 'border-indigo-300 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'}
-        hover:shadow-md
-      `}
+      className={cn(
+        'p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md',
+        isActive
+          ? 'border-indigo-300 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+          : 'border-border bg-muted/50'
+      )}
       onClick={() => onClick?.(debate)}
     >
       {/* 헤더 */}
@@ -75,13 +77,14 @@ export const DebateMiniCard: React.FC<DebateMiniCardProps> = ({ debate, onClick 
         </div>
         {debate.finalDecision && (
           <span
-            className={`text-xs px-1.5 py-0.5 rounded ${
+            className={cn(
+              'text-xs px-1.5 py-0.5 rounded',
               debate.finalDecision.confidence >= 80
                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
                 : debate.finalDecision.confidence >= 60
                   ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
                   : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-            }`}
+            )}
           >
             {debate.finalDecision.confidence}%
           </span>
@@ -102,18 +105,20 @@ export const DebateMiniCard: React.FC<DebateMiniCardProps> = ({ debate, onClick 
               {/* 세그먼트 */}
               <div className="flex-1 relative">
                 <div
-                  className={`
-                    h-1.5 rounded-full transition-colors
-                    ${status === 'completed' ? 'bg-indigo-500' : ''}
-                    ${status === 'active' ? 'bg-indigo-400 animate-pulse' : ''}
-                    ${status === 'pending' ? 'bg-gray-200 dark:bg-gray-700' : ''}
-                  `}
+                  className={cn(
+                    'h-1.5 rounded-full transition-colors',
+                    status === 'completed' && 'bg-indigo-500',
+                    status === 'active' && 'bg-indigo-400 animate-pulse',
+                    status === 'pending' && 'bg-gray-200 dark:bg-gray-700'
+                  )}
                 />
                 <span
-                  className={`
-                    absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px]
-                    ${status === 'active' ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-400 dark:text-gray-500'}
-                  `}
+                  className={cn(
+                    'absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px]',
+                    status === 'active'
+                      ? 'text-indigo-600 dark:text-indigo-400 font-medium'
+                      : 'text-gray-400 dark:text-gray-500'
+                  )}
                 >
                   {segment.label}
                 </span>
@@ -121,10 +126,12 @@ export const DebateMiniCard: React.FC<DebateMiniCardProps> = ({ debate, onClick 
               {/* 연결점 */}
               {index < segments.length - 1 && (
                 <div
-                  className={`
-                    w-1.5 h-1.5 rounded-full
-                    ${getSegmentStatus(segments[index + 1].phase) !== 'pending' ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'}
-                  `}
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full',
+                    getSegmentStatus(segments[index + 1].phase) !== 'pending'
+                      ? 'bg-indigo-500'
+                      : 'bg-gray-300 dark:bg-gray-600'
+                  )}
                 />
               )}
             </React.Fragment>
@@ -133,7 +140,7 @@ export const DebateMiniCard: React.FC<DebateMiniCardProps> = ({ debate, onClick 
       </div>
 
       {/* 퍼센트 표시 */}
-      <div className="text-right mt-4 text-xs text-gray-500 dark:text-gray-400">
+      <div className="text-right mt-4 text-xs text-muted-foreground">
         {progress}%
       </div>
     </div>

@@ -11,8 +11,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { Sparkles, ShoppingCart, CheckCircle } from 'lucide-react';
 import type { DashboardInsights } from '../../services/insightService';
 import type { ModalItem } from '../../types';
+import { Button } from '../ui/button';
+import { cn } from '../../lib/utils';
 
 interface ModalManagerProps {
   selectedItem: ModalItem | null;
@@ -50,7 +53,7 @@ export const ModalManager: React.FC<ModalManagerProps> = ({ selectedItem, insigh
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-            <h5 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+            <h5 className="text-sm font-bold text-muted-foreground mb-2">
               원가 구조
             </h5>
             {costData.length > 0 ? (
@@ -76,14 +79,14 @@ export const ModalManager: React.FC<ModalManagerProps> = ({ selectedItem, insigh
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
                 원가 데이터 수집 중...
               </div>
             )}
           </div>
 
           <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-            <h5 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+            <h5 className="text-sm font-bold text-muted-foreground mb-2">
               채널별 판매 비중
             </h5>
             {channelData.length > 0 ? (
@@ -109,7 +112,7 @@ export const ModalManager: React.FC<ModalManagerProps> = ({ selectedItem, insigh
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
                 채널 데이터 수집 중...
               </div>
             )}
@@ -129,16 +132,31 @@ export const ModalManager: React.FC<ModalManagerProps> = ({ selectedItem, insigh
     return (
       <div className="space-y-4">
         <div
-          className={`p-3 rounded-md mb-4 border ${isShortage ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800' : isOverstock ? 'bg-yellow-50 border-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-800' : 'bg-green-50 border-green-100 dark:bg-green-900/20 dark:border-green-800'}`}
+          className={cn(
+            'p-3 rounded-md mb-4 border',
+            isShortage && 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800',
+            isOverstock && 'bg-yellow-50 border-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-800',
+            !isShortage && !isOverstock && 'bg-green-50 border-green-100 dark:bg-green-900/20 dark:border-green-800'
+          )}
         >
           <h4
-            className={`font-bold ${isShortage ? 'text-red-800 dark:text-red-200' : isOverstock ? 'text-yellow-800 dark:text-yellow-200' : 'text-green-800 dark:text-green-200'}`}
+            className={cn(
+              'font-bold',
+              isShortage && 'text-red-800 dark:text-red-200',
+              isOverstock && 'text-yellow-800 dark:text-yellow-200',
+              !isShortage && !isOverstock && 'text-green-800 dark:text-green-200'
+            )}
           >
             재고 상태:{' '}
             {isShortage ? '부족 (발주 필요)' : isOverstock ? '과잉' : '정상'}
           </h4>
           <p
-            className={`text-xs mt-1 ${isShortage ? 'text-red-600 dark:text-red-300' : isOverstock ? 'text-yellow-600 dark:text-yellow-300' : 'text-green-600 dark:text-green-300'}`}
+            className={cn(
+              'text-xs mt-1',
+              isShortage && 'text-red-600 dark:text-red-300',
+              isOverstock && 'text-yellow-600 dark:text-yellow-300',
+              !isShortage && !isOverstock && 'text-green-600 dark:text-green-300'
+            )}
           >
             {isShortage
               ? '안전재고 미달 상태입니다. 즉시 발주가 권장됩니다.'
@@ -150,32 +168,33 @@ export const ModalManager: React.FC<ModalManagerProps> = ({ selectedItem, insigh
 
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
-            <p className="text-xs text-gray-500">현재 재고</p>
-            <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.currentStock.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">현재 재고</p>
+            <p className="font-bold text-foreground text-lg">{selectedItem.currentStock.toLocaleString()}</p>
           </div>
           <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
-            <p className="text-xs text-gray-500">안전재고</p>
-            <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.safetyStock.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">안전재고</p>
+            <p className="font-bold text-foreground text-lg">{selectedItem.safetyStock.toLocaleString()}</p>
           </div>
           <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
-            <p className="text-xs text-gray-500">재고 충족률</p>
-            <p className={`font-bold text-lg ${stockRatio < 100 ? 'text-red-600' : 'text-green-600'}`}>{stockRatio}%</p>
+            <p className="text-xs text-muted-foreground">재고 충족률</p>
+            <p className={cn('font-bold text-lg', stockRatio < 100 ? 'text-red-600' : 'text-green-600')}>{stockRatio}%</p>
           </div>
           <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
-            <p className="text-xs text-gray-500">회전율</p>
-            <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.turnoverRate}회</p>
+            <p className="text-xs text-muted-foreground">회전율</p>
+            <p className="font-bold text-foreground text-lg">{selectedItem.turnoverRate}회</p>
           </div>
         </div>
 
         {isShortage && (
-          <div className="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-700">
-            <button
+          <div className="flex justify-end pt-2 border-t border-border">
+            <Button
+              variant="destructive"
               onClick={onPurchaseRequest}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow flex items-center gap-2"
+              className="flex items-center gap-2"
             >
-              <span className="material-icons-outlined text-sm">shopping_cart</span>
+              <ShoppingCart size={14} />
               긴급 발주 요청
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -191,51 +210,68 @@ export const ModalManager: React.FC<ModalManagerProps> = ({ selectedItem, insigh
     const isLoss = variance > 0;
     return (
       <div className="space-y-4">
-        <div className={`p-3 rounded-md mb-4 border ${selectedItem.anomalyScore > 70 ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800' : 'bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800'}`}>
-          <h4 className={`font-bold ${selectedItem.anomalyScore > 70 ? 'text-red-800 dark:text-red-200' : 'text-indigo-800 dark:text-indigo-200'}`}>
+        <div className={cn(
+          'p-3 rounded-md mb-4 border',
+          selectedItem.anomalyScore > 70
+            ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800'
+            : 'bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800'
+        )}>
+          <h4 className={cn(
+            'font-bold',
+            selectedItem.anomalyScore > 70 ? 'text-red-800 dark:text-red-200' : 'text-indigo-800 dark:text-indigo-200'
+          )}>
             실사 분석: {selectedItem.materialName}
           </h4>
-          <p className={`text-xs mt-1 ${selectedItem.anomalyScore > 70 ? 'text-red-600 dark:text-red-300' : 'text-indigo-600 dark:text-indigo-300'}`}>
+          <p className={cn(
+            'text-xs mt-1',
+            selectedItem.anomalyScore > 70 ? 'text-red-600 dark:text-red-300' : 'text-indigo-600 dark:text-indigo-300'
+          )}>
             {selectedItem.reason}
           </p>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded text-center">
-            <p className="text-xs text-gray-500">전산 재고</p>
-            <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.systemQty.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">전산 재고</p>
+            <p className="font-bold text-foreground text-lg">{selectedItem.systemQty.toLocaleString()}</p>
           </div>
           <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded text-center">
-            <p className="text-xs text-gray-500">실사 재고</p>
-            <p className="font-bold text-gray-900 dark:text-white text-lg">{selectedItem.countedQty.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">실사 재고</p>
+            <p className="font-bold text-foreground text-lg">{selectedItem.countedQty.toLocaleString()}</p>
           </div>
           <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded text-center">
-            <p className="text-xs text-gray-500">AI 예측</p>
+            <p className="text-xs text-muted-foreground">AI 예측</p>
             <p className="font-bold text-blue-600 dark:text-blue-400 text-lg">{selectedItem.aiExpectedQty.toLocaleString()}</p>
           </div>
         </div>
 
-        <div className={`p-3 rounded-md border ${isLoss ? 'bg-red-50 border-red-200 dark:bg-red-900/10' : 'bg-green-50 border-green-200 dark:bg-green-900/10'}`}>
+        <div className={cn(
+          'p-3 rounded-md border',
+          isLoss ? 'bg-red-50 border-red-200 dark:bg-red-900/10' : 'bg-green-50 border-green-200 dark:bg-green-900/10'
+        )}>
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">차이 수량</span>
-            <span className={`font-bold text-lg ${isLoss ? 'text-red-600' : 'text-green-600'}`}>
+            <span className="text-sm font-medium text-muted-foreground">차이 수량</span>
+            <span className={cn('font-bold text-lg', isLoss ? 'text-red-600' : 'text-green-600')}>
               {isLoss ? '-' : '+'}{Math.abs(variance).toLocaleString()} ({variancePct}%)
             </span>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             {isLoss ? '전산 재고 > 실물 재고 — 분실/Loss 가능성' : '실물 재고 > 전산 재고 — 입고 미전표 가능성'}
           </p>
         </div>
 
         <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded">
-          <span className="text-xs text-gray-500">이상 점수:</span>
+          <span className="text-xs text-muted-foreground">이상 점수:</span>
           <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
-              className={`h-2 rounded-full ${selectedItem.anomalyScore > 70 ? 'bg-red-500' : selectedItem.anomalyScore > 40 ? 'bg-yellow-500' : 'bg-green-500'}`}
+              className={cn(
+                'h-2 rounded-full',
+                selectedItem.anomalyScore > 70 ? 'bg-red-500' : selectedItem.anomalyScore > 40 ? 'bg-yellow-500' : 'bg-green-500'
+              )}
               style={{ width: `${selectedItem.anomalyScore}%` }}
             />
           </div>
-          <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{selectedItem.anomalyScore}점</span>
+          <span className="text-xs font-bold text-muted-foreground">{selectedItem.anomalyScore}점</span>
         </div>
       </div>
     );
@@ -246,13 +282,13 @@ export const ModalManager: React.FC<ModalManagerProps> = ({ selectedItem, insigh
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
-          <p className="text-xs text-gray-500">표준 소요량</p>
-          <p className="font-bold text-gray-900 dark:text-white">
+          <p className="text-xs text-muted-foreground">표준 소요량</p>
+          <p className="font-bold text-foreground">
             {selectedItem.stdQty} {selectedItem.stdUnit}
           </p>
         </div>
         <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
-          <p className="text-xs text-gray-500">실제 소요량</p>
+          <p className="text-xs text-muted-foreground">실제 소요량</p>
           <p className="font-bold text-red-600 dark:text-red-400">
             {selectedItem.actualQty} {selectedItem.stdUnit}
           </p>
@@ -261,18 +297,18 @@ export const ModalManager: React.FC<ModalManagerProps> = ({ selectedItem, insigh
 
       <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-md border border-indigo-100 dark:border-indigo-800">
         <h4 className="text-sm font-bold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center">
-          <span className="material-icons-outlined text-sm mr-1">psychology</span>
+          <Sparkles size={14} className="mr-1" />
           AI Reasoning (원인 분석)
         </h4>
-        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+        <p className="text-sm text-muted-foreground leading-relaxed">
           {selectedItem.reasoning || '특이 사항이 발견되지 않았습니다.'}
         </p>
       </div>
 
       {selectedItem.costImpact && (
         <div>
-          <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">원가 영향</h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <h4 className="text-sm font-bold text-foreground mb-2">원가 영향</h4>
+          <p className="text-sm text-muted-foreground">
             이 차이로 인해 이번 배치에서 총{' '}
             <span className="font-bold text-red-600">
               ${Math.abs(selectedItem.costImpact).toLocaleString()}

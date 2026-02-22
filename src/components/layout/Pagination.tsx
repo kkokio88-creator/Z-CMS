@@ -1,4 +1,7 @@
 import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Button } from '../ui/button';
+import { cn } from '../../lib/utils';
 
 interface PaginationProps {
   currentPage: number;
@@ -38,41 +41,43 @@ export const Pagination: React.FC<PaginationProps> = ({
 
   return (
     <div className="flex items-center justify-between mt-4 px-1">
-      <span className="text-xs text-gray-500 dark:text-gray-400">
+      <span className="text-xs text-muted-foreground">
         {totalItems}건 중 {startIndex + 1}~{endIndex}
       </span>
       <div className="flex items-center gap-1">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onPrev}
           disabled={currentPage <= 1}
-          className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="h-7 w-7 p-0"
         >
-          <span className="material-icons-outlined text-sm">chevron_left</span>
-        </button>
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </Button>
         {pages.map((p, i) =>
           p === '...' ? (
-            <span key={`dots-${i}`} className="px-1 text-xs text-gray-400">...</span>
+            <span key={`dots-${i}`} className="px-1 text-xs text-muted-foreground">...</span>
           ) : (
-            <button
+            <Button
               key={p}
+              variant={p === currentPage ? 'default' : 'outline'}
+              size="sm"
               onClick={() => onGoToPage(p)}
-              className={`px-2.5 py-1 text-xs rounded border transition-colors ${
-                p === currentPage
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
+              className="h-7 w-7 p-0 text-xs"
             >
               {p}
-            </button>
+            </Button>
           )
         )}
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onNext}
           disabled={currentPage >= totalPages}
-          className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="h-7 w-7 p-0"
         >
-          <span className="material-icons-outlined text-sm">chevron_right</span>
-        </button>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
   );

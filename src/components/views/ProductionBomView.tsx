@@ -15,6 +15,11 @@ import { FormulaTooltip } from '../common';
 import { FORMULAS } from '../../constants/formulaDescriptions';
 import { InsightSection } from '../insight';
 import { FilterBar } from '../common';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Button } from '../ui/button';
 
 interface Props {
   production: ProductionData[];
@@ -219,19 +224,19 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 생산량</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{formatQty(totalProd)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">일 평균</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatQty(avgDaily)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">데이터 기간</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{dataRange?.days || 0}일</p>
                   <p className="text-xs text-gray-400 mt-1">{dataRange?.from || ''} ~ {dataRange?.to || ''}</p>
-                </div>
+                </Card>
               </div>
 
               {/* 필터 */}
@@ -239,7 +244,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
 
               {/* 주간 생산 추이 (간소화) + 카테고리 Pie */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                     주간 생산 추이 {prodFilter !== 'all' && <span className="text-sm text-gray-400 font-normal">({CATEGORY_LABELS[prodFilter]})</span>}
                     <FormulaTooltip {...FORMULAS.weeklyProduction} />
@@ -272,8 +277,8 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">생산 데이터 없음</p>}
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">카테고리 비율</h3>
                   {categoryPie.length > 0 ? (
                     <div className="h-72">
@@ -291,41 +296,41 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
-                </div>
+                </Card>
               </div>
 
               {/* 필터된 일별 상세 리스트 */}
               {prodFilter !== 'all' && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                     {CATEGORY_LABELS[prodFilter]} 일별 생산 내역 <span className="text-sm text-gray-400 font-normal">({filteredDailyList.length}건)</span>
                   </h3>
                   {filteredDailyList.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200 dark:border-gray-700">
-                            <th className="text-left py-2 px-3 text-gray-500">날짜</th>
-                            <th className="text-right py-2 px-3 text-gray-500">{CATEGORY_LABELS[prodFilter]} 생산량</th>
-                            <th className="text-right py-2 px-3 text-gray-500">전체 생산량</th>
-                            <th className="text-right py-2 px-3 text-gray-500">비율</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                    <div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                            <TableHead className="text-left py-2 px-3">날짜</TableHead>
+                            <TableHead className="text-right py-2 px-3">{CATEGORY_LABELS[prodFilter]} 생산량</TableHead>
+                            <TableHead className="text-right py-2 px-3">전체 생산량</TableHead>
+                            <TableHead className="text-right py-2 px-3">비율</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {filteredDailyList.slice((prodPage - 1) * PROD_PAGE_SIZE, prodPage * PROD_PAGE_SIZE).map(d => {
                             const catQty = d[prodFilter as keyof typeof d] as number;
                             const ratio = d.total > 0 ? Math.round((catQty / d.total) * 1000) / 10 : 0;
                             return (
-                              <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
-                                <td className="py-2 px-3 text-right font-medium" style={{ color: CATEGORY_COLORS[prodFilter] }}>{formatQty(catQty)}</td>
-                                <td className="py-2 px-3 text-right text-gray-500">{formatQty(d.total)}</td>
-                                <td className="py-2 px-3 text-right text-gray-500">{ratio}%</td>
-                              </tr>
+                              <TableRow key={d.date} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</TableCell>
+                                <TableCell className="py-2 px-3 text-right font-medium" style={{ color: CATEGORY_COLORS[prodFilter] }}>{formatQty(catQty)}</TableCell>
+                                <TableCell className="py-2 px-3 text-right text-gray-500">{formatQty(d.total)}</TableCell>
+                                <TableCell className="py-2 px-3 text-right text-gray-500">{ratio}%</TableCell>
+                              </TableRow>
                             );
                           })}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                       {filteredDailyList.length > PROD_PAGE_SIZE && (
                         <Pagination
                           currentPage={prodPage}
@@ -340,7 +345,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       )}
                     </div>
                   ) : <p className="text-gray-400 text-center py-6">해당 카테고리 생산 데이터 없음</p>}
-                </div>
+                </Card>
               )}
             </div>
             </InsightSection>
@@ -427,35 +432,35 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
             <div className="space-y-6">
               {/* KPI — 5개 */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">평균 폐기율(완제품)</p>
                   <p className={`text-2xl font-bold mt-1 ${avgRate > config.wasteThresholdPct ? 'text-red-600' : 'text-green-600'}`}>
                     {formatPercent(avgRate)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">목표: {config.wasteThresholdPct}%</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">평균 폐기율(반제품)</p>
                   <p className={`text-2xl font-bold mt-1 ${avgSemiRate > config.wasteThresholdPct ? 'text-orange-600' : 'text-green-600'}`}>
                     {formatPercent(avgSemiRate)}
                   </p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 폐기 수량(EA)</p>
                   <p className="text-2xl font-bold text-red-600 mt-1">{totalWasteEa.toLocaleString('ko-KR')}EA</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 폐기 중량(kg)</p>
                   <p className="text-2xl font-bold text-orange-600 mt-1">{totalWasteKg.toLocaleString('ko-KR')}kg</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">추정 폐기비용</p>
                   <p className="text-2xl font-bold text-orange-600 mt-1">{formatCurrency(totalCost)}</p>
-                </div>
+                </Card>
               </div>
 
               {/* 주간 생산량 & 폐기율 추이 (완제품 + 반제품) */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 생산량 & 폐기율 추이 <FormulaTooltip {...FORMULAS.wasteRate} /></h3>
                 {weeklyWaste.length > 0 ? (
                   <div className="h-64">
@@ -474,13 +479,13 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                     </ResponsiveContainer>
                   </div>
                 ) : <p className="text-gray-400 text-center py-10">생산 데이터 없음</p>}
-              </div>
+              </Card>
 
               {/* 폐기율 분포 + 요일별 분석 */}
               {daily.length > 0 && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* 폐기율 분포 */}
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <Card className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">폐기율 분포</h3>
                     <div className="h-48">
                       <ResponsiveContainer width="100%" height="100%">
@@ -503,10 +508,10 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                  </div>
+                  </Card>
 
                   {/* 요일별 평균 폐기율 */}
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <Card className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">요일별 평균 폐기율</h3>
                     <div className="h-48">
                       <ResponsiveContainer width="100%" height="100%">
@@ -532,13 +537,13 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       </ResponsiveContainer>
                     </div>
                     <p className="text-xs text-gray-400 text-center mt-2">주말(빨강) / 평일(파랑) 폐기율 패턴 분석</p>
-                  </div>
+                  </Card>
                 </div>
               )}
 
               {/* 카테고리별 생산량 비교 */}
               {categoryProduction.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">카테고리별 생산량</h3>
                   <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
@@ -554,100 +559,96 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 폐기율 초과일 테이블 */}
               {highDays.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-red-500">warning</span>
+                    <DynamicIcon name="warning" size={20} className="text-red-500" />
                     폐기율 {config.wasteThresholdPct}% 초과일
                   </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">날짜</th>
-                          <th className="text-left py-2 px-3 text-gray-500">요일</th>
-                          <th className="text-right py-2 px-3 text-gray-500">폐기율</th>
-                          <th className="text-right py-2 px-3 text-gray-500">생산량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">폐기 수량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">추정 비용</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {highDays.map(d => {
-                          const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][new Date(d.date).getDay()];
-                          return (
-                            <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 bg-red-50/50 dark:bg-red-900/10">
-                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
-                              <td className="py-2 px-3 text-gray-500 text-xs">{dayOfWeek}</td>
-                              <td className="py-2 px-3 text-right font-medium text-red-600">{formatPercent(d.rate)}</td>
-                              <td className="py-2 px-3 text-right text-gray-500">{formatQty(d.productionQty || 0)}</td>
-                              <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.qty)}</td>
-                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.cost || d.qty * config.wasteUnitCost)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableHead className="text-left py-2 px-3">날짜</TableHead>
+                        <TableHead className="text-left py-2 px-3">요일</TableHead>
+                        <TableHead className="text-right py-2 px-3">폐기율</TableHead>
+                        <TableHead className="text-right py-2 px-3">생산량</TableHead>
+                        <TableHead className="text-right py-2 px-3">폐기 수량</TableHead>
+                        <TableHead className="text-right py-2 px-3">추정 비용</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {highDays.map(d => {
+                        const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][new Date(d.date).getDay()];
+                        return (
+                          <TableRow key={d.date} className="border-b border-gray-100 dark:border-gray-800 bg-red-50/50 dark:bg-red-900/10">
+                            <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</TableCell>
+                            <TableCell className="py-2 px-3 text-gray-500 text-xs">{dayOfWeek}</TableCell>
+                            <TableCell className="py-2 px-3 text-right font-medium text-red-600">{formatPercent(d.rate)}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-500">{formatQty(d.productionQty || 0)}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.qty)}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(d.cost || d.qty * config.wasteUnitCost)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </Card>
               )}
 
               {/* 일별 폐기 상세 테이블 */}
               {dailyWasteDetail.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-blue-500">table_chart</span>
+                    <DynamicIcon name="table_chart" size={20} className="text-blue-500" />
                     일별 폐기 상세
                   </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">날짜</th>
-                          <th className="text-left py-2 px-3 text-gray-500">요일</th>
-                          <th className="text-right py-2 px-3 text-gray-500">생산(EA)</th>
-                          <th className="text-right py-2 px-3 text-gray-500">생산(kg)</th>
-                          <th className="text-right py-2 px-3 text-gray-500">완제품 폐기(EA)</th>
-                          <th className="text-right py-2 px-3 text-gray-500">완제품 폐기율</th>
-                          <th className="text-right py-2 px-3 text-gray-500">반제품 폐기(kg)</th>
-                          <th className="text-right py-2 px-3 text-gray-500">반제품 폐기율</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dailyWasteDetail.slice(0, 30).map(d => {
-                          const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][new Date(d.date).getDay()];
-                          const isHighFinished = d.wasteFinishedPct > config.wasteThresholdPct;
-                          const isHighSemi = d.wasteSemiPct > config.wasteThresholdPct;
-                          return (
-                            <tr key={d.date} className={`border-b border-gray-100 dark:border-gray-800 ${
-                              isHighFinished || isHighSemi ? 'bg-red-50/30 dark:bg-red-900/5' : ''
-                            }`}>
-                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
-                              <td className="py-2 px-3 text-gray-500 text-xs">{dayOfWeek}</td>
-                              <td className="py-2 px-3 text-right text-gray-500">{d.productionQty.toLocaleString('ko-KR')}</td>
-                              <td className="py-2 px-3 text-right text-gray-500">{d.productionKg.toLocaleString('ko-KR')}</td>
-                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{d.wasteFinishedEa > 0 ? d.wasteFinishedEa.toLocaleString('ko-KR') : '-'}</td>
-                              <td className={`py-2 px-3 text-right font-medium ${isHighFinished ? 'text-red-600' : 'text-gray-500'}`}>
-                                {d.wasteFinishedPct > 0 ? formatPercent(d.wasteFinishedPct) : '-'}
-                              </td>
-                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{d.wasteSemiKg > 0 ? d.wasteSemiKg.toLocaleString('ko-KR') : '-'}</td>
-                              <td className={`py-2 px-3 text-right font-medium ${isHighSemi ? 'text-orange-600' : 'text-gray-500'}`}>
-                                {d.wasteSemiPct > 0 ? formatPercent(d.wasteSemiPct) : '-'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {dailyWasteDetail.length > 30 && (
-                      <p className="text-xs text-gray-400 text-center mt-2">최근 30일만 표시 (전체 {dailyWasteDetail.length}일)</p>
-                    )}
-                  </div>
-                </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableHead className="text-left py-2 px-3">날짜</TableHead>
+                        <TableHead className="text-left py-2 px-3">요일</TableHead>
+                        <TableHead className="text-right py-2 px-3">생산(EA)</TableHead>
+                        <TableHead className="text-right py-2 px-3">생산(kg)</TableHead>
+                        <TableHead className="text-right py-2 px-3">완제품 폐기(EA)</TableHead>
+                        <TableHead className="text-right py-2 px-3">완제품 폐기율</TableHead>
+                        <TableHead className="text-right py-2 px-3">반제품 폐기(kg)</TableHead>
+                        <TableHead className="text-right py-2 px-3">반제품 폐기율</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dailyWasteDetail.slice(0, 30).map(d => {
+                        const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][new Date(d.date).getDay()];
+                        const isHighFinished = d.wasteFinishedPct > config.wasteThresholdPct;
+                        const isHighSemi = d.wasteSemiPct > config.wasteThresholdPct;
+                        return (
+                          <TableRow key={d.date} className={`border-b border-gray-100 dark:border-gray-800 ${
+                            isHighFinished || isHighSemi ? 'bg-red-50/30 dark:bg-red-900/5' : ''
+                          }`}>
+                            <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</TableCell>
+                            <TableCell className="py-2 px-3 text-gray-500 text-xs">{dayOfWeek}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-500">{d.productionQty.toLocaleString('ko-KR')}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-500">{d.productionKg.toLocaleString('ko-KR')}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{d.wasteFinishedEa > 0 ? d.wasteFinishedEa.toLocaleString('ko-KR') : '-'}</TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-medium ${isHighFinished ? 'text-red-600' : 'text-gray-500'}`}>
+                              {d.wasteFinishedPct > 0 ? formatPercent(d.wasteFinishedPct) : '-'}
+                            </TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{d.wasteSemiKg > 0 ? d.wasteSemiKg.toLocaleString('ko-KR') : '-'}</TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-medium ${isHighSemi ? 'text-orange-600' : 'text-gray-500'}`}>
+                              {d.wasteSemiPct > 0 ? formatPercent(d.wasteSemiPct) : '-'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  {dailyWasteDetail.length > 30 && (
+                    <p className="text-xs text-gray-400 text-center mt-2">최근 30일만 표시 (전체 {dailyWasteDetail.length}일)</p>
+                  )}
+                </Card>
               )}
             </div>
             </InsightSection>
@@ -672,26 +673,26 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
           <div className="space-y-6">
             {/* KPI */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">최대 생산일</p>
                 <p className="text-lg font-bold text-blue-600 mt-1">{maxDay?.date || '-'}</p>
                 <p className="text-xs text-gray-400 mt-1">{formatQty(maxDay?.qty || 0)} 생산</p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">일 평균 생산량</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatQty(prodEfficiency?.avgDaily || 0)}</p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">카테고리 수</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{catStats.filter(c => c.total > 0).length}개</p>
-              </div>
+              </Card>
             </div>
 
             {/* 필터 */}
             <FilterBar filters={categoryFilters} active={effFilter} onChange={setEffFilter} />
 
             {/* 주간 생산 추이 (필터 적용, 간소화) */}
-            <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+            <Card className="p-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                 주간 생산 추이 {effFilter !== 'all' && <span className="text-sm text-gray-400 font-normal">({CATEGORY_LABELS[effFilter]})</span>}
                 <FormulaTooltip {...FORMULAS.productivity} />
@@ -718,78 +719,76 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   </ResponsiveContainer>
                 </div>
               ) : <p className="text-gray-400 text-center py-10">생산 데이터 없음</p>}
-            </div>
+            </Card>
 
             {/* 카테고리별 통계 테이블 */}
-            <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+            <Card className="p-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">카테고리별 통계</h3>
               {catStats.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-2 px-3 text-gray-500">카테고리</th>
-                        <th className="text-right py-2 px-3 text-gray-500">총 생산량</th>
-                        <th className="text-right py-2 px-3 text-gray-500">일 평균</th>
-                        <th className="text-right py-2 px-3 text-gray-500">최대 생산</th>
-                        <th className="text-left py-2 px-3 text-gray-500">최대일</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {catStats.filter(c => c.total > 0).map((c, i) => (
-                        <tr key={c.category} className={`border-b border-gray-100 dark:border-gray-800 ${
-                          effFilter !== 'all' && CATEGORY_LABELS[effFilter] === c.category ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                        }`}>
-                          <td className="py-2 px-3">
-                            <span className="flex items-center gap-2">
-                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[CATEGORY_KEYS[i % CATEGORY_KEYS.length]] }}></span>
-                              <span className="text-gray-800 dark:text-gray-200">{c.category}</span>
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatQty(c.total)}</td>
-                          <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(c.avg)}</td>
-                          <td className="py-2 px-3 text-right text-blue-600">{formatQty(c.max)}</td>
-                          <td className="py-2 px-3 text-gray-500 text-xs">{c.maxDate}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                      <TableHead className="text-left py-2 px-3">카테고리</TableHead>
+                      <TableHead className="text-right py-2 px-3">총 생산량</TableHead>
+                      <TableHead className="text-right py-2 px-3">일 평균</TableHead>
+                      <TableHead className="text-right py-2 px-3">최대 생산</TableHead>
+                      <TableHead className="text-left py-2 px-3">최대일</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {catStats.filter(c => c.total > 0).map((c, i) => (
+                      <TableRow key={c.category} className={`border-b border-gray-100 dark:border-gray-800 ${
+                        effFilter !== 'all' && CATEGORY_LABELS[effFilter] === c.category ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                      }`}>
+                        <TableCell className="py-2 px-3">
+                          <span className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[CATEGORY_KEYS[i % CATEGORY_KEYS.length]] }}></span>
+                            <span className="text-gray-800 dark:text-gray-200">{c.category}</span>
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatQty(c.total)}</TableCell>
+                        <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(c.avg)}</TableCell>
+                        <TableCell className="py-2 px-3 text-right text-blue-600">{formatQty(c.max)}</TableCell>
+                        <TableCell className="py-2 px-3 text-gray-500 text-xs">{c.maxDate}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
-            </div>
+            </Card>
 
             {/* 필터된 일별 상세 리스트 */}
             {effFilter !== 'all' && (
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                   {CATEGORY_LABELS[effFilter]} 일별 상세 <span className="text-sm text-gray-400 font-normal">({filteredEffList.length}건)</span>
                 </h3>
                 {filteredEffList.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">날짜</th>
-                          <th className="text-right py-2 px-3 text-gray-500">{CATEGORY_LABELS[effFilter]} 생산량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">전체 생산량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">비율</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                  <div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                          <TableHead className="text-left py-2 px-3">날짜</TableHead>
+                          <TableHead className="text-right py-2 px-3">{CATEGORY_LABELS[effFilter]} 생산량</TableHead>
+                          <TableHead className="text-right py-2 px-3">전체 생산량</TableHead>
+                          <TableHead className="text-right py-2 px-3">비율</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {filteredEffList.slice((effPage - 1) * PROD_PAGE_SIZE, effPage * PROD_PAGE_SIZE).map(d => {
                           const catQty = d[effFilter as keyof typeof d] as number;
                           const ratio = d.total > 0 ? Math.round((catQty / d.total) * 1000) / 10 : 0;
                           return (
-                            <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
-                              <td className="py-2 px-3 text-right font-medium" style={{ color: CATEGORY_COLORS[effFilter] }}>{formatQty(catQty)}</td>
-                              <td className="py-2 px-3 text-right text-gray-500">{formatQty(d.total)}</td>
-                              <td className="py-2 px-3 text-right text-gray-500">{ratio}%</td>
-                            </tr>
+                            <TableRow key={d.date} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                              <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</TableCell>
+                              <TableCell className="py-2 px-3 text-right font-medium" style={{ color: CATEGORY_COLORS[effFilter] }}>{formatQty(catQty)}</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-500">{formatQty(d.total)}</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-500">{ratio}%</TableCell>
+                            </TableRow>
                           );
                         })}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                     {filteredEffList.length > PROD_PAGE_SIZE && (
                       <Pagination
                         currentPage={effPage}
@@ -804,7 +803,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                     )}
                   </div>
                 ) : <p className="text-gray-400 text-center py-6">해당 카테고리 데이터 없음</p>}
-              </div>
+              </Card>
             )}
           </div>
           </InsightSection>
@@ -821,7 +820,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
           if (!bomAnomaly || bomAnomaly.items.length === 0) {
             return (
               <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
-                <span className="material-icons-outlined text-5xl mb-3">check_circle</span>
+                <DynamicIcon name="check_circle" size={48} className="mb-3" />
                 <p className="text-lg font-medium">BOM 기준 자재 소진량이 정상 범위입니다</p>
                 <p className="text-sm mt-1">BOM 데이터와 구매 데이터가 연결되면 이상 항목이 여기에 표시됩니다</p>
               </div>
@@ -842,7 +841,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
           ].filter(d => d.value > 0);
 
           const renderTopCard = (title: string, items: BomConsumptionAnomalyItem[], color: string) => (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <Card className="rounded-xl p-4">
               <h4 className="text-sm font-semibold mb-3" style={{ color }}>{title}</h4>
               {items.length === 0 ? (
                 <p className="text-xs text-gray-400">해당 없음</p>
@@ -866,7 +865,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           );
 
           return (
@@ -883,20 +882,20 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                   { label: '미달사용', value: summary.underuseCount, unit: '건', icon: 'trending_down', color: 'text-blue-400' },
                   { label: '비용 영향', value: formatCurrency(Math.abs(summary.totalCostImpact)), unit: '', icon: 'payments', color: 'text-amber-500' },
                 ].map(kpi => (
-                  <div key={kpi.label} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                  <Card key={kpi.label} className="rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`material-icons-outlined text-lg ${kpi.color}`}>{kpi.icon}</span>
+                      <DynamicIcon name={kpi.icon} size={18} className={kpi.color} />
                       <span className="text-xs text-gray-500 dark:text-gray-400">{kpi.label}</span>
                     </div>
                     <p className="text-xl font-bold dark:text-white">{kpi.value}{kpi.unit}</p>
-                  </div>
+                  </Card>
                 ))}
               </div>
 
               {/* 차트 2열 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 이상 유형별 Pie */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="rounded-xl p-4">
                   <h4 className="text-sm font-semibold mb-3 dark:text-white">이상 유형별 분포</h4>
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
@@ -906,9 +905,9 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       <Tooltip formatter={(v: number) => [`${v}건`, '']} />
                     </PieChart>
                   </ResponsiveContainer>
-                </div>
+                </Card>
                 {/* 심각도별 Bar */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="rounded-xl p-4">
                   <h4 className="text-sm font-semibold mb-3 dark:text-white">심각도별 분포</h4>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={severityData} layout="vertical" margin={{ left: 40 }}>
@@ -921,7 +920,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
+                </Card>
               </div>
 
               {/* Top 5 카드 3열 */}
@@ -932,56 +931,54 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
               </div>
 
               {/* 전체 테이블 */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <Card className="rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                   <h4 className="text-sm font-semibold dark:text-white">전체 이상 항목 ({bomAnomaly.items.length}건)</h4>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">자재명</th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">사용 제품</th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">기대 소모</th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">실제 소모</th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">차이(%)</th>
-                        <th className="px-3 py-2 text-center font-medium text-gray-500 dark:text-gray-400">유형</th>
-                        <th className="px-3 py-2 text-center font-medium text-gray-500 dark:text-gray-400">심각도</th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">비용 영향</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                      {bomAnomaly.items.map((item) => (
-                        <tr key={item.materialCode} className="hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer" onClick={() => onItemClick({ id: item.materialCode, skuCode: item.materialCode, skuName: item.materialName, skuSub: '', process: item.anomalyType, stdQty: item.expectedConsumption, stdUnit: '', actualQty: item.actualConsumption, diffPercent: item.deviationPct, anomalyScore: item.severity === 'high' ? 80 : item.severity === 'medium' ? 50 : 20, costImpact: item.costImpact, reasoning: `${item.anomalyType} — 편차 ${item.deviationPct.toFixed(1)}%`, kind: 'bom' })}>
-                          <td className="px-3 py-2 dark:text-gray-200">
-                            <div className="font-medium">{item.materialName}</div>
-                            <div className="text-gray-400 text-[10px]">{item.materialCode}</div>
-                          </td>
-                          <td className="px-3 py-2 text-gray-500 dark:text-gray-400 max-w-[150px] truncate">{item.productNames.slice(0, 3).join(', ')}{item.productNames.length > 3 ? ` 외 ${item.productNames.length - 3}` : ''}</td>
-                          <td className="px-3 py-2 text-right dark:text-gray-300">{formatQty(item.expectedConsumption)}</td>
-                          <td className="px-3 py-2 text-right dark:text-gray-300">{formatQty(item.actualConsumption)}</td>
-                          <td className="px-3 py-2 text-right font-bold" style={{ color: item.deviationPct > 0 ? '#EF4444' : '#3B82F6' }}>
-                            {item.anomalyType === 'price_deviation'
-                              ? `${item.priceDeviationPct > 0 ? '+' : ''}${item.priceDeviationPct}%`
-                              : `${item.deviationPct > 0 ? '+' : ''}${item.deviationPct}%`}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-white" style={{ backgroundColor: ANOMALY_COLORS[item.anomalyType] }}>
-                              {ANOMALY_LABELS[item.anomalyType]}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-white" style={{ backgroundColor: SEVERITY_COLORS[item.severity] }}>
-                              {SEVERITY_LABELS[item.severity]}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right font-medium dark:text-gray-200">{formatCurrency(Math.abs(item.costImpact))}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                <Table className="text-xs">
+                  <TableHeader className="bg-gray-50 dark:bg-gray-700">
+                    <TableRow>
+                      <TableHead className="px-3 py-2 text-left">자재명</TableHead>
+                      <TableHead className="px-3 py-2 text-left">사용 제품</TableHead>
+                      <TableHead className="px-3 py-2 text-right">기대 소모</TableHead>
+                      <TableHead className="px-3 py-2 text-right">실제 소모</TableHead>
+                      <TableHead className="px-3 py-2 text-right">차이(%)</TableHead>
+                      <TableHead className="px-3 py-2 text-center">유형</TableHead>
+                      <TableHead className="px-3 py-2 text-center">심각도</TableHead>
+                      <TableHead className="px-3 py-2 text-right">비용 영향</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {bomAnomaly.items.map((item) => (
+                      <TableRow key={item.materialCode} className="hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer" onClick={() => onItemClick({ id: item.materialCode, skuCode: item.materialCode, skuName: item.materialName, skuSub: '', process: item.anomalyType, stdQty: item.expectedConsumption, stdUnit: '', actualQty: item.actualConsumption, diffPercent: item.deviationPct, anomalyScore: item.severity === 'high' ? 80 : item.severity === 'medium' ? 50 : 20, costImpact: item.costImpact, reasoning: `${item.anomalyType} — 편차 ${item.deviationPct.toFixed(1)}%`, kind: 'bom' })}>
+                        <TableCell className="px-3 py-2 dark:text-gray-200">
+                          <div className="font-medium">{item.materialName}</div>
+                          <div className="text-gray-400 text-[10px]">{item.materialCode}</div>
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-gray-500 dark:text-gray-400 max-w-[150px] truncate">{item.productNames.slice(0, 3).join(', ')}{item.productNames.length > 3 ? ` 외 ${item.productNames.length - 3}` : ''}</TableCell>
+                        <TableCell className="px-3 py-2 text-right dark:text-gray-300">{formatQty(item.expectedConsumption)}</TableCell>
+                        <TableCell className="px-3 py-2 text-right dark:text-gray-300">{formatQty(item.actualConsumption)}</TableCell>
+                        <TableCell className="px-3 py-2 text-right font-bold" style={{ color: item.deviationPct > 0 ? '#EF4444' : '#3B82F6' }}>
+                          {item.anomalyType === 'price_deviation'
+                            ? `${item.priceDeviationPct > 0 ? '+' : ''}${item.priceDeviationPct}%`
+                            : `${item.deviationPct > 0 ? '+' : ''}${item.deviationPct}%`}
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-center">
+                          <Badge className="px-1.5 py-0.5 rounded text-[10px] font-medium text-white border-0" style={{ backgroundColor: ANOMALY_COLORS[item.anomalyType] }}>
+                            {ANOMALY_LABELS[item.anomalyType]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-center">
+                          <Badge className="px-1.5 py-0.5 rounded text-[10px] font-medium text-white border-0" style={{ backgroundColor: SEVERITY_COLORS[item.severity] }}>
+                            {SEVERITY_LABELS[item.severity]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-right font-medium dark:text-gray-200">{formatCurrency(Math.abs(item.costImpact))}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
             </div>
           );
         }
@@ -997,44 +994,44 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
               </div>
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 차이 금액</p>
                   <p className={`text-2xl font-bold mt-1 ${
                     (bomVariance?.totalVariance || 0) > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
                     {(bomVariance?.totalVariance || 0) > 0 ? '+' : ''}{formatCurrency(bomVariance?.totalVariance || 0)}
                   </p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">가격 차이</p>
                   <p className={`text-2xl font-bold mt-1 ${
                     (bomVariance?.totalPriceVariance || 0) > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
                     {(bomVariance?.totalPriceVariance || 0) > 0 ? '+' : ''}{formatCurrency(bomVariance?.totalPriceVariance || 0)}
                   </p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">투입량 차이</p>
                   <p className={`text-2xl font-bold mt-1 ${
                     (bomVariance?.totalQtyVariance || 0) > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
                     {(bomVariance?.totalQtyVariance || 0) > 0 ? '+' : ''}{formatCurrency(bomVariance?.totalQtyVariance || 0)}
                   </p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">유리/불리 품목</p>
                   <p className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
                     <span className="text-green-600">{bomVariance?.favorableCount || 0}</span>
                     <span className="text-gray-400 mx-1">/</span>
                     <span className="text-red-600">{bomVariance?.unfavorableCount || 0}</span>
                   </p>
-                </div>
+                </Card>
               </div>
 
               {/* C2: 상위/하위 5 수평 BarChart + 분포도 */}
               {bomVariance && bomVariance.items.length > 0 && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <Card className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">상위/하위 5 품목 (차이 금액) <span className="text-xs font-normal text-gray-400">클릭 → 드릴다운</span></h3>
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
@@ -1074,8 +1071,8 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                  </div>
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  </Card>
+                  <Card className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">BOM 오차 분포</h3>
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
@@ -1104,13 +1101,13 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       </ResponsiveContainer>
                     </div>
                     <p className="text-xs text-gray-400 text-center mt-2">음수=유리(녹색) / 양수=불리(빨강) 단위: 만원</p>
-                  </div>
+                  </Card>
                 </div>
               )}
 
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                  <span className="material-icons-outlined text-purple-500">compare_arrows</span>
+                  <DynamicIcon name="compare_arrows" size={20} className="text-purple-500" />
                   레시피 대비 투입 오차 분석
                 </h3>
                 <div className="flex items-center justify-between mb-4">
@@ -1118,37 +1115,38 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                     BOM 레시피 기준 대비 실제 투입 비교 | 양수=불리(초과사용), 음수=유리(절감)
                   </p>
                   {bomVariance && bomVariance.items.some(i => i.linkedMenuCount > 0) && (
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setBomSortByMenu(!bomSortByMenu)}
-                      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full border transition-colors ${
+                      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full ${
                         bomSortByMenu
                           ? 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700'
                           : 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'
                       }`}
                     >
-                      <span className="material-icons-outlined text-xs">sort</span>
+                      <DynamicIcon name="sort" size={12} />
                       {bomSortByMenu ? '연결 메뉴수순' : '차이금액순'}
-                    </button>
+                    </Button>
                   )}
                 </div>
 
                 {bomVariance && bomVariance.items.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">자재명</th>
-                          <th className="text-left py-2 px-3 text-gray-500">연결 메뉴</th>
-                          <th className="text-right py-2 px-3 text-gray-500">기준단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">실제단가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">기준 투입량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">실제 투입량</th>
-                          <th className="text-right py-2 px-3 text-gray-500">단가 차이</th>
-                          <th className="text-right py-2 px-3 text-gray-500">투입량 차이</th>
-                          <th className="text-right py-2 px-3 text-gray-500">총 차이</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableHead className="text-left py-2 px-3">자재명</TableHead>
+                        <TableHead className="text-left py-2 px-3">연결 메뉴</TableHead>
+                        <TableHead className="text-right py-2 px-3">기준단가</TableHead>
+                        <TableHead className="text-right py-2 px-3">실제단가</TableHead>
+                        <TableHead className="text-right py-2 px-3">기준 투입량</TableHead>
+                        <TableHead className="text-right py-2 px-3">실제 투입량</TableHead>
+                        <TableHead className="text-right py-2 px-3">단가 차이</TableHead>
+                        <TableHead className="text-right py-2 px-3">투입량 차이</TableHead>
+                        <TableHead className="text-right py-2 px-3">총 차이</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                         {[...bomVariance.items]
                           .sort(bomSortByMenu
                             ? (a, b) => a.linkedMenuCount - b.linkedMenuCount || Math.abs(b.totalVariance) - Math.abs(a.totalVariance)
@@ -1156,125 +1154,124 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                           )
                           .slice(0, 20).map(item => (
                           <React.Fragment key={item.productCode}>
-                            <tr
+                            <TableRow
                               className={`border-b border-gray-100 dark:border-gray-800 ${
                                 item.totalVariance > 0 ? 'bg-red-50/30 dark:bg-red-900/5' : ''
                               } ${bomData.length > 0 ? 'cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/10' : ''}`}
                               onClick={() => bomData.length > 0 && setSelectedMaterial(selectedMaterial?.productCode === item.productCode ? null : item)}
                             >
-                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">
+                              <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">
                                 <div className="flex items-center gap-1">
                                   {bomData.length > 0 && (
-                                    <span className={`material-icons-outlined text-xs transition-transform ${selectedMaterial?.productCode === item.productCode ? 'rotate-90' : ''}`}>
-                                      chevron_right
-                                    </span>
+                                    <DynamicIcon name="chevron_right" size={12} className={`transition-transform ${selectedMaterial?.productCode === item.productCode ? 'rotate-90' : ''}`} />
                                   )}
                                   {item.productName}
                                 </div>
-                              </td>
-                              <td className="py-2 px-3">
+                              </TableCell>
+                              <TableCell className="py-2 px-3">
                                 <div className="flex flex-wrap gap-1">
                                   {item.linkedMenus.length > 0 ? item.linkedMenus.slice(0, 3).map(m => (
-                                    <span key={m.code} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400 whitespace-nowrap">
+                                    <Badge key={m.code} className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400 whitespace-nowrap border-0">
                                       {m.code ? `${m.code}` : m.name.slice(0, 6)}
-                                    </span>
+                                    </Badge>
                                   )) : <span className="text-[10px] text-gray-400">-</span>}
                                   {item.linkedMenus.length > 3 && (
                                     <span className="text-[10px] text-gray-400">+{item.linkedMenus.length - 3}</span>
                                   )}
                                 </div>
-                              </td>
-                              <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.standardPrice)}</td>
-                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.actualPrice)}</td>
-                              <td className="py-2 px-3 text-right text-gray-500">{formatQty(item.standardQty, item.unit)}</td>
-                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatQty(item.actualQty, item.unit)}</td>
-                              <td className={`py-2 px-3 text-right font-medium ${
+                              </TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.standardPrice)}</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatCurrency(item.actualPrice)}</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-500">{formatQty(item.standardQty, item.unit)}</TableCell>
+                              <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{formatQty(item.actualQty, item.unit)}</TableCell>
+                              <TableCell className={`py-2 px-3 text-right font-medium ${
                                 item.priceVariance > 0 ? 'text-red-600' : item.priceVariance < 0 ? 'text-green-600' : 'text-gray-500'
                               }`}>
                                 {item.priceVariance > 0 ? '+' : ''}{formatCurrency(item.priceVariance)}
-                              </td>
-                              <td className={`py-2 px-3 text-right font-medium ${
+                              </TableCell>
+                              <TableCell className={`py-2 px-3 text-right font-medium ${
                                 item.qtyVariance > 0 ? 'text-red-600' : item.qtyVariance < 0 ? 'text-green-600' : 'text-gray-500'
                               }`}>
                                 {item.qtyVariance > 0 ? '+' : ''}{formatCurrency(item.qtyVariance)}
-                              </td>
-                              <td className={`py-2 px-3 text-right font-bold ${
+                              </TableCell>
+                              <TableCell className={`py-2 px-3 text-right font-bold ${
                                 item.totalVariance > 0 ? 'text-red-600' : item.totalVariance < 0 ? 'text-green-600' : 'text-gray-500'
                               }`}>
                                 {item.totalVariance > 0 ? '+' : ''}{formatCurrency(item.totalVariance)}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                             {/* 드릴다운 패널 */}
                             {selectedMaterial?.productCode === item.productCode && (
-                              <tr>
-                                <td colSpan={9} className="p-0">
+                              <TableRow>
+                                <TableCell colSpan={9} className="p-0">
                                   <div className="bg-gray-50 dark:bg-gray-800 border-l-4 border-blue-500 p-4">
                                     <div className="flex items-center justify-between mb-3">
                                       <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200">
-                                        <span className="material-icons-outlined text-blue-500 text-base align-middle mr-1">account_tree</span>
+                                        <DynamicIcon name="account_tree" size={16} className="text-blue-500 align-middle mr-1" />
                                         {item.productName} — 메뉴별 소모 상세
                                       </h4>
-                                      <button
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
                                         onClick={(e) => { e.stopPropagation(); setSelectedMaterial(null); }}
-                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 h-auto p-1"
                                       >
-                                        <span className="material-icons-outlined text-sm">close</span>
-                                      </button>
+                                        <DynamicIcon name="close" size={14} />
+                                      </Button>
                                     </div>
                                     {materialDrilldown && materialDrilldown.items.length > 0 ? (
                                       <>
-                                        <table className="w-full text-xs">
-                                          <thead>
-                                            <tr className="border-b border-gray-300 dark:border-gray-600">
-                                              <th className="text-left py-1.5 px-2 text-gray-500">메뉴명</th>
-                                              <th className="text-right py-1.5 px-2 text-gray-500">배치크기</th>
-                                              <th className="text-right py-1.5 px-2 text-gray-500">레시피 기준({item.unit})</th>
-                                              <th className="text-right py-1.5 px-2 text-gray-500">기준 소모합({item.unit})</th>
-                                              <th className="text-right py-1.5 px-2 text-gray-500">구매 비례({item.unit})</th>
-                                              <th className="text-right py-1.5 px-2 text-gray-500">차이({item.unit})</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
+                                        <Table className="text-xs">
+                                          <TableHeader>
+                                            <TableRow className="border-b border-gray-300 dark:border-gray-600">
+                                              <TableHead className="text-left py-1.5 px-2">메뉴명</TableHead>
+                                              <TableHead className="text-right py-1.5 px-2">배치크기</TableHead>
+                                              <TableHead className="text-right py-1.5 px-2">레시피 기준({item.unit})</TableHead>
+                                              <TableHead className="text-right py-1.5 px-2">기준 소모합({item.unit})</TableHead>
+                                              <TableHead className="text-right py-1.5 px-2">구매 비례({item.unit})</TableHead>
+                                              <TableHead className="text-right py-1.5 px-2">차이({item.unit})</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
                                             {materialDrilldown.items.map(m => (
-                                              <tr key={m.menuCode} className="border-b border-gray-200 dark:border-gray-700">
-                                                <td className="py-1.5 px-2 text-gray-700 dark:text-gray-300">{m.menuName}</td>
-                                                <td className="py-1.5 px-2 text-right text-gray-500">{m.batchSize.toLocaleString('ko-KR')}</td>
-                                                <td className="py-1.5 px-2 text-right text-gray-500">{m.recipeQty.toLocaleString('ko-KR')}</td>
-                                                <td className="py-1.5 px-2 text-right text-gray-500">{m.standardConsumption.toLocaleString('ko-KR')}</td>
-                                                <td className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-300">{m.allocatedActual.toLocaleString('ko-KR')}</td>
-                                                <td className={`py-1.5 px-2 text-right font-medium ${m.diff > 0 ? 'text-red-600' : m.diff < 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                              <TableRow key={m.menuCode} className="border-b border-gray-200 dark:border-gray-700">
+                                                <TableCell className="py-1.5 px-2 text-gray-700 dark:text-gray-300">{m.menuName}</TableCell>
+                                                <TableCell className="py-1.5 px-2 text-right text-gray-500">{m.batchSize.toLocaleString('ko-KR')}</TableCell>
+                                                <TableCell className="py-1.5 px-2 text-right text-gray-500">{m.recipeQty.toLocaleString('ko-KR')}</TableCell>
+                                                <TableCell className="py-1.5 px-2 text-right text-gray-500">{m.standardConsumption.toLocaleString('ko-KR')}</TableCell>
+                                                <TableCell className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-300">{m.allocatedActual.toLocaleString('ko-KR')}</TableCell>
+                                                <TableCell className={`py-1.5 px-2 text-right font-medium ${m.diff > 0 ? 'text-red-600' : m.diff < 0 ? 'text-green-600' : 'text-gray-500'}`}>
                                                   {m.diff > 0 ? '+' : ''}{m.diff.toLocaleString('ko-KR')}
-                                                </td>
-                                              </tr>
+                                                </TableCell>
+                                              </TableRow>
                                             ))}
-                                          </tbody>
+                                          </TableBody>
                                           <tfoot>
-                                            <tr className="border-t-2 border-gray-400 dark:border-gray-500 font-bold">
-                                              <td className="py-1.5 px-2 text-gray-700 dark:text-gray-200" colSpan={3}>합계</td>
-                                              <td className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-200">{materialDrilldown.totalStandard.toLocaleString('ko-KR')}</td>
-                                              <td className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-200">{materialDrilldown.totalActual.toLocaleString('ko-KR')}</td>
-                                              <td className={`py-1.5 px-2 text-right ${(materialDrilldown.totalActual - materialDrilldown.totalStandard) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                            <TableRow className="border-t-2 border-gray-400 dark:border-gray-500 font-bold">
+                                              <TableCell className="py-1.5 px-2 text-gray-700 dark:text-gray-200" colSpan={3}>합계</TableCell>
+                                              <TableCell className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-200">{materialDrilldown.totalStandard.toLocaleString('ko-KR')}</TableCell>
+                                              <TableCell className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-200">{materialDrilldown.totalActual.toLocaleString('ko-KR')}</TableCell>
+                                              <TableCell className={`py-1.5 px-2 text-right ${(materialDrilldown.totalActual - materialDrilldown.totalStandard) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                                 {(materialDrilldown.totalActual - materialDrilldown.totalStandard) > 0 ? '+' : ''}
                                                 {(materialDrilldown.totalActual - materialDrilldown.totalStandard).toLocaleString('ko-KR')}
-                                              </td>
-                                            </tr>
+                                              </TableCell>
+                                            </TableRow>
                                           </tfoot>
-                                        </table>
+                                        </Table>
                                       </>
                                     ) : (
                                       <p className="text-xs text-gray-400 py-2">BOM 데이터가 없어 상세 분석을 표시할 수 없습니다.</p>
                                     )}
                                   </div>
-                                </td>
-                              </tr>
+                                </TableCell>
+                              </TableRow>
                             )}
                           </React.Fragment>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </TableBody>
+                    </Table>
                 ) : <p className="text-gray-400 text-center py-10">구매/생산 데이터가 충분하지 않습니다.</p>}
-              </div>
+              </Card>
             </div>
             </InsightSection>
           );
@@ -1287,42 +1284,42 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">기준 수율</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{yieldTracking?.standardYield || 0}%</p>
                   <p className="text-xs text-gray-400 mt-1">폐기 허용 {config.wasteThresholdPct}%</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">실제 수율</p>
                   <p className={`text-2xl font-bold mt-1 ${
                     (yieldTracking?.avgYieldRate || 0) >= (yieldTracking?.standardYield || 0) ? 'text-green-600' : 'text-red-600'
                   }`}>{yieldTracking?.avgYieldRate || 0}%</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">수율 차이</p>
                   <p className={`text-2xl font-bold mt-1 ${
                     (yieldTracking?.yieldGap || 0) >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
                     {(yieldTracking?.yieldGap || 0) > 0 ? '+' : ''}{yieldTracking?.yieldGap || 0}%p
                   </p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">환산단가</p>
                   <p className="text-2xl font-bold text-indigo-600 mt-1">{formatCurrency(yieldTracking?.avgAdjustedUnitCost || 0)}</p>
                   <p className="text-xs text-gray-400 mt-1">원가 {formatCurrency(yieldTracking?.avgUnitCost || 0)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">수율 손실 비용</p>
                   <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(yieldTracking?.costImpact || 0)}</p>
                   <p className="text-xs text-gray-400 mt-1">기준 미달 {yieldTracking?.lowYieldDays || 0}/{yieldTracking?.totalDays || 0}일</p>
-                </div>
+                </Card>
               </div>
 
               {/* 주간 수율 추이 차트 */}
               {yieldTracking && yieldTracking.weekly.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-green-500">show_chart</span>
+                    <DynamicIcon name="show_chart" size={20} className="text-green-500" />
                     주간 수율 추이
                     <FormulaTooltip {...FORMULAS.yieldRate} />
                   </h3>
@@ -1343,14 +1340,14 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* C4: 주간 생산량 vs 폐기량 — LineChart + 폐기율 우축 */}
               {yieldTracking && yieldTracking.weekly.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-blue-500">show_chart</span>
+                    <DynamicIcon name="show_chart" size={20} className="text-blue-500" />
                     주간 생산량 vs 폐기량 & 폐기율
                     <FormulaTooltip {...FORMULAS.wasteRate} />
                   </h3>
@@ -1372,63 +1369,61 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 일별 수율 상세 테이블 */}
               {yieldTracking && yieldTracking.daily.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                    <span className="material-icons-outlined text-orange-500">science</span>
+                    <DynamicIcon name="science" size={20} className="text-orange-500" />
                     일별 수율 상세
                     <FormulaTooltip {...FORMULAS.adjustedCost} />
                   </h3>
                   <p className="text-xs text-gray-500 mb-4">
                     환산단가 = 단위원가 / 수율 | 수율 기준 미달일은 빨간 배경
                   </p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">날짜</th>
-                          <th className="text-right py-2 px-3 text-gray-500">생산(ea)</th>
-                          <th className="text-right py-2 px-3 text-gray-500">생산(kg)</th>
-                          <th className="text-right py-2 px-3 text-gray-500">폐기(ea)</th>
-                          <th className="text-right py-2 px-3 text-gray-500">수율(%)</th>
-                          <th className="text-right py-2 px-3 text-gray-500">기준</th>
-                          <th className="text-right py-2 px-3 text-gray-500">차이</th>
-                          <th className="text-right py-2 px-3 text-gray-500">단위원가</th>
-                          <th className="text-right py-2 px-3 text-gray-500">환산단가</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {yieldTracking.daily.slice(-30).reverse().map(d => (
-                          <tr key={d.date} className={`border-b border-gray-100 dark:border-gray-800 ${
-                            d.yieldGap < 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableHead className="text-left py-2 px-3">날짜</TableHead>
+                        <TableHead className="text-right py-2 px-3">생산(ea)</TableHead>
+                        <TableHead className="text-right py-2 px-3">생산(kg)</TableHead>
+                        <TableHead className="text-right py-2 px-3">폐기(ea)</TableHead>
+                        <TableHead className="text-right py-2 px-3">수율(%)</TableHead>
+                        <TableHead className="text-right py-2 px-3">기준</TableHead>
+                        <TableHead className="text-right py-2 px-3">차이</TableHead>
+                        <TableHead className="text-right py-2 px-3">단위원가</TableHead>
+                        <TableHead className="text-right py-2 px-3">환산단가</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {yieldTracking.daily.slice(-30).reverse().map(d => (
+                        <TableRow key={d.date} className={`border-b border-gray-100 dark:border-gray-800 ${
+                          d.yieldGap < 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''
+                        }`}>
+                          <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.productionQty)}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-gray-500">{d.productionKg > 0 ? formatQty(d.productionKg) : '-'}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-red-500">{d.wasteQty > 0 ? formatQty(d.wasteQty) : '-'}</TableCell>
+                          <TableCell className={`py-2 px-3 text-right font-medium ${
+                            d.yieldRate >= d.standardYield ? 'text-green-600' : 'text-red-600'
+                          }`}>{d.yieldRate}%</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-gray-400">{d.standardYield}%</TableCell>
+                          <TableCell className={`py-2 px-3 text-right font-medium ${
+                            d.yieldGap >= 0 ? 'text-green-600' : 'text-red-600'
                           }`}>
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{d.date}</td>
-                            <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatQty(d.productionQty)}</td>
-                            <td className="py-2 px-3 text-right text-gray-500">{d.productionKg > 0 ? formatQty(d.productionKg) : '-'}</td>
-                            <td className="py-2 px-3 text-right text-red-500">{d.wasteQty > 0 ? formatQty(d.wasteQty) : '-'}</td>
-                            <td className={`py-2 px-3 text-right font-medium ${
-                              d.yieldRate >= d.standardYield ? 'text-green-600' : 'text-red-600'
-                            }`}>{d.yieldRate}%</td>
-                            <td className="py-2 px-3 text-right text-gray-400">{d.standardYield}%</td>
-                            <td className={`py-2 px-3 text-right font-medium ${
-                              d.yieldGap >= 0 ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {d.yieldGap > 0 ? '+' : ''}{d.yieldGap}%p
-                            </td>
-                            <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(d.unitCost)}</td>
-                            <td className={`py-2 px-3 text-right font-medium ${
-                              d.adjustedUnitCost > d.unitCost * 1.1 ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'
-                            }`}>{formatCurrency(d.adjustedUnitCost)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                            {d.yieldGap > 0 ? '+' : ''}{d.yieldGap}%p
+                          </TableCell>
+                          <TableCell className="py-2 px-3 text-right text-gray-500">{formatCurrency(d.unitCost)}</TableCell>
+                          <TableCell className={`py-2 px-3 text-right font-medium ${
+                            d.adjustedUnitCost > d.unitCost * 1.1 ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'
+                          }`}>{formatCurrency(d.adjustedUnitCost)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
               )}
 
               {(!yieldTracking || yieldTracking.daily.length === 0) && (

@@ -18,6 +18,14 @@ import {
   type DataSourceSheet,
 } from '../../config/dataSourceConfig';
 import { generateDataSourceMd, saveMdToStorage } from '../../utils/generateDataSourceMd';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
 
 // ─── 구글시트 연결 테스트 상태 타입 ───
 type SheetTestStatus = { status: 'idle' | 'testing' | 'ok' | 'error'; message?: string; rowCount?: number };
@@ -148,27 +156,28 @@ const CollapsibleSection: React.FC<{
   subtitle?: string;
   children: React.ReactNode;
 }> = ({ id, title, icon, isOpen, onToggle, headerBg, headerTextColor, subtitle, children }) => (
-  <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-    <button
+  <Card className="overflow-hidden">
+    <Button
+      variant="ghost"
       onClick={onToggle}
-      className={`w-full px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-pointer transition-colors hover:opacity-90 ${headerBg || 'bg-gray-50 dark:bg-gray-800'}`}
+      className={`w-full px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-pointer transition-colors hover:opacity-90 rounded-none h-auto ${headerBg || 'bg-gray-50 dark:bg-gray-800'}`}
     >
       <div className="text-left">
         <h3 className={`font-bold flex items-center ${headerTextColor || 'text-gray-900 dark:text-white'}`}>
-          <span className="material-icons-outlined mr-2">{icon}</span>
+          <DynamicIcon name={icon} size={20} className="mr-2" />
           {title}
         </h3>
         {subtitle && <p className={`text-xs mt-1 opacity-70 ${headerTextColor || ''}`}>{subtitle}</p>}
       </div>
-      <span
-        className={`material-icons-outlined transition-transform duration-200 ${headerTextColor || 'text-gray-500 dark:text-gray-400'}`}
+      <DynamicIcon
+        name="expand_more"
+        size={20}
+        className={`transition-transform duration-200 ${headerTextColor || 'text-gray-500 dark:text-gray-400'}`}
         style={{ transform: isOpen ? 'rotate(180deg)' : '' }}
-      >
-        expand_more
-      </span>
-    </button>
+      />
+    </Button>
     {isOpen && <div className="p-6">{children}</div>}
-  </div>
+  </Card>
 );
 
 // ─── 카테고리 블럭 컴포넌트 ───
@@ -179,28 +188,27 @@ const CategoryBlock: React.FC<{
   warningCount: number;
   children: React.ReactNode;
 }> = ({ category, isOpen, onToggle, warningCount, children }) => (
-  <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
-    <button
+  <Card className="overflow-hidden">
+    <Button
+      variant="ghost"
       onClick={onToggle}
-      className={`w-full px-5 py-4 flex items-center justify-between cursor-pointer transition-all ${
+      className={`w-full px-5 py-4 flex items-center justify-between cursor-pointer transition-all rounded-none h-auto ${
         isOpen
           ? `${category.color} text-white`
           : 'bg-white dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-gray-800'
       }`}
     >
       <div className="flex items-center gap-3">
-        <span className={`material-icons-outlined text-2xl ${isOpen ? 'text-white' : category.textColor}`}>
-          {category.icon}
-        </span>
+        <DynamicIcon name={category.icon} size={24} className={isOpen ? 'text-white' : category.textColor} />
         <div className="text-left">
           <div className="flex items-center gap-2">
             <h3 className={`font-bold text-base ${isOpen ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
               {category.label}
             </h3>
             {warningCount > 0 && !isOpen && (
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-amber-900 text-xs font-bold animate-pulse">
+              <Badge className="w-5 h-5 rounded-full bg-amber-400 text-amber-900 text-xs font-bold animate-pulse p-0 justify-center border-0">
                 !
-              </span>
+              </Badge>
             )}
           </div>
           <p className={`text-xs mt-0.5 ${isOpen ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -210,25 +218,25 @@ const CategoryBlock: React.FC<{
       </div>
       <div className="flex items-center gap-2">
         {warningCount > 0 && isOpen && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-xs font-medium text-white">
-            <span className="material-icons-outlined text-sm">warning</span>
+          <Badge className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-xs font-medium text-white border-0">
+            <DynamicIcon name="warning" size={14} />
             {warningCount}개 확인 필요
-          </span>
+          </Badge>
         )}
-        <span
-          className={`material-icons-outlined transition-transform duration-200 ${isOpen ? 'text-white' : 'text-gray-400'}`}
+        <DynamicIcon
+          name="expand_more"
+          size={20}
+          className={`transition-transform duration-200 ${isOpen ? 'text-white' : 'text-gray-400'}`}
           style={{ transform: isOpen ? 'rotate(180deg)' : '' }}
-        >
-          expand_more
-        </span>
+        />
       </div>
-    </button>
+    </Button>
     {isOpen && (
       <div className="bg-gray-50/50 dark:bg-gray-900/30 p-4 space-y-3">
         {children}
       </div>
     )}
-  </div>
+  </Card>
 );
 
 export const SettingsView: React.FC = () => {
@@ -398,23 +406,23 @@ export const SettingsView: React.FC = () => {
   const renderSheetTestBadge = (sheetId: string) => {
     const result = sheetTestResults[sheetId];
     if (!result || result.status === 'idle') {
-      return <span className="inline-flex items-center text-xs text-gray-400"><span className="w-2 h-2 rounded-full bg-gray-300 mr-1"></span>미확인</span>;
+      return <Badge variant="outline" className="text-xs text-gray-400 border-gray-300"><span className="w-2 h-2 rounded-full bg-gray-300 mr-1"></span>미확인</Badge>;
     }
     if (result.status === 'testing') {
-      return <span className="inline-flex items-center text-xs text-blue-500"><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mr-1"></span>테스트 중</span>;
+      return <Badge variant="outline" className="text-xs text-blue-500 border-blue-300"><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mr-1"></span>테스트 중</Badge>;
     }
     if (result.status === 'ok') {
-      return <span className="inline-flex items-center text-xs text-green-600"><span className="material-icons-outlined text-sm mr-0.5">check_circle</span>{result.rowCount}행</span>;
+      return <Badge variant="outline" className="text-xs text-green-600 border-green-300"><DynamicIcon name="check_circle" size={14} className="mr-0.5" />{result.rowCount}행</Badge>;
     }
     return (
-      <span className="inline-flex items-center text-xs text-red-500 group relative">
-        <span className="material-icons-outlined text-sm mr-0.5">error</span>오류
+      <Badge variant="outline" className="text-xs text-red-500 border-red-300 group relative">
+        <DynamicIcon name="error" size={14} className="mr-0.5" />오류
         {result.message && (
           <span className="hidden group-hover:block absolute bottom-full left-0 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10 mb-1">
             {result.message}
           </span>
         )}
-      </span>
+      </Badge>
     );
   };
 
@@ -467,20 +475,20 @@ export const SettingsView: React.FC = () => {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">회사 코드 (Company Code)</label>
-              <input type="text" value={ecountConfig.COM_CODE} onChange={e => handleConfigChange('COM_CODE', e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" placeholder="예: 12345" />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">회사 코드 (Company Code)</Label>
+              <Input type="text" value={ecountConfig.COM_CODE} onChange={e => handleConfigChange('COM_CODE', e.target.value)} placeholder="예: 12345" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">사용자 ID (User ID)</label>
-              <input type="text" value={ecountConfig.USER_ID} onChange={e => handleConfigChange('USER_ID', e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" placeholder="예: MASTER" />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">사용자 ID (User ID)</Label>
+              <Input type="text" value={ecountConfig.USER_ID} onChange={e => handleConfigChange('USER_ID', e.target.value)} placeholder="예: MASTER" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API 인증키 (API Key)</label>
-              <input type="password" value={ecountConfig.API_KEY} onChange={e => handleConfigChange('API_KEY', e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" placeholder="ECOUNT API 인증키 입력" />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API 인증키 (API Key)</Label>
+              <Input type="password" value={ecountConfig.API_KEY} onChange={e => handleConfigChange('API_KEY', e.target.value)} placeholder="ECOUNT API 인증키 입력" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Zone</label>
-              <select value={ecountConfig.ZONE} onChange={e => handleConfigChange('ZONE', e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border">
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Zone</Label>
+              <select value={ecountConfig.ZONE} onChange={e => handleConfigChange('ZONE', e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 <option value="CD">CD (운영서버)</option>
                 <option value="AA">AA</option>
                 <option value="AB">AB</option>
@@ -490,14 +498,14 @@ export const SettingsView: React.FC = () => {
           </div>
           <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
             <p className="text-xs text-gray-500">* 저장 시 자동으로 연결 테스트가 수행됩니다. <br />* 변경된 정보는 로컬 브라우저에만 저장됩니다.</p>
-            <button onClick={handleSaveAndTest} disabled={isTesting} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 flex items-center">
+            <Button onClick={handleSaveAndTest} disabled={isTesting} className="flex items-center">
               {isTesting ? (<><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>연결 확인 중...</>) : '저장 및 연결 테스트'}
-            </button>
+            </Button>
           </div>
           {apiTestStatus && (
             <div className={`mt-2 p-3 rounded-md text-sm ${apiTestStatus.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
               <div className="flex items-center">
-                <span className="material-icons-outlined mr-2 text-sm">{apiTestStatus.success ? 'check_circle' : 'error'}</span>
+                <DynamicIcon name={apiTestStatus.success ? 'check_circle' : 'error'} size={16} className="mr-2" />
                 {apiTestStatus.message}
               </div>
             </div>
@@ -519,15 +527,15 @@ export const SettingsView: React.FC = () => {
           {/* 서비스 계정 안내 */}
           <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-100 dark:border-yellow-800">
             <div className="flex items-start">
-              <span className="material-icons-outlined text-yellow-600 dark:text-yellow-400 mr-2 text-lg">warning</span>
+              <DynamicIcon name="warning" size={20} className="text-yellow-600 dark:text-yellow-400 mr-2 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">서비스 계정 권한</p>
                 <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">아래 서비스 계정에 스프레드시트 <strong>"편집자"</strong> 권한을 공유하세요:</p>
                 <div className="mt-2 flex items-center gap-2">
                   <code className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded text-xs font-mono text-yellow-900 dark:text-yellow-100">{normalizedDSConfig.serviceAccount}</code>
-                  <button onClick={() => navigator.clipboard.writeText(normalizedDSConfig.serviceAccount)} className="p-1 hover:bg-yellow-200 dark:hover:bg-yellow-700 rounded transition-colors" title="복사">
-                    <span className="material-icons-outlined text-sm text-yellow-700 dark:text-yellow-300">content_copy</span>
-                  </button>
+                  <Button variant="ghost" size="icon" onClick={() => navigator.clipboard.writeText(normalizedDSConfig.serviceAccount)} className="h-7 w-7 hover:bg-yellow-200 dark:hover:bg-yellow-700" title="복사">
+                    <DynamicIcon name="content_copy" size={14} className="text-yellow-700 dark:text-yellow-300" />
+                  </Button>
                 </div>
               </div>
             </div>
@@ -535,154 +543,156 @@ export const SettingsView: React.FC = () => {
 
           {/* 전체 연결 테스트 버튼 */}
           <div className="flex justify-end">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={testAllSheets}
-              className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-300 rounded text-xs font-medium transition-colors flex items-center gap-1"
+              className="bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-300 border-green-200 dark:border-green-800 text-xs flex items-center gap-1"
             >
-              <span className="material-icons-outlined text-sm">wifi_tethering</span>
+              <DynamicIcon name="wifi_tethering" size={14} />
               전체 연결 테스트
-            </button>
+            </Button>
           </div>
 
           {/* 시트 목록 테이블 */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
-                  <th className="pb-2 pr-2 w-6"></th>
-                  <th className="pb-2 pr-4">데이터</th>
-                  <th className="pb-2 pr-4">시트명</th>
-                  <th className="pb-2 pr-4 text-center">헤더행</th>
-                  <th className="pb-2 pr-4 text-center">시작행</th>
-                  <th className="pb-2 pr-4 text-center">컬럼수</th>
-                  <th className="pb-2 pr-4 text-center">상태</th>
-                  <th className="pb-2 text-center">작업</th>
-                </tr>
-              </thead>
-              <tbody>
-                {normalizedDSConfig.sheets.map((sheet) => (
-                  <React.Fragment key={sheet.id}>
-                    <tr className={`border-b dark:border-gray-700 ${!sheet.enabled ? 'opacity-50' : ''}`}>
-                      <td className="py-2.5 pr-2">
-                        <input
-                          type="checkbox"
-                          checked={sheet.enabled}
-                          onChange={() => {
-                            const updated = { ...normalizedDSConfig };
-                            const idx = updated.sheets.findIndex(s => s.id === sheet.id);
-                            updated.sheets[idx] = { ...sheet, enabled: !sheet.enabled };
-                            setNormalizedDSConfig(updated);
-                            saveDataSourceConfig(updated);
-                            const md = generateDataSourceMd(updated);
-                            saveMdToStorage(md);
-                          }}
-                          className="rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                      </td>
-                      <td className="py-2.5 pr-4 font-medium text-gray-800 dark:text-gray-200">{sheet.name}</td>
-                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400 font-mono text-xs">{sheet.sheetName}</td>
-                      <td className="py-2.5 pr-4 text-center text-gray-500">{sheet.headerRow}</td>
-                      <td className="py-2.5 pr-4 text-center text-gray-500">{sheet.dataStartRow}</td>
-                      <td className="py-2.5 pr-4 text-center">
-                        <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded text-xs">{sheet.columns.length}</span>
-                      </td>
-                      <td className="py-2.5 pr-4 text-center">{renderSheetTestBadge(sheet.id)}</td>
-                      <td className="py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => testSheetConnection(sheet)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="연결 테스트">
-                            <span className="material-icons-outlined text-sm text-blue-500 dark:text-blue-400">wifi_tethering</span>
-                          </button>
-                          <button onClick={() => setDsEditingSheet(dsEditingSheet === sheet.id ? null : sheet.id)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="편집">
-                            <span className="material-icons-outlined text-sm text-gray-500 dark:text-gray-400">{dsEditingSheet === sheet.id ? 'expand_less' : 'edit'}</span>
-                          </button>
-                          <a href={getSpreadsheetUrl(sheet.spreadsheetId)} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="시트 열기">
-                            <span className="material-icons-outlined text-sm text-green-600 dark:text-green-400">open_in_new</span>
+          <Table>
+            <TableHeader>
+              <TableRow className="text-xs text-gray-500 dark:text-gray-400">
+                <TableHead className="w-6 py-2 pr-2"></TableHead>
+                <TableHead className="py-2 pr-4">데이터</TableHead>
+                <TableHead className="py-2 pr-4">시트명</TableHead>
+                <TableHead className="py-2 pr-4 text-center">헤더행</TableHead>
+                <TableHead className="py-2 pr-4 text-center">시작행</TableHead>
+                <TableHead className="py-2 pr-4 text-center">컬럼수</TableHead>
+                <TableHead className="py-2 pr-4 text-center">상태</TableHead>
+                <TableHead className="py-2 text-center">작업</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {normalizedDSConfig.sheets.map((sheet) => (
+                <React.Fragment key={sheet.id}>
+                  <TableRow className={!sheet.enabled ? 'opacity-50' : ''}>
+                    <TableCell className="py-2.5 pr-2">
+                      <input
+                        type="checkbox"
+                        checked={sheet.enabled}
+                        onChange={() => {
+                          const updated = { ...normalizedDSConfig };
+                          const idx = updated.sheets.findIndex(s => s.id === sheet.id);
+                          updated.sheets[idx] = { ...sheet, enabled: !sheet.enabled };
+                          setNormalizedDSConfig(updated);
+                          saveDataSourceConfig(updated);
+                          const md = generateDataSourceMd(updated);
+                          saveMdToStorage(md);
+                        }}
+                        className="rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                    </TableCell>
+                    <TableCell className="py-2.5 pr-4 font-medium text-gray-800 dark:text-gray-200">{sheet.name}</TableCell>
+                    <TableCell className="py-2.5 pr-4 text-gray-600 dark:text-gray-400 font-mono text-xs">{sheet.sheetName}</TableCell>
+                    <TableCell className="py-2.5 pr-4 text-center text-gray-500">{sheet.headerRow}</TableCell>
+                    <TableCell className="py-2.5 pr-4 text-center text-gray-500">{sheet.dataStartRow}</TableCell>
+                    <TableCell className="py-2.5 pr-4 text-center">
+                      <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0">{sheet.columns.length}</Badge>
+                    </TableCell>
+                    <TableCell className="py-2.5 pr-4 text-center">{renderSheetTestBadge(sheet.id)}</TableCell>
+                    <TableCell className="py-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => testSheetConnection(sheet)} className="h-7 w-7" title="연결 테스트">
+                          <DynamicIcon name="wifi_tethering" size={14} className="text-blue-500 dark:text-blue-400" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setDsEditingSheet(dsEditingSheet === sheet.id ? null : sheet.id)} className="h-7 w-7" title="편집">
+                          <DynamicIcon name={dsEditingSheet === sheet.id ? 'expand_less' : 'edit'} size={14} className="text-gray-500 dark:text-gray-400" />
+                        </Button>
+                        <Button variant="ghost" size="icon" asChild className="h-7 w-7">
+                          <a href={getSpreadsheetUrl(sheet.spreadsheetId)} target="_blank" rel="noopener noreferrer" title="시트 열기">
+                            <DynamicIcon name="open_in_new" size={14} className="text-green-600 dark:text-green-400" />
                           </a>
-                        </div>
-                      </td>
-                    </tr>
-                    {/* 편집 확장 영역 */}
-                    {dsEditingSheet === sheet.id && (
-                      <tr>
-                        <td colSpan={8} className="bg-gray-50 dark:bg-gray-800/50 px-4 py-4">
-                          <div className="space-y-3">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">시트명</label>
-                                <input type="text" value={sheet.sheetName} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, sheetName: e.target.value }; setNormalizedDSConfig(updated); }} className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border" />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">헤더행</label>
-                                <input type="number" min={1} value={sheet.headerRow} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, headerRow: Number(e.target.value) }; setNormalizedDSConfig(updated); }} className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border" />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">데이터시작행</label>
-                                <input type="number" min={1} value={sheet.dataStartRow} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, dataStartRow: Number(e.target.value) }; setNormalizedDSConfig(updated); }} className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border" />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">스프레드시트 ID</label>
-                                <input type="text" value={sheet.spreadsheetId} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, spreadsheetId: e.target.value }; setNormalizedDSConfig(updated); }} className="block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1.5 border font-mono text-xs" />
-                              </div>
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {/* 편집 확장 영역 */}
+                  {dsEditingSheet === sheet.id && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="bg-gray-50 dark:bg-gray-800/50 px-4 py-4">
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                              <Label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">시트명</Label>
+                              <Input type="text" value={sheet.sheetName} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, sheetName: e.target.value }; setNormalizedDSConfig(updated); }} className="h-8 text-sm" />
                             </div>
                             <div>
-                              <h5 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">컬럼 매핑 ({sheet.columns.length}개)</h5>
-                              <div className="max-h-48 overflow-auto rounded border dark:border-gray-700">
-                                <table className="w-full text-xs">
-                                  <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
-                                    <tr>
-                                      <th className="px-2 py-1 text-left">필드</th>
-                                      <th className="px-2 py-1 text-center w-16">컬럼</th>
-                                      <th className="px-2 py-1 text-left">라벨</th>
-                                      <th className="px-2 py-1 text-center w-20">타입</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {sheet.columns.map((col, ci) => (
-                                      <tr key={ci} className="border-t dark:border-gray-700">
-                                        <td className="px-2 py-1 font-mono text-blue-600 dark:text-blue-400">{col.key}</td>
-                                        <td className="px-2 py-1 text-center">
-                                          <input type="text" value={col.column} onChange={(e) => { const updated = { ...normalizedDSConfig }; const si = updated.sheets.findIndex(s => s.id === sheet.id); const cols = [...updated.sheets[si].columns]; cols[ci] = { ...cols[ci], column: e.target.value }; updated.sheets[si] = { ...updated.sheets[si], columns: cols }; setNormalizedDSConfig(updated); }} className="w-12 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 p-0.5 border" />
-                                        </td>
-                                        <td className="px-2 py-1 text-gray-600 dark:text-gray-400">{col.label}</td>
-                                        <td className="px-2 py-1 text-center">
-                                          <span className={`px-1.5 py-0.5 rounded ${col.type === 'number' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : col.type === 'date' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>{col.type}</span>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                              <Label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">헤더행</Label>
+                              <Input type="number" min={1} value={sheet.headerRow} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, headerRow: Number(e.target.value) }; setNormalizedDSConfig(updated); }} className="h-8 text-sm" />
                             </div>
-                            {sheet.notes && <p className="text-xs text-gray-500 dark:text-gray-400 italic">{sheet.notes}</p>}
-                            <div className="flex justify-end">
-                              <button onClick={() => { saveDataSourceConfig(normalizedDSConfig); const md = generateDataSourceMd(normalizedDSConfig); saveMdToStorage(md); setDsEditingSheet(null); }} className="px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors">저장</button>
+                            <div>
+                              <Label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">데이터시작행</Label>
+                              <Input type="number" min={1} value={sheet.dataStartRow} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, dataStartRow: Number(e.target.value) }; setNormalizedDSConfig(updated); }} className="h-8 text-sm" />
+                            </div>
+                            <div>
+                              <Label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">스프레드시트 ID</Label>
+                              <Input type="text" value={sheet.spreadsheetId} onChange={(e) => { const updated = { ...normalizedDSConfig }; const idx = updated.sheets.findIndex(s => s.id === sheet.id); updated.sheets[idx] = { ...sheet, spreadsheetId: e.target.value }; setNormalizedDSConfig(updated); }} className="h-8 text-sm font-mono text-xs" />
                             </div>
                           </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          <div>
+                            <h5 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">컬럼 매핑 ({sheet.columns.length}개)</h5>
+                            <div className="max-h-48 overflow-auto rounded border dark:border-gray-700">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-gray-100 dark:bg-gray-700 sticky top-0">
+                                    <TableHead className="px-2 py-1 text-left text-xs">필드</TableHead>
+                                    <TableHead className="px-2 py-1 text-center w-16 text-xs">컬럼</TableHead>
+                                    <TableHead className="px-2 py-1 text-left text-xs">라벨</TableHead>
+                                    <TableHead className="px-2 py-1 text-center w-20 text-xs">타입</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {sheet.columns.map((col, ci) => (
+                                    <TableRow key={ci}>
+                                      <TableCell className="px-2 py-1 font-mono text-blue-600 dark:text-blue-400 text-xs">{col.key}</TableCell>
+                                      <TableCell className="px-2 py-1 text-center">
+                                        <Input type="text" value={col.column} onChange={(e) => { const updated = { ...normalizedDSConfig }; const si = updated.sheets.findIndex(s => s.id === sheet.id); const cols = [...updated.sheets[si].columns]; cols[ci] = { ...cols[ci], column: e.target.value }; updated.sheets[si] = { ...updated.sheets[si], columns: cols }; setNormalizedDSConfig(updated); }} className="w-12 h-6 text-center text-xs p-0.5" />
+                                      </TableCell>
+                                      <TableCell className="px-2 py-1 text-gray-600 dark:text-gray-400 text-xs">{col.label}</TableCell>
+                                      <TableCell className="px-2 py-1 text-center">
+                                        <Badge variant="secondary" className={`text-xs ${col.type === 'number' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : col.type === 'date' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'} border-0`}>{col.type}</Badge>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                          {sheet.notes && <p className="text-xs text-gray-500 dark:text-gray-400 italic">{sheet.notes}</p>}
+                          <div className="flex justify-end">
+                            <Button size="sm" onClick={() => { saveDataSourceConfig(normalizedDSConfig); const md = generateDataSourceMd(normalizedDSConfig); saveMdToStorage(md); setDsEditingSheet(null); }} className="text-xs">저장</Button>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
+              ))}
+            </TableBody>
+          </Table>
 
           {/* 액션 버튼 */}
           <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
             <div className="flex gap-2">
-              <button onClick={() => { saveDataSourceConfig(normalizedDSConfig); const md = generateDataSourceMd(normalizedDSConfig); saveMdToStorage(md); alert('설정이 저장되고 MD 문서가 업데이트되었습니다.'); }} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-300 rounded text-xs font-medium transition-colors flex items-center gap-1">
-                <span className="material-icons-outlined text-sm">save</span>전체 저장 + MD 업데이트
-              </button>
-              <button onClick={() => { const md = generateDataSourceMd(normalizedDSConfig); setDsMdPreview(!dsMdPreview); saveMdToStorage(md); }} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300 rounded text-xs font-medium transition-colors flex items-center gap-1">
-                <span className="material-icons-outlined text-sm">description</span>{dsMdPreview ? 'MD 미리보기 닫기' : 'MD 미리보기'}
-              </button>
-              <button onClick={() => { const md = generateDataSourceMd(normalizedDSConfig); const blob = new Blob([md], { type: 'text/markdown' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `google-sheets-data-${new Date().toISOString().slice(0, 10)}.md`; a.click(); URL.revokeObjectURL(url); }} className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded text-xs font-medium transition-colors flex items-center gap-1">
-                <span className="material-icons-outlined text-sm">download</span>MD 다운로드
-              </button>
+              <Button variant="outline" size="sm" onClick={() => { saveDataSourceConfig(normalizedDSConfig); const md = generateDataSourceMd(normalizedDSConfig); saveMdToStorage(md); alert('설정이 저장되고 MD 문서가 업데이트되었습니다.'); }} className="bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-300 border-green-200 dark:border-green-800 text-xs flex items-center gap-1">
+                <DynamicIcon name="save" size={14} />전체 저장 + MD 업데이트
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => { const md = generateDataSourceMd(normalizedDSConfig); setDsMdPreview(!dsMdPreview); saveMdToStorage(md); }} className="bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300 border-blue-200 dark:border-blue-800 text-xs flex items-center gap-1">
+                <DynamicIcon name="description" size={14} />{dsMdPreview ? 'MD 미리보기 닫기' : 'MD 미리보기'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => { const md = generateDataSourceMd(normalizedDSConfig); const blob = new Blob([md], { type: 'text/markdown' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `google-sheets-data-${new Date().toISOString().slice(0, 10)}.md`; a.click(); URL.revokeObjectURL(url); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 text-xs flex items-center gap-1">
+                <DynamicIcon name="download" size={14} />MD 다운로드
+              </Button>
             </div>
-            <button onClick={() => { if (window.confirm('데이터 소스 설정을 기본값으로 초기화하시겠습니까?')) { const defaultConfig = resetDataSourceConfig(); setNormalizedDSConfig(defaultConfig); const md = generateDataSourceMd(defaultConfig); saveMdToStorage(md); } }} className="text-red-500 hover:text-red-600 dark:text-red-400 text-xs flex items-center">
-              <span className="material-icons-outlined text-sm mr-1">restart_alt</span>초기화
-            </button>
+            <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('데이터 소스 설정을 기본값으로 초기화하시겠습니까?')) { const defaultConfig = resetDataSourceConfig(); setNormalizedDSConfig(defaultConfig); const md = generateDataSourceMd(defaultConfig); saveMdToStorage(md); } }} className="text-red-500 hover:text-red-600 dark:text-red-400 text-xs flex items-center">
+              <DynamicIcon name="restart_alt" size={14} className="mr-1" />초기화
+            </Button>
           </div>
 
           {dsMdPreview && (
@@ -709,56 +719,56 @@ export const SettingsView: React.FC = () => {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 이익률</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 이익률</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={Math.round(draft.defaultMarginRate * 100)} onChange={e => updateDraft({ defaultMarginRate: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={Math.round(draft.defaultMarginRate * 100)} onChange={e => updateDraft({ defaultMarginRate: Number(e.target.value) / 100 })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">실제 비용 데이터 없을 때 사용하는 추정 마진율</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">폐기 기본 단가</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">폐기 기본 단가</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="100" min="0" value={draft.wasteUnitCost} onChange={e => updateDraft({ wasteUnitCost: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
+              <Input type="number" step="100" min="0" value={draft.wasteUnitCost} onChange={e => updateDraft({ wasteUnitCost: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">원/개</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">품목별 단가가 없을 때 사용하는 기본 폐기 비용</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">노무비 추정 비율</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">노무비 추정 비율</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={Math.round(draft.laborCostRatio * 100)} onChange={e => updateDraft({ laborCostRatio: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={Math.round(draft.laborCostRatio * 100)} onChange={e => updateDraft({ laborCostRatio: Number(e.target.value) / 100 })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">총 원가 대비 노무비 추정 비율 (실데이터 없을 때)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">간접 경비 비율</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">간접 경비 비율</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={Math.round(draft.overheadRatio * 100)} onChange={e => updateDraft({ overheadRatio: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={Math.round(draft.overheadRatio * 100)} onChange={e => updateDraft({ overheadRatio: Number(e.target.value) / 100 })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">구매비 대비 기타 간접 경비 비율</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">의제 매입세액 공제율</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">의제 매입세액 공제율</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="0.1" min="0" max="100" value={Math.round((draft.deemedInputTaxRate ?? 0.028) * 1000) / 10} onChange={e => updateDraft({ deemedInputTaxRate: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
+              <Input type="number" step="0.1" min="0" max="100" value={Math.round((draft.deemedInputTaxRate ?? 0.028) * 1000) / 10} onChange={e => updateDraft({ deemedInputTaxRate: Number(e.target.value) / 100 })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">당기 매입액 대비 의제 매입세액 공제율 (원가 점수에 반영)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">월 고정경비</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">월 고정경비</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="10000" min="0" value={draft.monthlyFixedOverhead} onChange={e => updateDraft({ monthlyFixedOverhead: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
+              <Input type="number" step="10000" min="0" value={draft.monthlyFixedOverhead} onChange={e => updateDraft({ monthlyFixedOverhead: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">원</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고 보유비 비율</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고 보유비 비율</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={Math.round(draft.holdingCostRate * 100)} onChange={e => updateDraft({ holdingCostRate: Number(e.target.value) / 100 })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={Math.round(draft.holdingCostRate * 100)} onChange={e => updateDraft({ holdingCostRate: Number(e.target.value) / 100 })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">단가 대비 연간 재고 보유비 비율</p>
@@ -777,16 +787,16 @@ export const SettingsView: React.FC = () => {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">반별 평균 인건비</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">반별 평균 인건비</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1000" min="0" value={draft.avgHourlyWage} onChange={e => updateDraft({ avgHourlyWage: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1000" min="0" value={draft.avgHourlyWage} onChange={e => updateDraft({ avgHourlyWage: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">원/시간</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">초과근무 할증률</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">초과근무 할증률</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="0.1" min="1" max="5" value={draft.overtimeMultiplier} onChange={e => updateDraft({ overtimeMultiplier: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="0.1" min="1" max="5" value={draft.overtimeMultiplier} onChange={e => updateDraft({ overtimeMultiplier: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">배</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">기본급 대비 초과근무 할증 배수</p>
@@ -817,20 +827,20 @@ export const SettingsView: React.FC = () => {
           <p className="text-xs text-gray-500 mb-4">비용 요소별 월간 예산을 설정합니다. 예산 대비 실적 분석에 활용됩니다.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">원재료 예산 (원)</label>
-              <input type="number" value={draft.budgetRawMaterial} onChange={e => updateDraft({ budgetRawMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">원재료 예산 (원)</Label>
+              <Input type="number" value={draft.budgetRawMaterial} onChange={e => updateDraft({ budgetRawMaterial: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">부재료 예산 (원)</label>
-              <input type="number" value={draft.budgetSubMaterial} onChange={e => updateDraft({ budgetSubMaterial: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">부재료 예산 (원)</Label>
+              <Input type="number" value={draft.budgetSubMaterial} onChange={e => updateDraft({ budgetSubMaterial: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">노무비 예산 (원)</label>
-              <input type="number" value={draft.budgetLabor} onChange={e => updateDraft({ budgetLabor: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">노무비 예산 (원)</Label>
+              <Input type="number" value={draft.budgetLabor} onChange={e => updateDraft({ budgetLabor: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">수도광열전력 예산 (원)</label>
-              <input type="number" value={draft.budgetOverhead} onChange={e => updateDraft({ budgetOverhead: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">수도광열전력 예산 (원)</Label>
+              <Input type="number" value={draft.budgetOverhead} onChange={e => updateDraft({ budgetOverhead: Number(e.target.value) })} />
             </div>
           </div>
         </div>
@@ -849,13 +859,13 @@ export const SettingsView: React.FC = () => {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">평균 주문 단가 (원)</label>
-            <input type="number" value={draft.averageOrderValue} onChange={e => updateDraft({ averageOrderValue: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">평균 주문 단가 (원)</Label>
+            <Input type="number" value={draft.averageOrderValue} onChange={e => updateDraft({ averageOrderValue: Number(e.target.value) })} />
             <p className="text-xs text-gray-500 mt-1">건당 변동비 산출에 사용 (주문 건수 = 매출 / 평균단가)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">기본 이익률 (%)</label>
-            <input type="number" step="0.01" value={Math.round(draft.defaultMarginRate * 100)} onChange={e => updateDraft({ defaultMarginRate: Number(e.target.value) / 100 })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">기본 이익률 (%)</Label>
+            <Input type="number" step="0.01" value={Math.round(draft.defaultMarginRate * 100)} onChange={e => updateDraft({ defaultMarginRate: Number(e.target.value) / 100 })} />
             <p className="text-xs text-gray-500 mt-1">구매 데이터 없을 때 사용하는 추정 이익률</p>
           </div>
         </div>
@@ -872,17 +882,17 @@ export const SettingsView: React.FC = () => {
           <p className="text-xs text-gray-500 mb-4">각 채널의 매출 입금까지 소요되는 일수를 설정합니다. 현금흐름 분석에 반영됩니다.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">자사몰 (일)</label>
-              <input type="number" value={draft.channelCollectionDaysJasa} onChange={e => updateDraft({ channelCollectionDaysJasa: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">자사몰 (일)</Label>
+              <Input type="number" value={draft.channelCollectionDaysJasa} onChange={e => updateDraft({ channelCollectionDaysJasa: Number(e.target.value) })} min={0} />
               <p className="text-xs text-gray-500 mt-1">0 = 즉시 입금</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">쿠팡 (일)</label>
-              <input type="number" value={draft.channelCollectionDaysCoupang} onChange={e => updateDraft({ channelCollectionDaysCoupang: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">쿠팡 (일)</Label>
+              <Input type="number" value={draft.channelCollectionDaysCoupang} onChange={e => updateDraft({ channelCollectionDaysCoupang: Number(e.target.value) })} min={0} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">컬리 (일)</label>
-              <input type="number" value={draft.channelCollectionDaysKurly} onChange={e => updateDraft({ channelCollectionDaysKurly: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" min={0} />
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">컬리 (일)</Label>
+              <Input type="number" value={draft.channelCollectionDaysKurly} onChange={e => updateDraft({ channelCollectionDaysKurly: Number(e.target.value) })} min={0} />
             </div>
           </div>
         </div>
@@ -911,17 +921,17 @@ export const SettingsView: React.FC = () => {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">안전재고 산출 기준일수</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">안전재고 산출 기준일수</Label>
             <div className="flex items-center gap-2">
-              <input type="number" value={safetyDays} onChange={e => setSafetyDays(Number(e.target.value))} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border" />
+              <Input type="number" value={safetyDays} onChange={e => setSafetyDays(Number(e.target.value))} />
               <span className="text-sm text-gray-500">일</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">일 평균 출고량 × {safetyDays}일분을 안전재고로 설정합니다.</p>
+            <p className="text-xs text-gray-500 mt-1">일 평균 출고량 x {safetyDays}일분을 안전재고로 설정합니다.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">저마진 경고 알림 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">저마진 경고 알림 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" value={marginAlert} onChange={e => setMarginAlert(Number(e.target.value))} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm p-2 border" />
+              <Input type="number" value={marginAlert} onChange={e => setMarginAlert(Number(e.target.value))} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">마진율이 {marginAlert}% 미만일 경우 대시보드에 경고를 표시합니다.</p>
@@ -940,31 +950,31 @@ export const SettingsView: React.FC = () => {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ABC A등급 기준 (금액 비중)</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ABC A등급 기준 (금액 비중)</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="5" min="0" max="100" value={draft.abcClassAThreshold} onChange={e => updateDraft({ abcClassAThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="5" min="0" max="100" value={draft.abcClassAThreshold} onChange={e => updateDraft({ abcClassAThreshold: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">상위 금액 비중이 이 값 이하인 품목을 A등급으로 분류</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ABC B등급 기준 (금액 비중)</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ABC B등급 기준 (금액 비중)</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="5" min="0" max="100" value={draft.abcClassBThreshold} onChange={e => updateDraft({ abcClassBThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="5" min="0" max="100" value={draft.abcClassBThreshold} onChange={e => updateDraft({ abcClassBThreshold: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">XYZ X등급 변동계수 상한</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">XYZ X등급 변동계수 상한</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="0.1" min="0" max="5" value={draft.xyzClassXThreshold} onChange={e => updateDraft({ xyzClassXThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="0.1" min="0" max="5" value={draft.xyzClassXThreshold} onChange={e => updateDraft({ xyzClassXThreshold: Number(e.target.value) })} />
             </div>
             <p className="text-xs text-gray-500 mt-1">변동계수(CV)가 이 값 이하이면 X등급 (안정 수요)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">XYZ Y등급 변동계수 상한</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">XYZ Y등급 변동계수 상한</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="0.1" min="0" max="5" value={draft.xyzClassYThreshold} onChange={e => updateDraft({ xyzClassYThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="0.1" min="0" max="5" value={draft.xyzClassYThreshold} onChange={e => updateDraft({ xyzClassYThreshold: Number(e.target.value) })} />
             </div>
           </div>
         </div>
@@ -981,32 +991,32 @@ export const SettingsView: React.FC = () => {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 리드타임</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 리드타임</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="1" max="90" value={draft.defaultLeadTime} onChange={e => updateDraft({ defaultLeadTime: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="1" max="90" value={draft.defaultLeadTime} onChange={e => updateDraft({ defaultLeadTime: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">일</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">리드타임 표준편차</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">리드타임 표준편차</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="0.5" min="0" max="30" value={draft.leadTimeStdDev} onChange={e => updateDraft({ leadTimeStdDev: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="0.5" min="0" max="30" value={draft.leadTimeStdDev} onChange={e => updateDraft({ leadTimeStdDev: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">일</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">납품기간 변동성 (클수록 안전재고 증가)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 서비스 수준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">기본 서비스 수준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="50" max="99" value={draft.defaultServiceLevel} onChange={e => updateDraft({ defaultServiceLevel: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="50" max="99" value={draft.defaultServiceLevel} onChange={e => updateDraft({ defaultServiceLevel: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">품절 방지 목표 확률 (높을수록 안전재고 증가)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">주문 비용 (건당)</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">주문 비용 (건당)</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="5000" min="0" value={draft.orderCost} onChange={e => updateDraft({ orderCost: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="5000" min="0" value={draft.orderCost} onChange={e => updateDraft({ orderCost: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">원</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">EOQ 계산에 사용되는 1회 주문 비용</p>
@@ -1030,7 +1040,7 @@ export const SettingsView: React.FC = () => {
         <div className="space-y-6">
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">탐지 민감도 (Sensitivity)</label>
+              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">탐지 민감도 (Sensitivity)</Label>
               <span className="text-sm font-bold text-primary dark:text-green-400">{aiSensitivity}%</span>
             </div>
             <input type="range" min="0" max="100" value={aiSensitivity} onChange={e => setAiSensitivity(Number(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary" />
@@ -1041,10 +1051,7 @@ export const SettingsView: React.FC = () => {
               <p className="text-sm font-medium text-gray-900 dark:text-white">자동 BOM 학습 승인</p>
               <p className="text-xs text-gray-500">AI가 95% 이상 확신할 때 표준 BOM을 자동 업데이트합니다.</p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-            </label>
+            <Switch />
           </div>
         </div>
       </CollapsibleSection>
@@ -1060,45 +1067,45 @@ export const SettingsView: React.FC = () => {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">폐기율 경고 임계값</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">폐기율 경고 임계값</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="0.5" min="0" max="100" value={draft.wasteThresholdPct} onChange={e => updateDraft({ wasteThresholdPct: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="0.5" min="0" max="100" value={draft.wasteThresholdPct} onChange={e => updateDraft({ wasteThresholdPct: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 비율을 초과하면 폐기 경고 발생</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">레시피 오차 허용률</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">레시피 오차 허용률</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={draft.recipeVarianceTolerance} onChange={e => updateDraft({ recipeVarianceTolerance: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={draft.recipeVarianceTolerance} onChange={e => updateDraft({ recipeVarianceTolerance: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상 감지 주의 임계값</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상 감지 주의 임계값</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={draft.anomalyWarningThreshold} onChange={e => updateDraft({ anomalyWarningThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={draft.anomalyWarningThreshold} onChange={e => updateDraft({ anomalyWarningThreshold: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상 감지 위험 임계값</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상 감지 위험 임계값</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={draft.anomalyCriticalThreshold} onChange={e => updateDraft({ anomalyCriticalThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={draft.anomalyCriticalThreshold} onChange={e => updateDraft({ anomalyCriticalThreshold: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">수율 저하 허용률</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">수율 저하 허용률</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="0.5" min="0" max="100" value={draft.yieldDropTolerance} onChange={e => updateDraft({ yieldDropTolerance: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="0.5" min="0" max="100" value={draft.yieldDropTolerance} onChange={e => updateDraft({ yieldDropTolerance: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">성능 허용 오차</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">성능 허용 오차</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={draft.performanceTolerance} onChange={e => updateDraft({ performanceTolerance: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={draft.performanceTolerance} onChange={e => updateDraft({ performanceTolerance: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
           </div>
@@ -1117,62 +1124,62 @@ export const SettingsView: React.FC = () => {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">마진율 양호 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">마진율 양호 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={draft.profitMarginGood} onChange={e => updateDraft({ profitMarginGood: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={draft.profitMarginGood} onChange={e => updateDraft({ profitMarginGood: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 값 이상이면 녹색(양호)으로 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">단가상승 경고 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">단가상승 경고 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" max="100" value={draft.priceIncreaseThreshold} onChange={e => updateDraft({ priceIncreaseThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" max="100" value={draft.priceIncreaseThreshold} onChange={e => updateDraft({ priceIncreaseThreshold: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 값 이상 상승한 원재료를 경고 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 주의 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 주의 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="5" min="0" max="100" value={draft.anomalyScoreWarning} onChange={e => updateDraft({ anomalyScoreWarning: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="5" min="0" max="100" value={draft.anomalyScoreWarning} onChange={e => updateDraft({ anomalyScoreWarning: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">점</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 점수 이상이면 주의(주황) 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 고위험 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 고위험 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="5" min="0" max="100" value={draft.anomalyScoreHigh} onChange={e => updateDraft({ anomalyScoreHigh: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="5" min="0" max="100" value={draft.anomalyScoreHigh} onChange={e => updateDraft({ anomalyScoreHigh: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">점</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 위험 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">이상점수 위험 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="5" min="0" max="100" value={draft.anomalyScoreCritical} onChange={e => updateDraft({ anomalyScoreCritical: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="5" min="0" max="100" value={draft.anomalyScoreCritical} onChange={e => updateDraft({ anomalyScoreCritical: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">점</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고일수 긴급 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고일수 긴급 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" value={draft.stockDaysUrgent} onChange={e => updateDraft({ stockDaysUrgent: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" value={draft.stockDaysUrgent} onChange={e => updateDraft({ stockDaysUrgent: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">일</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 일수 미만이면 긴급(빨강) 표시</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고일수 주의 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">재고일수 주의 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="1" min="0" value={draft.stockDaysWarning} onChange={e => updateDraft({ stockDaysWarning: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="1" min="0" value={draft.stockDaysWarning} onChange={e => updateDraft({ stockDaysWarning: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">일</span>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">저회전 판단 기준</label>
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">저회전 판단 기준</Label>
             <div className="flex items-center gap-2">
-              <input type="number" step="0.1" min="0" value={draft.lowTurnoverThreshold} onChange={e => updateDraft({ lowTurnoverThreshold: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm sm:text-sm p-2 border" />
+              <Input type="number" step="0.1" min="0" value={draft.lowTurnoverThreshold} onChange={e => updateDraft({ lowTurnoverThreshold: Number(e.target.value) })} />
               <span className="text-sm text-gray-500">회전율</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">이 값 미만이면 저회전 품목으로 분류</p>
@@ -1196,21 +1203,21 @@ export const SettingsView: React.FC = () => {
       >
         <div className="space-y-3">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                  <th className="text-left py-2 px-1.5">구간</th>
-                  <th className="text-center py-2 px-1.5">매출<br/><span className="text-[10px] font-normal">(권장판매가)</span></th>
-                  <th className="text-center py-2 px-1.5">매출<br/><span className="text-[10px] font-normal">(생산)</span></th>
-                  <th className="text-center py-2 px-1.5">원재료비</th>
-                  <th className="text-center py-2 px-1.5">부재료비</th>
-                  <th className="text-center py-2 px-1.5">노무비</th>
-                  <th className="text-center py-2 px-1.5">수도광열<br/>전력</th>
-                  <th className="text-center py-2 px-1.5">폐기율<br/><span className="text-[10px] font-normal">(%)</span></th>
-                  <th className="text-center py-2 px-1.5 w-8"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow className="text-xs text-gray-500 dark:text-gray-400">
+                  <TableHead className="text-left py-2 px-1.5">구간</TableHead>
+                  <TableHead className="text-center py-2 px-1.5">매출<br/><span className="text-[10px] font-normal">(권장판매가)</span></TableHead>
+                  <TableHead className="text-center py-2 px-1.5">매출<br/><span className="text-[10px] font-normal">(생산)</span></TableHead>
+                  <TableHead className="text-center py-2 px-1.5">원재료비</TableHead>
+                  <TableHead className="text-center py-2 px-1.5">부재료비</TableHead>
+                  <TableHead className="text-center py-2 px-1.5">노무비</TableHead>
+                  <TableHead className="text-center py-2 px-1.5">수도광열<br/>전력</TableHead>
+                  <TableHead className="text-center py-2 px-1.5">폐기율<br/><span className="text-[10px] font-normal">(%)</span></TableHead>
+                  <TableHead className="text-center py-2 px-1.5 w-8"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {(draft.profitCenterGoals || []).map((goal: ProfitCenterGoal, idx: number) => {
                   const rev = goal.revenueBracket;
                   const absFields: { key: 'targetRecommendedRevenue' | 'targetProductionRevenue' | 'targetRawMaterialCost' | 'targetSubMaterialCost' | 'targetLaborCost' | 'targetOverheadCost'; multiplierKey?: 'revenueToRawMaterial' | 'revenueToSubMaterial' | 'productionToLabor' | 'revenueToExpense'; step: number }[] = [
@@ -1222,24 +1229,24 @@ export const SettingsView: React.FC = () => {
                     { key: 'targetOverheadCost', multiplierKey: 'revenueToExpense', step: 10 },
                   ];
                   return (
-                    <tr key={idx} className="border-b border-gray-50 dark:border-gray-800">
-                      <td className="py-1.5 px-1.5">
+                    <TableRow key={idx} className="border-b border-gray-50 dark:border-gray-800">
+                      <TableCell className="py-1.5 px-1.5">
                         <div className="flex items-center gap-1">
-                          <input type="number" step="1" min="1" value={Math.round(rev / 100000000)} onChange={e => {
+                          <Input type="number" step="1" min="1" value={Math.round(rev / 100000000)} onChange={e => {
                             const newGoals = [...draft.profitCenterGoals];
                             const updated = { ...goal, revenueBracket: Number(e.target.value) * 100000000, label: `${e.target.value}억` };
                             newGoals[idx] = deriveMultipliersFromTargets(updated);
                             updateDraft({ profitCenterGoals: newGoals });
-                          }} className="w-14 text-right rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border" />
+                          }} className="w-14 text-right h-7 text-sm p-1" />
                           <span className="text-xs text-gray-400">억</span>
                         </div>
-                      </td>
+                      </TableCell>
                       {absFields.map(({ key, multiplierKey, step }) => {
                         const val = goal.targets[key];
                         const multiplier = multiplierKey ? goal.targets[multiplierKey] : null;
                         return (
-                          <td key={key} className="py-1.5 px-1.5 text-center">
-                            <input
+                          <TableCell key={key} className="py-1.5 px-1.5 text-center">
+                            <Input
                               type="number"
                               step={step}
                               min="0"
@@ -1253,41 +1260,43 @@ export const SettingsView: React.FC = () => {
                                 updateDraft({ profitCenterGoals: newGoals });
                               }}
                               placeholder="-"
-                              className="w-[4.5rem] text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
+                              className="w-[4.5rem] text-center h-7 text-sm p-1"
                             />
                             {multiplier != null && (
                               <div className="text-[10px] text-gray-400 mt-0.5">&times;{multiplier}</div>
                             )}
-                          </td>
+                          </TableCell>
                         );
                       })}
                       {(['wasteRateTarget'] as const).map(key => (
-                        <td key={key} className="py-1.5 px-1.5 text-center">
-                          <input type="number" step="0.5" min="0" value={goal.targets[key]} onChange={e => {
+                        <TableCell key={key} className="py-1.5 px-1.5 text-center">
+                          <Input type="number" step="0.5" min="0" value={goal.targets[key]} onChange={e => {
                             const newGoals = [...draft.profitCenterGoals];
                             newGoals[idx] = { ...goal, targets: { ...goal.targets, [key]: Number(e.target.value) } };
                             updateDraft({ profitCenterGoals: newGoals });
-                          }} className="w-14 text-center rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border" />
-                        </td>
+                          }} className="w-14 text-center h-7 text-sm p-1" />
+                        </TableCell>
                       ))}
-                      <td className="py-1.5 px-1.5 text-center">
-                        <button onClick={() => {
+                      <TableCell className="py-1.5 px-1.5 text-center">
+                        <Button variant="ghost" size="icon" onClick={() => {
                           const newGoals = draft.profitCenterGoals.filter((_: ProfitCenterGoal, i: number) => i !== idx);
                           updateDraft({ profitCenterGoals: newGoals });
-                        }} className="text-gray-400 hover:text-red-500">
-                          <span className="material-icons-outlined text-sm">close</span>
-                        </button>
-                      </td>
-                    </tr>
+                        }} className="h-7 w-7 text-gray-400 hover:text-red-500">
+                          <DynamicIcon name="close" size={14} />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
-          <div className="text-xs text-gray-400 px-2">만원 단위 입력 | 배수(&times;)는 생산매출 ÷ 원가 금액으로 자동 계산 (읽기전용)</div>
+          <div className="text-xs text-gray-400 px-2">만원 단위 입력 | 배수(&times;)는 생산매출 / 원가 금액으로 자동 계산 (읽기전용)</div>
 
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => {
               const newGoal: ProfitCenterGoal = {
                 revenueBracket: 1600000000,
@@ -1304,9 +1313,9 @@ export const SettingsView: React.FC = () => {
             }}
             className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 flex items-center"
           >
-            <span className="material-icons-outlined text-sm mr-1">add</span>
+            <DynamicIcon name="add" size={14} className="mr-1" />
             매출 구간 추가
-          </button>
+          </Button>
         </div>
       </CollapsibleSection>
       {/* ═══════════ 17. 설정 내보내기/가져오기 ═══════════ */}
@@ -1322,7 +1331,8 @@ export const SettingsView: React.FC = () => {
             비즈니스 설정, 채널 비용, 노무 기록, 데이터 소스 설정을 JSON 파일로 백업하거나 복원할 수 있습니다.
           </p>
           <div className="flex gap-3">
-            <button
+            <Button
+              variant="outline"
               onClick={() => {
                 const exportData = {
                   version: 1,
@@ -1342,18 +1352,19 @@ export const SettingsView: React.FC = () => {
                 a.click();
                 URL.revokeObjectURL(url);
               }}
-              className="px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded-md text-sm font-medium transition-colors flex items-center"
+              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 text-sm flex items-center"
             >
-              <span className="material-icons-outlined text-sm mr-1">download</span>
+              <DynamicIcon name="download" size={14} className="mr-1" />
               JSON 내보내기
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => importFileRef.current?.click()}
-              className="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 rounded-md text-sm font-medium transition-colors flex items-center"
+              className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-sm flex items-center"
             >
-              <span className="material-icons-outlined text-sm mr-1">upload</span>
+              <DynamicIcon name="upload" size={14} className="mr-1" />
               JSON 가져오기
-            </button>
+            </Button>
             <input
               ref={importFileRef}
               type="file"
@@ -1396,18 +1407,19 @@ export const SettingsView: React.FC = () => {
 
       {/* ═══════════ 설정 초기화 ═══════════ */}
       <div className="flex justify-end">
-        <button
+        <Button
+          variant="outline"
           onClick={() => {
             if (window.confirm('모든 비즈니스 설정을 기본값으로 초기화하시겠습니까?')) {
               resetConfig();
               setDraft({ ...config });
             }
           }}
-          className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-300 rounded-md text-sm font-medium transition-colors flex items-center"
+          className="bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-300 border-red-200 dark:border-red-800 text-sm flex items-center"
         >
-          <span className="material-icons-outlined text-sm mr-1">restart_alt</span>
+          <DynamicIcon name="restart_alt" size={14} className="mr-1" />
           비즈니스 설정 초기화
-        </button>
+        </Button>
       </div>
 
       {/* ═══════════ 하단 고정 저장 바 ═══════════ */}
@@ -1415,23 +1427,23 @@ export const SettingsView: React.FC = () => {
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg">
           <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-              <span className="material-icons-outlined text-lg">edit_note</span>
+              <DynamicIcon name="edit_note" size={20} />
               저장하지 않은 변경사항이 있습니다
             </div>
             <div className="flex gap-3">
-              <button
+              <Button
+                variant="secondary"
                 onClick={handleDiscard}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
               >
                 취소
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSave}
-                className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors flex items-center gap-1"
+                className="flex items-center gap-1"
               >
-                <span className="material-icons-outlined text-sm">save</span>
+                <DynamicIcon name="save" size={14} />
                 저장
-              </button>
+              </Button>
             </div>
           </div>
         </div>

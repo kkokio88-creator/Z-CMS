@@ -6,6 +6,10 @@ import {
   LineChart,
   Line,
 } from 'recharts';
+import { Card, CardContent } from '../ui/card';
+import { DynamicIcon } from '../ui/icon';
+import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
 export interface KPICardProps {
   /** 카드 제목 */
@@ -35,12 +39,6 @@ export interface KPICardProps {
   className?: string;
 }
 
-/**
- * KPICard — 공통 KPI 지표 카드 컴포넌트
- *
- * DashboardHomeView 의 로컬 KPICard 패턴을 추출한 범용 버전.
- * 미니 트렌드 차트(area/line), 아이콘, 변화량 표시를 지원한다.
- */
 export const KPICard: React.FC<KPICardProps> = ({
   title,
   value,
@@ -56,7 +54,6 @@ export const KPICard: React.FC<KPICardProps> = ({
   color = '#3B82F6',
   className = '',
 }) => {
-  // isPositive 결정: 명시적으로 전달된 경우 우선, 없으면 changePercent 부호로 추론
   const positive =
     isPositive !== undefined
       ? isPositive
@@ -64,80 +61,87 @@ export const KPICard: React.FC<KPICardProps> = ({
       ? changePercent >= 0
       : true;
 
-  // 표시할 변화 텍스트
   const changeText =
     change ??
     (changePercent !== undefined
       ? `${changePercent >= 0 ? '+' : ''}${changePercent}%`
       : undefined);
 
+  const TrendIcon =
+    trend === 'up' || (trend === undefined && positive) ? ArrowUp
+    : trend === 'down' || (trend === undefined && !positive) ? ArrowDown
+    : Minus;
+
   return (
-    <div
-      className={`bg-white dark:bg-surface-dark rounded-lg p-5 shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col justify-between h-40 relative overflow-hidden group hover:shadow-md transition-shadow ${className}`}
+    <Card
+      className={cn(
+        'flex flex-col justify-between h-40 relative overflow-hidden group hover:shadow-md transition-shadow',
+        className
+      )}
     >
-      {/* 상단: 제목 + 값 + 아이콘 */}
-      <div className="flex justify-between items-start z-10">
-        <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-            {value}
-            {unit && (
-              <span className="text-base font-normal text-gray-500 dark:text-gray-400 ml-0.5">
-                {unit}
-              </span>
-            )}
-          </p>
+      <CardContent className="p-5 flex flex-col justify-between h-full">
+        {/* 상단: 제목 + 값 + 아이콘 */}
+        <div className="flex justify-between items-start z-10">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <p className="text-2xl font-bold text-foreground mt-1">
+              {value}
+              {unit && (
+                <span className="text-base font-normal text-muted-foreground ml-0.5">
+                  {unit}
+                </span>
+              )}
+            </p>
+          </div>
+
+          {icon && (
+            <div
+              className={cn(
+                'p-2 rounded-full',
+                positive
+                  ? 'bg-green-100 dark:bg-green-900/30'
+                  : 'bg-red-100 dark:bg-red-900/30'
+              )}
+            >
+              <DynamicIcon
+                name={icon}
+                size={20}
+                className={cn(
+                  positive
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
+                )}
+              />
+            </div>
+          )}
         </div>
 
-        {icon && (
-          <div
-            className={`p-2 rounded-full ${
-              positive
-                ? 'bg-green-100 dark:bg-green-900/30'
-                : 'bg-red-100 dark:bg-red-900/30'
-            }`}
-          >
+        {/* 하단: 변화량 */}
+        {changeText !== undefined && (
+          <div className="flex items-center mt-2 z-10">
+            {(trend || changePercent !== undefined) && (
+              <TrendIcon
+                size={12}
+                className={cn(
+                  'mr-0.5',
+                  positive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                )}
+              />
+            )}
             <span
-              className={`material-icons-outlined text-xl ${
+              className={cn(
+                'text-xs font-bold mr-1',
                 positive
                   ? 'text-green-600 dark:text-green-400'
                   : 'text-red-600 dark:text-red-400'
-              }`}
+              )}
             >
-              {icon}
+              {changeText}
             </span>
+            <span className="text-xs text-muted-foreground">{changeLabel}</span>
           </div>
         )}
-      </div>
-
-      {/* 하단: 변화량 */}
-      {changeText !== undefined && (
-        <div className="flex items-center mt-2 z-10">
-          {(trend || changePercent !== undefined) && (
-            <span
-              className={`material-icons-outlined text-xs mr-0.5 ${
-                positive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-              }`}
-            >
-              {trend === 'up' || (trend === undefined && positive)
-                ? 'arrow_upward'
-                : trend === 'down' || (trend === undefined && !positive)
-                ? 'arrow_downward'
-                : 'remove'}
-            </span>
-          )}
-          <span
-            className={`text-xs font-bold mr-1 ${
-              positive
-                ? 'text-green-600 dark:text-green-400'
-                : 'text-red-600 dark:text-red-400'
-            }`}
-          >
-            {changeText}
-          </span>
-          <span className="text-xs text-gray-400">{changeLabel}</span>
-        </div>
-      )}
+      </CardContent>
 
       {/* 배경 미니 차트 */}
       {chartData && chartData.length > 0 ? (
@@ -162,10 +166,10 @@ export const KPICard: React.FC<KPICardProps> = ({
         </div>
       ) : (
         <div className="absolute bottom-2 right-2 opacity-10">
-          <span className="text-4xl text-gray-300 material-icons-outlined">show_chart</span>
+          <DynamicIcon name="show_chart" size={36} className="text-muted-foreground" />
         </div>
       )}
-    </div>
+    </Card>
   );
 };
 

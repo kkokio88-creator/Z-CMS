@@ -17,6 +17,11 @@ import {
 } from 'recharts';
 import { DailyPerformanceMetric, PerformanceStatus, StaffingSuggestion } from '../../types';
 import { formatCurrency, formatNumber } from '../../utils/format';
+import { Button } from '../ui/button';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
 
 interface Props {
   data?: DailyPerformanceMetric[];
@@ -192,85 +197,71 @@ const DailyPerformanceView: React.FC<Props> = ({
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-            <button
+            <Button
+              variant={viewMode === 'today' ? 'secondary' : 'ghost'}
+              size="sm"
               onClick={() => setViewMode('today')}
-              className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                viewMode === 'today'
-                  ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white'
-                  : 'text-gray-500 dark:text-gray-400'
-              }`}
             >
               오늘
-            </button>
-            <button
+            </Button>
+            <Button
+              variant={viewMode === 'trend' ? 'secondary' : 'ghost'}
+              size="sm"
               onClick={() => setViewMode('trend')}
-              className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                viewMode === 'trend'
-                  ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white'
-                  : 'text-gray-500 dark:text-gray-400'
-              }`}
             >
               추세
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
       {/* KPI 요약 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">평균 노무비율</span>
-            <span
-              className={`material-icons-outlined ${kpis.laborTrend === 'up' ? 'text-red-500' : kpis.laborTrend === 'down' ? 'text-green-500' : 'text-gray-400'}`}
-            >
-              {kpis.laborTrend === 'up'
-                ? 'trending_up'
-                : kpis.laborTrend === 'down'
-                  ? 'trending_down'
-                  : 'trending_flat'}
-            </span>
+            <DynamicIcon
+              name={kpis.laborTrend === 'up' ? 'trending_up' : kpis.laborTrend === 'down' ? 'trending_down' : 'trending_flat'}
+              size={20}
+              className={kpis.laborTrend === 'up' ? 'text-red-500' : kpis.laborTrend === 'down' ? 'text-green-500' : 'text-gray-400'}
+            />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.avgLaborRatio.toFixed(1)}%
           </p>
           <p className="text-xs text-gray-500 mt-1">목표: {targets.laborRatio}%</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">평균 원재료비율</span>
-            <span
-              className={`material-icons-outlined ${kpis.materialTrend === 'up' ? 'text-red-500' : kpis.materialTrend === 'down' ? 'text-green-500' : 'text-gray-400'}`}
-            >
-              {kpis.materialTrend === 'up'
-                ? 'trending_up'
-                : kpis.materialTrend === 'down'
-                  ? 'trending_down'
-                  : 'trending_flat'}
-            </span>
+            <DynamicIcon
+              name={kpis.materialTrend === 'up' ? 'trending_up' : kpis.materialTrend === 'down' ? 'trending_down' : 'trending_flat'}
+              size={20}
+              className={kpis.materialTrend === 'up' ? 'text-red-500' : kpis.materialTrend === 'down' ? 'text-green-500' : 'text-gray-400'}
+            />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.avgMaterialRatio.toFixed(1)}%
           </p>
           <p className="text-xs text-gray-500 mt-1">목표: {targets.materialRatio}%</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">평균 효율</span>
-            <span className="material-icons-outlined text-blue-500">speed</span>
+            <DynamicIcon name="speed" size={20} className="text-blue-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.avgEfficiency.toFixed(0)}%
           </p>
           <p className="text-xs text-gray-500 mt-1">생산 효율성</p>
-        </div>
+        </Card>
 
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-500 dark:text-gray-400 text-sm">목표 달성일</span>
-            <span className="material-icons-outlined text-green-500">check_circle</span>
+            <DynamicIcon name="check_circle" size={20} className="text-green-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
             {kpis.onTargetDays}/{kpis.totalDays}일
@@ -279,7 +270,7 @@ const DailyPerformanceView: React.FC<Props> = ({
             달성률{' '}
             {kpis.totalDays > 0 ? ((kpis.onTargetDays / kpis.totalDays) * 100).toFixed(0) : 0}%
           </p>
-        </div>
+        </Card>
       </div>
 
       {viewMode === 'today' ? (
@@ -287,7 +278,7 @@ const DailyPerformanceView: React.FC<Props> = ({
           {/* 게이지 차트 영역 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 노무비율 게이지 */}
-            <div className="bg-white dark:bg-surface-dark rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+            <Card className="p-6">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 text-center">
                 오늘의 노무비율
               </h3>
@@ -309,21 +300,22 @@ const DailyPerformanceView: React.FC<Props> = ({
                   </p>
                   <p className="text-sm text-gray-500">목표: {targets.laborRatio}%</p>
                   {todayData && (
-                    <span
-                      className={`mt-2 px-2 py-1 rounded-full text-xs ${getStatusBadgeClass(todayData.laborStatus)}`}
+                    <Badge
+                      variant="outline"
+                      className={`mt-2 ${getStatusBadgeClass(todayData.laborStatus)}`}
                     >
                       {getStatusText(todayData.laborStatus)}
-                    </span>
+                    </Badge>
                   )}
                 </div>
               </div>
               <div className="text-center text-sm text-gray-600 dark:text-gray-400">
                 노무비: ₩{formatCurrency(todayData?.laborCost || 0)}
               </div>
-            </div>
+            </Card>
 
             {/* 원재료비율 게이지 */}
-            <div className="bg-white dark:bg-surface-dark rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+            <Card className="p-6">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 text-center">
                 오늘의 원재료비율
               </h3>
@@ -345,23 +337,24 @@ const DailyPerformanceView: React.FC<Props> = ({
                   </p>
                   <p className="text-sm text-gray-500">목표: {targets.materialRatio}%</p>
                   {todayData && (
-                    <span
-                      className={`mt-2 px-2 py-1 rounded-full text-xs ${getStatusBadgeClass(todayData.materialStatus)}`}
+                    <Badge
+                      variant="outline"
+                      className={`mt-2 ${getStatusBadgeClass(todayData.materialStatus)}`}
                     >
                       {getStatusText(todayData.materialStatus)}
-                    </span>
+                    </Badge>
                   )}
                 </div>
               </div>
               <div className="text-center text-sm text-gray-600 dark:text-gray-400">
                 원재료비: ₩{formatCurrency(todayData?.materialCost || 0)}
               </div>
-            </div>
+            </Card>
           </div>
 
           {/* 오늘 상세 정보 */}
           {todayData && (
-            <div className="bg-white dark:bg-surface-dark rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+            <Card className="p-6">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
                 오늘의 생산 현황 ({todayData.date} {todayData.dayOfWeek}요일)
               </h3>
@@ -400,7 +393,7 @@ const DailyPerformanceView: React.FC<Props> = ({
                   </p>
                 </div>
               </div>
-            </div>
+            </Card>
           )}
         </>
       ) : (
@@ -408,7 +401,7 @@ const DailyPerformanceView: React.FC<Props> = ({
           {/* 추세 차트 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 비율 추세 */}
-            <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+            <Card className="p-4">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
                 노무비율 / 원재료비율 추세
               </h3>
@@ -457,10 +450,10 @@ const DailyPerformanceView: React.FC<Props> = ({
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </Card>
 
             {/* 일별 효율 */}
-            <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+            <Card className="p-4">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
                 일별 생산 효율
               </h3>
@@ -488,90 +481,89 @@ const DailyPerformanceView: React.FC<Props> = ({
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </Card>
           </div>
 
           {/* 일별 상세 테이블 */}
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <Card className="p-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
               일별 성과 상세
             </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-gray-600 dark:text-gray-300">날짜</th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
-                      생산량
-                    </th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
-                      노무비율
-                    </th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
-                      원재료비율
-                    </th>
-                    <th className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">효율</th>
-                    <th className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">상태</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {data
-                    .slice(-7)
-                    .reverse()
-                    .map(item => (
-                      <tr key={item.date} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                        <td className="px-3 py-2 text-gray-900 dark:text-white">
-                          {item.date} ({item.dayOfWeek})
-                        </td>
-                        <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
-                          {formatNumber(item.productionQty)}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <span
-                            className={
-                              item.actualLaborRatio > targets.laborRatio
-                                ? 'text-red-600'
-                                : 'text-green-600'
-                            }
-                          >
-                            {item.actualLaborRatio.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <span
-                            className={
-                              item.actualMaterialRatio > targets.materialRatio
-                                ? 'text-red-600'
-                                : 'text-green-600'
-                            }
-                          >
-                            {item.actualMaterialRatio.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right text-gray-900 dark:text-white">
-                          {item.efficiency}%
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs ${getStatusBadgeClass(item.overallStatus)}`}
-                          >
-                            {getStatusText(item.overallStatus)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+            <Table>
+              <TableHeader className="bg-gray-50 dark:bg-gray-800">
+                <TableRow>
+                  <TableHead className="px-3 py-2 text-left text-gray-600 dark:text-gray-300">날짜</TableHead>
+                  <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
+                    생산량
+                  </TableHead>
+                  <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
+                    노무비율
+                  </TableHead>
+                  <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
+                    원재료비율
+                  </TableHead>
+                  <TableHead className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">효율</TableHead>
+                  <TableHead className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">상태</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data
+                  .slice(-7)
+                  .reverse()
+                  .map(item => (
+                    <TableRow key={item.date}>
+                      <TableCell className="px-3 py-2 text-gray-900 dark:text-white">
+                        {item.date} ({item.dayOfWeek})
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
+                        {formatNumber(item.productionQty)}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right">
+                        <span
+                          className={
+                            item.actualLaborRatio > targets.laborRatio
+                              ? 'text-red-600'
+                              : 'text-green-600'
+                          }
+                        >
+                          {item.actualLaborRatio.toFixed(1)}%
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right">
+                        <span
+                          className={
+                            item.actualMaterialRatio > targets.materialRatio
+                              ? 'text-red-600'
+                              : 'text-green-600'
+                          }
+                        >
+                          {item.actualMaterialRatio.toFixed(1)}%
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right text-gray-900 dark:text-white">
+                        {item.efficiency}%
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-center">
+                        <Badge
+                          variant="outline"
+                          className={getStatusBadgeClass(item.overallStatus)}
+                        >
+                          {getStatusText(item.overallStatus)}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </Card>
         </>
       )}
 
       {/* 인력 배치 제안 */}
       {staffingSuggestions.length > 0 && (
-        <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+        <Card className="p-4">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-            <span className="material-icons-outlined text-blue-500">people</span>
+            <DynamicIcon name="people" size={20} className="text-blue-500" />
             익일 인력 배치 제안
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -590,29 +582,28 @@ const DailyPerformanceView: React.FC<Props> = ({
                   <span className="font-semibold text-gray-900 dark:text-white">
                     {suggestion.department}
                   </span>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${
+                  <Badge
+                    variant="outline"
+                    className={
                       suggestion.priority === 'high'
                         ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                         : suggestion.priority === 'medium'
                           ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
                           : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                    }`}
+                    }
                   >
                     {suggestion.priority === 'high'
                       ? '긴급'
                       : suggestion.priority === 'medium'
                         ? '권장'
                         : '참고'}
-                  </span>
+                  </Badge>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{suggestion.reason}</p>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">현재:</span>
                   <span className="font-medium">{suggestion.currentHeadcount}명</span>
-                  <span className="material-icons-outlined text-gray-400 text-sm">
-                    arrow_forward
-                  </span>
+                  <DynamicIcon name="arrow_forward" size={14} className="text-gray-400" />
                   <span className="text-gray-500">권장:</span>
                   <span
                     className={`font-medium ${
@@ -627,7 +618,7 @@ const DailyPerformanceView: React.FC<Props> = ({
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

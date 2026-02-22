@@ -23,6 +23,9 @@ import { InsightSection } from '../insight';
 import { getDateRange, filterByDate, getRangeLabel } from '../../utils/dateRange';
 import { FormulaTooltip } from '../common';
 import { FORMULAS } from '../../constants/formulaDescriptions';
+import { Card } from '../ui/card';
+import { DynamicIcon } from '../ui/icon';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
 
 interface Props {
   dailySales: DailySalesData[];
@@ -175,7 +178,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
               {/* KPI: 채널별 매출 + 3단계 이익 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {channels.map((ch, i) => (
-                  <div key={ch.name} className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <Card key={ch.name} className="p-4">
                     <p className="text-xs text-gray-500 dark:text-gray-400">{ch.name}</p>
                     <p className="text-2xl font-bold mt-1" style={{ color: CHANNEL_COLORS[i] }}>
                       {formatCurrency(ch.revenue)}
@@ -198,129 +201,127 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                         <p className="text-xs text-right text-gray-400">마진율 {ch.marginRate3.toFixed(1)}%</p>
                       </div>
                     )}
-                  </div>
+                  </Card>
                 ))}
               </div>
 
               {/* A1: 5단계 수익 분석 테이블 — 권장판매가 → 할인/수수료 → 정산매출 → 이익 */}
               {channelRevenue && totals && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널별 수익 구조 분석 <FormulaTooltip {...FORMULAS.channelRevenue} /></h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b-2 border-gray-300 dark:border-gray-600">
-                          <th className="text-left py-2 px-3 text-gray-500 w-48">구분</th>
-                          {channels.map((ch, i) => (
-                            <th key={ch.name} className="text-right py-2 px-3" style={{ color: CHANNEL_COLORS[i] }}>{ch.name}</th>
-                          ))}
-                          <th className="text-right py-2 px-3 text-gray-900 dark:text-white font-bold">합계</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {/* 매출 산출 구간 */}
-                        <tr className="bg-amber-50/50 dark:bg-amber-900/10 border-b border-gray-200 dark:border-gray-700">
-                          <td colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-amber-700 dark:text-amber-400">매출 산출</td>
-                        </tr>
-                        <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400">권장판매가 매출</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right">{formatCurrency(ch.recommendedRevenue)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold">{formatCurrency(channelRevenue.totalRecommendedRevenue)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 할인금액</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-red-400">{ch.discountAmount > 0 ? `-${formatCurrency(ch.discountAmount)}` : '-'}</td>)}
-                          <td className="py-2 px-3 text-right text-red-400">{channelRevenue.totalDiscountAmount > 0 ? `-${formatCurrency(channelRevenue.totalDiscountAmount)}` : '-'}</td>
-                        </tr>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 플랫폼 수수료</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-red-400">{ch.commissionAmount > 0 ? `-${formatCurrency(ch.commissionAmount)}` : '-'}</td>)}
-                          <td className="py-2 px-3 text-right text-red-400">{channelRevenue.totalCommissionAmount > 0 ? `-${formatCurrency(channelRevenue.totalCommissionAmount)}` : '-'}</td>
-                        </tr>
-                        {channelRevenue.totalPromotionDiscountAmount > 0 && (
-                          <>
-                            <tr className="border-b border-gray-100 dark:border-gray-800">
-                              <td className="py-2 px-3 text-gray-600 dark:text-gray-400 font-medium">공급가액</td>
-                              {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right">{formatCurrency(ch.rawSupplyAmount)}</td>)}
-                              <td className="py-2 px-3 text-right font-medium">{formatCurrency(channelRevenue.totalRawSupplyAmount)}</td>
-                            </tr>
-                            <tr className="border-b border-gray-200 dark:border-gray-700">
-                              <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 할인매출</td>
-                              {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-red-400">{ch.promotionDiscountAmount > 0 ? `-${formatCurrency(ch.promotionDiscountAmount)}` : '-'}</td>)}
-                              <td className="py-2 px-3 text-right text-red-400">{channelRevenue.totalPromotionDiscountAmount > 0 ? `-${formatCurrency(channelRevenue.totalPromotionDiscountAmount)}` : '-'}</td>
-                            </tr>
-                          </>
-                        )}
-                        <tr className="border-b border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30">
-                          <td className="py-2 px-3 font-bold text-gray-900 dark:text-white">정산매출</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right font-bold">{formatCurrency(ch.settlementRevenue)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold">{formatCurrency(channels.reduce((s, ch) => s + ch.settlementRevenue, 0))}</td>
-                        </tr>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b-2 border-gray-300 dark:border-gray-600">
+                        <TableHead className="text-left py-2 px-3 w-48">구분</TableHead>
+                        {channels.map((ch, i) => (
+                          <TableHead key={ch.name} className="text-right py-2 px-3" style={{ color: CHANNEL_COLORS[i] }}>{ch.name}</TableHead>
+                        ))}
+                        <TableHead className="text-right py-2 px-3 text-gray-900 dark:text-white font-bold">합계</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {/* 매출 산출 구간 */}
+                      <TableRow className="bg-amber-50/50 dark:bg-amber-900/10 border-b border-gray-200 dark:border-gray-700 hover:bg-amber-50/50">
+                        <TableCell colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-amber-700 dark:text-amber-400">매출 산출</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-100 dark:border-gray-800">
+                        <TableCell className="py-2 px-3 text-gray-600 dark:text-gray-400">권장판매가 매출</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right">{formatCurrency(ch.recommendedRevenue)}</TableCell>)}
+                        <TableCell className="py-2 px-3 text-right font-bold">{formatCurrency(channelRevenue.totalRecommendedRevenue)}</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-100 dark:border-gray-800">
+                        <TableCell className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 할인금액</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right text-red-400">{ch.discountAmount > 0 ? `-${formatCurrency(ch.discountAmount)}` : '-'}</TableCell>)}
+                        <TableCell className="py-2 px-3 text-right text-red-400">{channelRevenue.totalDiscountAmount > 0 ? `-${formatCurrency(channelRevenue.totalDiscountAmount)}` : '-'}</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableCell className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 플랫폼 수수료</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right text-red-400">{ch.commissionAmount > 0 ? `-${formatCurrency(ch.commissionAmount)}` : '-'}</TableCell>)}
+                        <TableCell className="py-2 px-3 text-right text-red-400">{channelRevenue.totalCommissionAmount > 0 ? `-${formatCurrency(channelRevenue.totalCommissionAmount)}` : '-'}</TableCell>
+                      </TableRow>
+                      {channelRevenue.totalPromotionDiscountAmount > 0 && (
+                        <>
+                          <TableRow className="border-b border-gray-100 dark:border-gray-800">
+                            <TableCell className="py-2 px-3 text-gray-600 dark:text-gray-400 font-medium">공급가액</TableCell>
+                            {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right">{formatCurrency(ch.rawSupplyAmount)}</TableCell>)}
+                            <TableCell className="py-2 px-3 text-right font-medium">{formatCurrency(channelRevenue.totalRawSupplyAmount)}</TableCell>
+                          </TableRow>
+                          <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                            <TableCell className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 할인매출</TableCell>
+                            {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right text-red-400">{ch.promotionDiscountAmount > 0 ? `-${formatCurrency(ch.promotionDiscountAmount)}` : '-'}</TableCell>)}
+                            <TableCell className="py-2 px-3 text-right text-red-400">{channelRevenue.totalPromotionDiscountAmount > 0 ? `-${formatCurrency(channelRevenue.totalPromotionDiscountAmount)}` : '-'}</TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                      <TableRow className="border-b border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-50/50">
+                        <TableCell className="py-2 px-3 font-bold text-gray-900 dark:text-white">정산매출</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right font-bold">{formatCurrency(ch.settlementRevenue)}</TableCell>)}
+                        <TableCell className="py-2 px-3 text-right font-bold">{formatCurrency(channels.reduce((s, ch) => s + ch.settlementRevenue, 0))}</TableCell>
+                      </TableRow>
 
-                        {/* 1단계: 제품이익 */}
-                        <tr className="bg-green-50/50 dark:bg-green-900/10 border-b border-gray-200 dark:border-gray-700">
-                          <td colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-green-700 dark:text-green-400">1단계: 제품이익</td>
-                        </tr>
-                        <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 재료비 <span className="text-xs text-gray-400">(권장판매가/1.1×50%)</span></td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.materialCost)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channelRevenue.totalMaterialCost)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <td className="py-2 px-3 font-medium text-green-700 dark:text-green-400">제품이익</td>
-                          {channels.map(ch => <td key={ch.name} className={`py-2 px-3 text-right font-medium ${ch.profit1 >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(ch.profit1)}</td>)}
-                          <td className={`py-2 px-3 text-right font-bold ${totals.profit1 >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(totals.profit1)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <td className="py-1 px-3 text-gray-400 text-xs">마진율</td>
-                          {channels.map(ch => <td key={ch.name} className="py-1 px-3 text-right text-xs text-gray-400">{ch.marginRate1.toFixed(1)}%</td>)}
-                          <td className="py-1 px-3 text-right text-xs text-gray-400">{totals.revenue > 0 ? (totals.profit1 / totals.revenue * 100).toFixed(1) : '0.0'}%</td>
-                        </tr>
+                      {/* 1단계: 제품이익 */}
+                      <TableRow className="bg-green-50/50 dark:bg-green-900/10 border-b border-gray-200 dark:border-gray-700 hover:bg-green-50/50">
+                        <TableCell colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-green-700 dark:text-green-400">1단계: 제품이익</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-100 dark:border-gray-800">
+                        <TableCell className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 재료비 <span className="text-xs text-gray-400">(권장판매가/1.1×50%)</span></TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.materialCost)}</TableCell>)}
+                        <TableCell className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channelRevenue.totalMaterialCost)}</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableCell className="py-2 px-3 font-medium text-green-700 dark:text-green-400">제품이익</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className={`py-2 px-3 text-right font-medium ${ch.profit1 >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(ch.profit1)}</TableCell>)}
+                        <TableCell className={`py-2 px-3 text-right font-bold ${totals.profit1 >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(totals.profit1)}</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableCell className="py-1 px-3 text-gray-400 text-xs">마진율</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className="py-1 px-3 text-right text-xs text-gray-400">{ch.marginRate1.toFixed(1)}%</TableCell>)}
+                        <TableCell className="py-1 px-3 text-right text-xs text-gray-400">{totals.revenue > 0 ? (totals.profit1 / totals.revenue * 100).toFixed(1) : '0.0'}%</TableCell>
+                      </TableRow>
 
-                        {/* 2단계: 채널이익 */}
-                        <tr className="bg-blue-50/50 dark:bg-blue-900/10 border-b border-gray-200 dark:border-gray-700">
-                          <td colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-blue-700 dark:text-blue-400">2단계: 채널이익</td>
-                        </tr>
-                        <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 채널 변동비</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.channelVariableCost)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channels.reduce((s, c) => s + c.channelVariableCost, 0))}</td>
-                        </tr>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <td className="py-2 px-3 font-medium text-blue-700 dark:text-blue-400">채널이익</td>
-                          {channels.map(ch => <td key={ch.name} className={`py-2 px-3 text-right font-medium ${ch.profit2 >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatCurrency(ch.profit2)}</td>)}
-                          <td className={`py-2 px-3 text-right font-bold ${totals.profit2 >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatCurrency(totals.profit2)}</td>
-                        </tr>
+                      {/* 2단계: 채널이익 */}
+                      <TableRow className="bg-blue-50/50 dark:bg-blue-900/10 border-b border-gray-200 dark:border-gray-700 hover:bg-blue-50/50">
+                        <TableCell colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-blue-700 dark:text-blue-400">2단계: 채널이익</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-100 dark:border-gray-800">
+                        <TableCell className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 채널 변동비</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.channelVariableCost)}</TableCell>)}
+                        <TableCell className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channels.reduce((s, c) => s + c.channelVariableCost, 0))}</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableCell className="py-2 px-3 font-medium text-blue-700 dark:text-blue-400">채널이익</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className={`py-2 px-3 text-right font-medium ${ch.profit2 >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatCurrency(ch.profit2)}</TableCell>)}
+                        <TableCell className={`py-2 px-3 text-right font-bold ${totals.profit2 >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatCurrency(totals.profit2)}</TableCell>
+                      </TableRow>
 
-                        {/* 3단계: 사업부이익 */}
-                        <tr className="bg-emerald-50/50 dark:bg-emerald-900/10 border-b border-gray-200 dark:border-gray-700">
-                          <td colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-emerald-700 dark:text-emerald-400">3단계: 사업부이익</td>
-                        </tr>
-                        <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 채널 고정비</td>
-                          {channels.map(ch => <td key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.channelFixedCost)}</td>)}
-                          <td className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channels.reduce((s, c) => s + c.channelFixedCost, 0))}</td>
-                        </tr>
-                        <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                          <td className="py-2 px-3 font-bold text-emerald-700 dark:text-emerald-400">사업부이익</td>
-                          {channels.map(ch => <td key={ch.name} className={`py-2 px-3 text-right font-bold ${ch.profit3 >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(ch.profit3)}</td>)}
-                          <td className={`py-2 px-3 text-right font-bold ${totals.profit3 >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(totals.profit3)}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-1 px-3 text-gray-400 text-xs">마진율</td>
-                          {channels.map(ch => (
-                            <td key={ch.name} className={`py-1 px-3 text-right text-xs font-medium ${ch.marginRate3 >= config.profitMarginGood ? 'text-green-600' : ch.marginRate3 >= 0 ? 'text-orange-500' : 'text-red-600'}`}>{ch.marginRate3.toFixed(1)}%</td>
-                          ))}
-                          <td className="py-1 px-3 text-right text-xs font-bold">{totals.revenue > 0 ? (totals.profit3 / totals.revenue * 100).toFixed(1) : '0.0'}%</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                      {/* 3단계: 사업부이익 */}
+                      <TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10 border-b border-gray-200 dark:border-gray-700 hover:bg-emerald-50/50">
+                        <TableCell colSpan={channels.length + 2} className="py-1.5 px-3 text-xs font-bold text-emerald-700 dark:text-emerald-400">3단계: 사업부이익</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-100 dark:border-gray-800">
+                        <TableCell className="py-2 px-3 text-gray-600 dark:text-gray-400 pl-6">(-) 채널 고정비</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className="py-2 px-3 text-right text-gray-500">{formatCurrency(ch.channelFixedCost)}</TableCell>)}
+                        <TableCell className="py-2 px-3 text-right font-bold text-gray-500">{formatCurrency(channels.reduce((s, c) => s + c.channelFixedCost, 0))}</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-50">
+                        <TableCell className="py-2 px-3 font-bold text-emerald-700 dark:text-emerald-400">사업부이익</TableCell>
+                        {channels.map(ch => <TableCell key={ch.name} className={`py-2 px-3 text-right font-bold ${ch.profit3 >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(ch.profit3)}</TableCell>)}
+                        <TableCell className={`py-2 px-3 text-right font-bold ${totals.profit3 >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(totals.profit3)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="py-1 px-3 text-gray-400 text-xs">마진율</TableCell>
+                        {channels.map(ch => (
+                          <TableCell key={ch.name} className={`py-1 px-3 text-right text-xs font-medium ${ch.marginRate3 >= config.profitMarginGood ? 'text-green-600' : ch.marginRate3 >= 0 ? 'text-orange-500' : 'text-red-600'}`}>{ch.marginRate3.toFixed(1)}%</TableCell>
+                        ))}
+                        <TableCell className="py-1 px-3 text-right text-xs font-bold">{totals.revenue > 0 ? (totals.profit3 / totals.revenue * 100).toFixed(1) : '0.0'}%</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </Card>
               )}
 
               {/* A2: 주간 채널별 매출 LineChart */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 채널별 매출 추이</h3>
                 {weeklyChannelTrend.length > 0 ? (
                   <div className="h-72">
@@ -339,11 +340,11 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                     </ResponsiveContainer>
                   </div>
                 ) : <p className="text-gray-400 text-center py-10">매출 데이터 없음</p>}
-              </div>
+              </Card>
 
               {/* 점유율 Pie + 마진율 비교 */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널 점유율</h3>
                   {channels.length > 0 ? (
                     <div className="h-64">
@@ -358,10 +359,10 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
-                </div>
+                </Card>
 
                 {hasProfit && channelRevenue && (
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <Card className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">채널별 마진율 비교</h3>
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
@@ -385,7 +386,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                     <p className="text-xs text-gray-500 mt-2 text-center">
                       마진율 = 이익 / 매출 x 100 | 기준: {config.profitMarginGood}% 이상 양호
                     </p>
-                  </div>
+                  </Card>
                 )}
               </div>
             </div>
@@ -401,32 +402,32 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
             <div className="space-y-6">
               {/* A3: 최근 30일 기반 표시 */}
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2">
-                <span className="material-icons-outlined text-blue-500 text-lg">info</span>
+                <DynamicIcon name="info" size={18} className="text-blue-500" />
                 <p className="text-sm text-blue-700 dark:text-blue-300">{rangeLabelText} 판매 데이터 기준 품목별 매출/마진 분석입니다.</p>
               </div>
 
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 품목 수</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{productProfit?.items.length || 0}개</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">1위 품목</p>
                   <p className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1 truncate">{topItems[0]?.productName || '-'}</p>
                   <p className="text-xs text-gray-400 mt-1">매출 {formatCurrency(topItems[0]?.revenue || 0)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 매출</p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">{formatCurrency(productProfit?.totalRevenue || 0)}</p>
-                </div>
+                </Card>
               </div>
 
               {/* Top / Bottom Bar Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-green-500">trending_up</span>
+                    <DynamicIcon name="trending_up" size={20} className="text-green-500" />
                     매출 상위 품목
                     <FormulaTooltip {...FORMULAS.productProfit} />
                   </h3>
@@ -444,10 +445,10 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-8">데이터 없음</p>}
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-red-500">trending_down</span>
+                    <DynamicIcon name="trending_down" size={20} className="text-red-500" />
                     매출 하위 품목
                   </h3>
                   {bottomItems.length > 0 ? (
@@ -464,112 +465,108 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                       </ResponsiveContainer>
                     </div>
                   ) : <p className="text-gray-400 text-center py-8">데이터 없음</p>}
-                </div>
+                </Card>
               </div>
 
               {/* 품목별 매출/마진 테이블 */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">품목별 매출/마진</h3>
                 {(productProfit?.items.length || 0) > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">#</th>
-                          <th className="text-left py-2 px-3 text-gray-500">품목명</th>
-                          <th className="text-right py-2 px-3 text-gray-500">매출</th>
-                          <th className="text-right py-2 px-3 text-gray-500">비용</th>
-                          <th className="text-right py-2 px-3 text-gray-500">마진</th>
-                          <th className="text-right py-2 px-3 text-gray-500">마진율</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {productProfit!.items.slice(0, 20).map((item, i) => (
-                          <tr key={item.productCode} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onItemClick({ id: item.productCode, rank: i + 1, skuName: item.productName, channel: '', profit: item.margin, margin: item.marginRate, kind: 'profit' })}>
-                            <td className="py-2 px-3 text-gray-400">{i + 1}</td>
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
-                            <td className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(item.revenue)}</td>
-                            <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.cost)}</td>
-                            <td className={`py-2 px-3 text-right font-medium ${item.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(item.margin)}</td>
-                            <td className={`py-2 px-3 text-right ${item.marginRate >= config.profitMarginGood ? 'text-green-600' : item.marginRate >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
-                              {formatPercent(item.marginRate)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableHead className="text-left py-2 px-3">#</TableHead>
+                        <TableHead className="text-left py-2 px-3">품목명</TableHead>
+                        <TableHead className="text-right py-2 px-3">매출</TableHead>
+                        <TableHead className="text-right py-2 px-3">비용</TableHead>
+                        <TableHead className="text-right py-2 px-3">마진</TableHead>
+                        <TableHead className="text-right py-2 px-3">마진율</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {productProfit!.items.slice(0, 20).map((item, i) => (
+                        <TableRow key={item.productCode} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onItemClick({ id: item.productCode, rank: i + 1, skuName: item.productName, channel: '', profit: item.margin, margin: item.marginRate, kind: 'profit' })}>
+                          <TableCell className="py-2 px-3 text-gray-400">{i + 1}</TableCell>
+                          <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</TableCell>
+                          <TableCell className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(item.revenue)}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.cost)}</TableCell>
+                          <TableCell className={`py-2 px-3 text-right font-medium ${item.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(item.margin)}</TableCell>
+                          <TableCell className={`py-2 px-3 text-right ${item.marginRate >= config.profitMarginGood ? 'text-green-600' : item.marginRate >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                            {formatPercent(item.marginRate)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
-              </div>
+              </Card>
 
               {/* BEP 분석 섹션 */}
               {productBEP && productBEP.items.length > 0 && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    <Card className="p-4">
                       <p className="text-xs text-gray-500 dark:text-gray-400">전체 BEP 매출</p>
                       <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(productBEP.overallBEPSales)}</p>
-                    </div>
-                    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    </Card>
+                    <Card className="p-4">
                       <p className="text-xs text-gray-500 dark:text-gray-400">BEP 달성률</p>
                       <p className={`text-2xl font-bold mt-1 ${productBEP.overallAchievementRate >= 100 ? 'text-green-600' : 'text-red-600'}`}>
                         {productBEP.overallAchievementRate}%
                       </p>
-                    </div>
-                    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    </Card>
+                    <Card className="p-4">
                       <p className="text-xs text-gray-500 dark:text-gray-400">여유비율</p>
                       <p className={`text-2xl font-bold mt-1 ${productBEP.overallSafetyMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {productBEP.overallSafetyMargin}%
                       </p>
-                    </div>
-                    <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    </Card>
+                    <Card className="p-4">
                       <p className="text-xs text-gray-500 dark:text-gray-400">평균 기여이익률</p>
                       <p className="text-2xl font-bold text-indigo-600 mt-1">{productBEP.avgContributionRate}%</p>
-                    </div>
+                    </Card>
                   </div>
 
-                  <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <Card className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                      <span className="material-icons-outlined text-orange-500">balance</span>
+                      <DynamicIcon name="balance" size={20} className="text-orange-500" />
                       품목별 손익분기점 (BEP)
                       <FormulaTooltip {...FORMULAS.productBEP} />
                     </h3>
                     <p className="text-xs text-gray-500 mb-4">
                       고정비 {formatCurrency(productBEP.totalFixedCost)}을 매출비중으로 배분 | 여유비율 낮은 순 정렬
                     </p>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200 dark:border-gray-700">
-                            <th className="text-left py-2 px-3 text-gray-500">품목</th>
-                            <th className="text-right py-2 px-3 text-gray-500">판매단가</th>
-                            <th className="text-right py-2 px-3 text-gray-500">변동단가</th>
-                            <th className="text-right py-2 px-3 text-gray-500">기여이익률</th>
-                            <th className="text-right py-2 px-3 text-blue-600">BEP 수량</th>
-                            <th className="text-right py-2 px-3 text-gray-500">실제 수량</th>
-                            <th className="text-right py-2 px-3 text-gray-500">달성률</th>
-                            <th className="text-right py-2 px-3 text-gray-500">여유비율</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {productBEP.items.slice(0, 20).map(item => (
-                            <tr key={item.productCode} className={`border-b border-gray-100 dark:border-gray-800 ${item.safetyMargin < 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
-                              <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</td>
-                              <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(item.unitPrice)}</td>
-                              <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.unitVariableCost)}</td>
-                              <td className={`py-2 px-3 text-right font-medium ${item.contributionRate >= 30 ? 'text-green-600' : item.contributionRate >= 10 ? 'text-orange-500' : 'text-red-600'}`}>{item.contributionRate}%</td>
-                              <td className="py-2 px-3 text-right text-blue-600 font-medium">{item.bepUnits.toLocaleString()}</td>
-                              <td className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{item.actualUnits.toLocaleString()}</td>
-                              <td className={`py-2 px-3 text-right font-medium ${item.achievementRate >= 100 ? 'text-green-600' : 'text-red-600'}`}>{item.achievementRate}%</td>
-                              <td className={`py-2 px-3 text-right font-bold ${item.safetyMargin >= 20 ? 'text-green-600' : item.safetyMargin >= 0 ? 'text-orange-500' : 'text-red-600'}`}>
-                                {item.safetyMargin > 0 ? '+' : ''}{item.safetyMargin}%
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                          <TableHead className="text-left py-2 px-3">품목</TableHead>
+                          <TableHead className="text-right py-2 px-3">판매단가</TableHead>
+                          <TableHead className="text-right py-2 px-3">변동단가</TableHead>
+                          <TableHead className="text-right py-2 px-3">기여이익률</TableHead>
+                          <TableHead className="text-right py-2 px-3 text-blue-600">BEP 수량</TableHead>
+                          <TableHead className="text-right py-2 px-3">실제 수량</TableHead>
+                          <TableHead className="text-right py-2 px-3">달성률</TableHead>
+                          <TableHead className="text-right py-2 px-3">여유비율</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {productBEP.items.slice(0, 20).map(item => (
+                          <TableRow key={item.productCode} className={`border-b border-gray-100 dark:border-gray-800 ${item.safetyMargin < 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
+                            <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{item.productName}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatCurrency(item.unitPrice)}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.unitVariableCost)}</TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-medium ${item.contributionRate >= 30 ? 'text-green-600' : item.contributionRate >= 10 ? 'text-orange-500' : 'text-red-600'}`}>{item.contributionRate}%</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-blue-600 font-medium">{item.bepUnits.toLocaleString()}</TableCell>
+                            <TableCell className="py-2 px-3 text-right text-gray-700 dark:text-gray-300">{item.actualUnits.toLocaleString()}</TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-medium ${item.achievementRate >= 100 ? 'text-green-600' : 'text-red-600'}`}>{item.achievementRate}%</TableCell>
+                            <TableCell className={`py-2 px-3 text-right font-bold ${item.safetyMargin >= 20 ? 'text-green-600' : item.safetyMargin >= 0 ? 'text-orange-500' : 'text-red-600'}`}>
+                              {item.safetyMargin > 0 ? '+' : ''}{item.safetyMargin}%
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Card>
                 </>
               )}
             </div>
@@ -588,30 +585,30 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
             <div className="space-y-6">
               {/* KPI */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 예산</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatCurrency(budgetActual.totalBudget)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">총 실적</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(budgetActual.totalActual)}</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">차이 ({budgetActual.diff <= 0 ? '절감' : '초과'})</p>
                   <p className={`text-2xl font-bold mt-1 ${budgetActual.diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {budgetActual.diff > 0 ? '+' : ''}{formatCurrency(budgetActual.diff)}
                   </p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">달성률</p>
                   <p className={`text-2xl font-bold mt-1 ${budgetActual.achievementRate <= 100 ? 'text-green-600' : 'text-red-600'}`}>
                     {budgetActual.achievementRate}%
                   </p>
-                </div>
+                </Card>
               </div>
 
               {/* 비용 요소별 예산 vs 실적 Bar */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">비용 요소별 예산 vs 실적</h3>
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
@@ -630,11 +627,11 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </Card>
 
               {/* 일별 누적 지출 LineChart */}
               {budgetActual.dailyCumulative.length > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">일별 누적 지출</h3>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
@@ -649,55 +646,53 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 요소별 상세 테이블 */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">요소별 예산 상세</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-2 px-3 text-gray-500">항목</th>
-                        <th className="text-right py-2 px-3 text-gray-500">예산</th>
-                        <th className="text-right py-2 px-3 text-blue-600">실적</th>
-                        <th className="text-right py-2 px-3 text-gray-500">차이</th>
-                        <th className="text-right py-2 px-3 text-gray-500">달성률</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {budgetActual.items.map(item => (
-                        <tr key={item.name} className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 font-medium" style={{ color: item.color }}>{item.name}</td>
-                          <td className="py-2 px-3 text-right text-gray-600">{formatCurrency(item.budget)}</td>
-                          <td className="py-2 px-3 text-right text-blue-600 font-medium">{formatCurrency(item.actual)}</td>
-                          <td className={`py-2 px-3 text-right font-medium ${item.diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {item.diff > 0 ? '+' : ''}{formatCurrency(item.diff)}
-                          </td>
-                          <td className={`py-2 px-3 text-right ${item.rate <= 100 ? 'text-green-600' : 'text-red-600'}`}>
-                            {item.rate}%
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="border-t-2 border-gray-300 dark:border-gray-600 font-bold">
-                        <td className="py-2 px-3">합계</td>
-                        <td className="py-2 px-3 text-right">{formatCurrency(budgetActual.totalBudget)}</td>
-                        <td className="py-2 px-3 text-right text-blue-600">{formatCurrency(budgetActual.totalActual)}</td>
-                        <td className={`py-2 px-3 text-right ${budgetActual.diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {budgetActual.diff > 0 ? '+' : ''}{formatCurrency(budgetActual.diff)}
-                        </td>
-                        <td className={`py-2 px-3 text-right ${budgetActual.achievementRate <= 100 ? 'text-green-600' : 'text-red-600'}`}>
-                          {budgetActual.achievementRate}%
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                      <TableHead className="text-left py-2 px-3">항목</TableHead>
+                      <TableHead className="text-right py-2 px-3">예산</TableHead>
+                      <TableHead className="text-right py-2 px-3 text-blue-600">실적</TableHead>
+                      <TableHead className="text-right py-2 px-3">차이</TableHead>
+                      <TableHead className="text-right py-2 px-3">달성률</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {budgetActual.items.map(item => (
+                      <TableRow key={item.name} className="border-b border-gray-100 dark:border-gray-800">
+                        <TableCell className="py-2 px-3 font-medium" style={{ color: item.color }}>{item.name}</TableCell>
+                        <TableCell className="py-2 px-3 text-right text-gray-600">{formatCurrency(item.budget)}</TableCell>
+                        <TableCell className="py-2 px-3 text-right text-blue-600 font-medium">{formatCurrency(item.actual)}</TableCell>
+                        <TableCell className={`py-2 px-3 text-right font-medium ${item.diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {item.diff > 0 ? '+' : ''}{formatCurrency(item.diff)}
+                        </TableCell>
+                        <TableCell className={`py-2 px-3 text-right ${item.rate <= 100 ? 'text-green-600' : 'text-red-600'}`}>
+                          {item.rate}%
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="border-t-2 border-gray-300 dark:border-gray-600 font-bold">
+                      <TableCell className="py-2 px-3">합계</TableCell>
+                      <TableCell className="py-2 px-3 text-right">{formatCurrency(budgetActual.totalBudget)}</TableCell>
+                      <TableCell className="py-2 px-3 text-right text-blue-600">{formatCurrency(budgetActual.totalActual)}</TableCell>
+                      <TableCell className={`py-2 px-3 text-right ${budgetActual.diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {budgetActual.diff > 0 ? '+' : ''}{formatCurrency(budgetActual.diff)}
+                      </TableCell>
+                      <TableCell className={`py-2 px-3 text-right ${budgetActual.achievementRate <= 100 ? 'text-green-600' : 'text-red-600'}`}>
+                        {budgetActual.achievementRate}%
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
                 <p className="text-xs text-gray-500 mt-3 text-center">
                   예산 설정은 설정 &gt; 월간 예산 설정에서 변경할 수 있습니다.
                 </p>
-              </div>
+              </Card>
             </div>
             </InsightSection>
           );
@@ -711,7 +706,7 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
             <div className="space-y-6">
               {/* 안내 배너 */}
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2">
-                <span className="material-icons-outlined text-blue-500 text-lg">info</span>
+                <DynamicIcon name="info" size={18} className="text-blue-500" />
                 <div>
                   <p className="text-sm text-blue-700 dark:text-blue-300">매출/매입 데이터 기반 추정 현금흐름입니다.</p>
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">채널별 정산주기는 설정 &gt; 채널 정산주기 설정에서 변경할 수 있습니다. (자사몰: {config.channelCollectionDaysJasa}일, 쿠팡: {config.channelCollectionDaysCoupang}일, 컬리: {config.channelCollectionDaysKurly}일)</p>
@@ -720,33 +715,33 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
 
               {/* KPI 카드 4개 */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">순현금포지션</p>
                   <p className={`text-2xl font-bold mt-1 ${(cf?.netCashPosition || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(cf?.netCashPosition || 0)}
                   </p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">현금전환주기 (CCC)</p>
                   <p className={`text-2xl font-bold mt-1 ${(cf?.cashConversionCycle || 0) <= 30 ? 'text-green-600' : 'text-orange-600'}`}>
                     {cf?.cashConversionCycle ?? 0}일
                   </p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">재고회전율</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">{cf?.inventoryTurnover ?? 0}회</p>
                   <p className="text-xs text-gray-400 mt-1">{cf?.inventoryTurnoverDays ?? 0}일</p>
-                </div>
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                </Card>
+                <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">평균 회수기간</p>
                   <p className="text-2xl font-bold text-purple-600 mt-1">{cf?.avgCollectionPeriod ?? 0}일</p>
-                </div>
+                </Card>
               </div>
 
               {/* 월별 현금흐름 차트 */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <span className="material-icons-outlined text-blue-500">waterfall_chart</span>
+                  <DynamicIcon name="waterfall_chart" size={20} className="text-blue-500" />
                   월별 현금흐름
                 </h3>
                 {(cf?.monthly?.length || 0) > 0 ? (
@@ -767,13 +762,13 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                     </ResponsiveContainer>
                   </div>
                 ) : <p className="text-gray-400 text-center py-10">현금흐름 데이터 없음</p>}
-              </div>
+              </Card>
 
               {/* 채널별 현금회수 */}
               {(cf?.channelCycles?.length || 0) > 0 && (
-                <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <Card className="p-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span className="material-icons-outlined text-green-500">schedule</span>
+                    <DynamicIcon name="schedule" size={20} className="text-green-500" />
                     채널별 현금회수 주기
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -799,43 +794,41 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 월별 현금흐름 테이블 */}
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+              <Card className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">월별 현금흐름 상세</h3>
                 {(cf?.monthly?.length || 0) > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-500">월</th>
-                          <th className="text-right py-2 px-3 text-blue-600">유입(매출)</th>
-                          <th className="text-right py-2 px-3 text-red-600">유출(비용)</th>
-                          <th className="text-right py-2 px-3 text-green-600">순현금흐름</th>
-                          <th className="text-right py-2 px-3 text-purple-600">누적현금</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cf!.monthly.map(m => (
-                          <tr key={m.month} className="border-b border-gray-100 dark:border-gray-800">
-                            <td className="py-2 px-3 text-gray-800 dark:text-gray-200">{m.month}</td>
-                            <td className="py-2 px-3 text-right text-blue-600">{formatCurrency(m.cashInflow)}</td>
-                            <td className="py-2 px-3 text-right text-red-500">{formatCurrency(m.cashOutflow)}</td>
-                            <td className={`py-2 px-3 text-right font-medium ${m.netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {m.netCashFlow >= 0 ? '+' : ''}{formatCurrency(m.netCashFlow)}
-                            </td>
-                            <td className={`py-2 px-3 text-right font-bold ${m.cumulativeCash >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
-                              {formatCurrency(m.cumulativeCash)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableHead className="text-left py-2 px-3">월</TableHead>
+                        <TableHead className="text-right py-2 px-3 text-blue-600">유입(매출)</TableHead>
+                        <TableHead className="text-right py-2 px-3 text-red-600">유출(비용)</TableHead>
+                        <TableHead className="text-right py-2 px-3 text-green-600">순현금흐름</TableHead>
+                        <TableHead className="text-right py-2 px-3 text-purple-600">누적현금</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cf!.monthly.map(m => (
+                        <TableRow key={m.month} className="border-b border-gray-100 dark:border-gray-800">
+                          <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200">{m.month}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-blue-600">{formatCurrency(m.cashInflow)}</TableCell>
+                          <TableCell className="py-2 px-3 text-right text-red-500">{formatCurrency(m.cashOutflow)}</TableCell>
+                          <TableCell className={`py-2 px-3 text-right font-medium ${m.netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {m.netCashFlow >= 0 ? '+' : ''}{formatCurrency(m.netCashFlow)}
+                          </TableCell>
+                          <TableCell className={`py-2 px-3 text-right font-bold ${m.cumulativeCash >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+                            {formatCurrency(m.cumulativeCash)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
-              </div>
+              </Card>
             </div>
             </InsightSection>
           );
@@ -849,24 +842,24 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
           <div className="space-y-6">
             {/* KPI */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">최근주 매출</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatCurrency(lastWeek?.revenue || 0)}</p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">전주 대비 증감</p>
                 <p className={`text-2xl font-bold mt-1 ${(lastWeek?.prevWeekChange || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {(lastWeek?.prevWeekChange || 0) >= 0 ? '+' : ''}{lastWeek?.prevWeekChange || 0}%
                 </p>
-              </div>
-              <div className="bg-white dark:bg-surface-dark rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              </Card>
+              <Card className="p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400">데이터 기간</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{weekly.length}주</p>
-              </div>
+              </Card>
             </div>
 
             {/* 주간 매출 Line + 마진율 듀얼축 */}
-            <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+            <Card className="p-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 매출 추이</h3>
               {weekly.length > 0 ? (
                 <div className="h-72">
@@ -885,44 +878,42 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                   </ResponsiveContainer>
                 </div>
               ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
-            </div>
+            </Card>
 
             {/* 주간 요약 테이블 */}
-            <div className="bg-white dark:bg-surface-dark rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+            <Card className="p-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">주간 요약</h3>
               {weekly.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-2 px-3 text-gray-500">주차</th>
-                        <th className="text-right py-2 px-3 text-gray-500">매출</th>
-                        <th className="text-right py-2 px-3 text-gray-500">재료비</th>
-                        <th className="text-right py-2 px-3 text-green-600">제품이익</th>
-                        <th className="text-right py-2 px-3 text-emerald-600">최종이익</th>
-                        <th className="text-right py-2 px-3 text-gray-500">마진율</th>
-                        <th className="text-right py-2 px-3 text-gray-500">전주 대비</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {weekly.map(w => (
-                        <tr key={w.weekLabel} className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 px-3 text-gray-800 dark:text-gray-200 text-xs">{w.weekLabel}</td>
-                          <td className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(w.revenue)}</td>
-                          <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(w.cost)}</td>
-                          <td className={`py-2 px-3 text-right ${w.profit1 >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(w.profit1)}</td>
-                          <td className={`py-2 px-3 text-right font-medium ${w.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(w.profit)}</td>
-                          <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatPercent(w.marginRate)}</td>
-                          <td className={`py-2 px-3 text-right font-medium ${w.prevWeekChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {w.prevWeekChange >= 0 ? '+' : ''}{w.prevWeekChange}%
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                      <TableHead className="text-left py-2 px-3">주차</TableHead>
+                      <TableHead className="text-right py-2 px-3">매출</TableHead>
+                      <TableHead className="text-right py-2 px-3">재료비</TableHead>
+                      <TableHead className="text-right py-2 px-3 text-green-600">제품이익</TableHead>
+                      <TableHead className="text-right py-2 px-3 text-emerald-600">최종이익</TableHead>
+                      <TableHead className="text-right py-2 px-3">마진율</TableHead>
+                      <TableHead className="text-right py-2 px-3">전주 대비</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {weekly.map(w => (
+                      <TableRow key={w.weekLabel} className="border-b border-gray-100 dark:border-gray-800">
+                        <TableCell className="py-2 px-3 text-gray-800 dark:text-gray-200 text-xs">{w.weekLabel}</TableCell>
+                        <TableCell className="py-2 px-3 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(w.revenue)}</TableCell>
+                        <TableCell className="py-2 px-3 text-right text-gray-500">{formatCurrency(w.cost)}</TableCell>
+                        <TableCell className={`py-2 px-3 text-right ${w.profit1 >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(w.profit1)}</TableCell>
+                        <TableCell className={`py-2 px-3 text-right font-medium ${w.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(w.profit)}</TableCell>
+                        <TableCell className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">{formatPercent(w.marginRate)}</TableCell>
+                        <TableCell className={`py-2 px-3 text-right font-medium ${w.prevWeekChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {w.prevWeekChange >= 0 ? '+' : ''}{w.prevWeekChange}%
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               ) : <p className="text-gray-400 text-center py-6">데이터 없음</p>}
-            </div>
+            </Card>
           </div>
           </InsightSection>
         );

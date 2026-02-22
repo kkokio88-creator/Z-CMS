@@ -5,6 +5,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Store, ChevronDown, ChevronRight, Trash2, X, Plus, Percent, Info, RefreshCw } from 'lucide-react';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { cn } from '../../lib/utils';
 
 /** 비용 유형: rate=매출대비%, per_order=건당원, monthly_fixed=월고정원 */
 export type CostType = 'rate' | 'per_order' | 'monthly_fixed';
@@ -237,10 +242,10 @@ export const ChannelCostAdmin: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white dark:bg-surface-dark rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
           <h3 className="font-bold text-blue-900 dark:text-blue-200 flex items-center">
-            <span className="material-icons-outlined mr-2">store</span>
+            <Store className="h-5 w-5 mr-2" />
             채널별 비용 관리
           </h3>
           <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
@@ -264,23 +269,26 @@ export const ChannelCostAdmin: React.FC = () => {
                   onClick={() => toggleChannel(channelName)}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="material-icons-outlined text-sm text-gray-500">
-                      {isExpanded ? 'expand_more' : 'chevron_right'}
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-white">{channelName}</span>
-                    <span className="text-xs text-gray-500">{channelItems.length}개 항목</span>
+                    {isExpanded
+                      ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    }
+                    <span className="font-medium text-foreground">{channelName}</span>
+                    <span className="text-xs text-muted-foreground">{channelItems.length}개 항목</span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     {varTotal > 0 && <span>수수료 {varTotal}%</span>}
                     {perOrderTotal > 0 && <span>건당 {perOrderTotal.toLocaleString()}원</span>}
                     {fixedTotal > 0 && <span>고정 {fixedTotal.toLocaleString()}원/월</span>}
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={e => { e.stopPropagation(); handleRemoveChannel(channelName); }}
-                      className="text-red-400 hover:text-red-600 ml-2"
+                      className="h-6 w-6 text-red-400 hover:text-red-600"
                       title="채널 삭제"
                     >
-                      <span className="material-icons-outlined text-sm">delete</span>
-                    </button>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
 
@@ -289,8 +297,8 @@ export const ChannelCostAdmin: React.FC = () => {
                   <div className="p-3">
                     {/* 할인/수수료 설정 */}
                     <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-200 dark:border-amber-800">
-                      <div className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-2">
-                        <span className="material-icons-outlined text-xs align-middle mr-1">percent</span>
+                      <div className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-2 flex items-center">
+                        <Percent className="h-3 w-3 mr-1" />
                         할인/수수료 설정 (권장판매가 대비)
                       </div>
                       <div className="flex items-center gap-4">
@@ -338,20 +346,20 @@ export const ChannelCostAdmin: React.FC = () => {
                         <span className="text-[10px] text-gray-400">공급가액 대비 할인매출 비율 (정산매출 = 공급가액 × (1 - 비율))</span>
                       </div>
                     </div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                          <th className="text-left py-2 px-2">비용 항목</th>
-                          <th className="text-center py-2 px-2">비용 유형</th>
-                          <th className="text-right py-2 px-2">금액/비율</th>
-                          <th className="text-center py-2 px-2">변동/고정</th>
-                          <th className="text-center py-2 px-2 w-10"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-gray-100 dark:border-gray-700">
+                          <TableHead className="text-xs py-2 px-2">비용 항목</TableHead>
+                          <TableHead className="text-xs text-center py-2 px-2">비용 유형</TableHead>
+                          <TableHead className="text-xs text-right py-2 px-2">금액/비율</TableHead>
+                          <TableHead className="text-xs text-center py-2 px-2">변동/고정</TableHead>
+                          <TableHead className="text-xs text-center py-2 px-2 w-10"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {channelItems.map(item => (
-                          <tr key={item.id} className="border-b border-gray-50 dark:border-gray-800">
-                            <td className="py-1.5 px-2">
+                          <TableRow key={item.id} className="border-b border-gray-50 dark:border-gray-800">
+                            <TableCell className="py-1.5 px-2">
                               <input
                                 type="text"
                                 value={item.costName}
@@ -359,8 +367,8 @@ export const ChannelCostAdmin: React.FC = () => {
                                 placeholder="항목명"
                                 className="w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm p-1 border"
                               />
-                            </td>
-                            <td className="py-1.5 px-2">
+                            </TableCell>
+                            <TableCell className="py-1.5 px-2">
                               <select
                                 value={item.costType}
                                 onChange={e => handleUpdate(item.id, 'costType', e.target.value)}
@@ -370,8 +378,8 @@ export const ChannelCostAdmin: React.FC = () => {
                                   <option key={key} value={key}>{label}</option>
                                 ))}
                               </select>
-                            </td>
-                            <td className="py-1.5 px-2">
+                            </TableCell>
+                            <TableCell className="py-1.5 px-2">
                               <div className="flex items-center justify-end gap-1">
                                 <input
                                   type="number"
@@ -385,38 +393,43 @@ export const ChannelCostAdmin: React.FC = () => {
                                   {item.costType === 'rate' ? '%' : '원'}
                                 </span>
                               </div>
-                            </td>
-                            <td className="py-1.5 px-2 text-center">
+                            </TableCell>
+                            <TableCell className="py-1.5 px-2 text-center">
                               <button
                                 onClick={() => handleUpdate(item.id, 'isVariable', !item.isVariable)}
-                                className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                className={cn(
+                                  'text-xs px-2 py-0.5 rounded-full font-medium',
                                   item.isVariable
                                     ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                     : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                                }`}
+                                )}
                               >
                                 {item.isVariable ? '변동' : '고정'}
                               </button>
-                            </td>
-                            <td className="py-1.5 px-2 text-center">
-                              <button
+                            </TableCell>
+                            <TableCell className="py-1.5 px-2 text-center">
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleRemoveItem(item.id)}
-                                className="text-gray-400 hover:text-red-500"
+                                className="h-6 w-6 text-gray-400 hover:text-red-500"
                               >
-                                <span className="material-icons-outlined text-sm">close</span>
-                              </button>
-                            </td>
-                          </tr>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
-                    <button
+                      </TableBody>
+                    </Table>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleAddItem(channelName)}
-                      className="mt-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center"
+                      className="mt-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 gap-1"
                     >
-                      <span className="material-icons-outlined text-sm mr-1">add</span>
+                      <Plus className="h-3.5 w-3.5" />
                       항목 추가
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -433,32 +446,35 @@ export const ChannelCostAdmin: React.FC = () => {
               onKeyDown={e => e.key === 'Enter' && handleAddChannel()}
               className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-sm p-2 border flex-1 max-w-xs"
             />
-            <button
+            <Button
               onClick={handleAddChannel}
               disabled={!newChannelName.trim()}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 flex items-center"
+              size="sm"
+              className="gap-1"
             >
-              <span className="material-icons-outlined text-sm mr-1">add</span>
+              <Plus className="h-3.5 w-3.5" />
               채널 추가
-            </button>
+            </Button>
           </div>
 
           {/* 하단 */}
           <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              <span className="material-icons-outlined text-xs align-middle mr-1">info</span>
+            <p className="text-xs text-muted-foreground flex items-center">
+              <Info className="h-3 w-3 mr-1" />
               변경사항은 자동 저장됩니다. 변동비→2단계 이익, 고정비→3단계 이익에 반영.
             </p>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleReset}
-              className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 flex items-center"
+              className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 gap-1"
             >
-              <span className="material-icons-outlined text-sm mr-1">restart_alt</span>
+              <RefreshCw className="h-3.5 w-3.5" />
               기본값으로 초기화
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 };

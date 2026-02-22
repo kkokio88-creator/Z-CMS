@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { DynamicIcon } from '../ui/icon';
+import { cn } from '../../lib/utils';
 
 interface SubTab {
   key: string;
@@ -34,19 +36,20 @@ export const SubTabLayout: React.FC<SubTabLayoutProps> = ({ title, tabs, default
           {headerRight}
         </div>
       )}
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div className="border-b">
         <nav className="flex gap-1 -mb-px">
           {tabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={cn(
+                'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
                 activeTab === tab.key
                   ? 'border-primary text-primary dark:text-green-400 dark:border-green-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+              )}
             >
-              <span className="material-icons-outlined text-base">{tab.icon}</span>
+              <DynamicIcon name={tab.icon} size={16} />
               {tab.label}
             </button>
           ))}
