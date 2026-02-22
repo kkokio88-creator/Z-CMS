@@ -17,6 +17,7 @@ import { DataProvider, DataContextType } from '../contexts/DataContext.tsx';
 import { SyncProvider, SyncContextType } from '../contexts/SyncContext.tsx';
 import { UIProvider, useUI, ViewType as UIViewType } from '../contexts/UIContext.tsx';
 import { ErrorBoundary } from '../components/common';
+import { TooltipProvider } from '../components/ui/tooltip';
 import { Notification, ModalItem } from '../types.ts';
 import {
   computeChannelRevenue,
@@ -40,7 +41,9 @@ const App = () => {
   return (
     <SettingsProvider>
     <UIProvider>
+    <TooltipProvider>
       <AppContent />
+    </TooltipProvider>
     </UIProvider>
     </SettingsProvider>
   );
