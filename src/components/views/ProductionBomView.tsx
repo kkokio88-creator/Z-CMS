@@ -5,9 +5,10 @@ import {
 } from 'recharts';
 import { SubTabLayout, Pagination } from '../layout';
 import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../../utils/format';
-import type { ProductionData, PurchaseData, BomItemData, MaterialMasterItem } from '../../services/googleSheetService';
+import type { ProductionData, PurchaseData, SalesDetailData, BomItemData, MaterialMasterItem } from '../../services/googleSheetService';
 import type { DashboardInsights, BomVarianceInsight, BomVarianceItem, YieldTrackingInsight, BomConsumptionAnomalyInsight, BomConsumptionAnomalyItem } from '../../services/insightService';
 import { computeWasteAnalysis, computeProductionEfficiency, computeBomVariance, computeYieldTracking } from '../../services/insightService';
+import { computeBomCoverage, computeSalesBasedConsumption, computeConsumptionVariance, validateBomData, computeBomHealthScore } from '../../services/bomAnalysisService';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
 import { useUI } from '../../contexts/UIContext';
 import { getDateRange, filterByDate } from '../../utils/dateRange';
@@ -24,6 +25,7 @@ import { Button } from '../ui/button';
 interface Props {
   production: ProductionData[];
   purchases: PurchaseData[];
+  salesDetail?: SalesDetailData[];
   insights: DashboardInsights | null;
   bomData?: BomItemData[];
   materialMaster?: MaterialMasterItem[];
@@ -57,12 +59,13 @@ const formatDate = (d: string) => {
   return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
 };
 
-export const ProductionBomView: React.FC<Props> = ({ production, purchases, insights, bomData = [], materialMaster = [], onItemClick, onTabChange }) => {
+export const ProductionBomView: React.FC<Props> = ({ production, purchases, salesDetail = [], insights, bomData = [], materialMaster = [], onItemClick, onTabChange }) => {
   const config = useBusinessConfig();
   const { dateRange } = useUI();
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getDateRange(dateRange), [dateRange]);
   const filteredProduction = useMemo(() => filterByDate(production, rangeStart, rangeEnd), [production, rangeStart, rangeEnd]);
   const filteredPurchases = useMemo(() => filterByDate(purchases, rangeStart, rangeEnd), [purchases, rangeStart, rangeEnd]);
+  const filteredSalesDetail = useMemo(() => filterByDate(salesDetail, rangeStart, rangeEnd), [salesDetail, rangeStart, rangeEnd]);
 
   // dateRange 기반 인사이트 로컬 재계산
   const wasteAnalysis = useMemo(
@@ -74,8 +77,30 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
     [filteredProduction]
   );
   const bomVariance = useMemo(
-    () => (filteredPurchases.length > 0 && filteredProduction.length > 0) ? computeBomVariance(filteredPurchases, filteredProduction, bomData, materialMaster) : null,
-    [filteredPurchases, filteredProduction, bomData, materialMaster]
+    () => (filteredPurchases.length > 0 && filteredProduction.length > 0) ? computeBomVariance(filteredPurchases, filteredProduction, bomData, materialMaster, [], filteredSalesDetail) : null,
+    [filteredPurchases, filteredProduction, bomData, materialMaster, filteredSalesDetail]
+  );
+
+  // BOM 분석 서비스 (US-005: BOM 개요)
+  const bomCoverage = useMemo(
+    () => bomData.length > 0 ? computeBomCoverage(bomData, filteredSalesDetail, filteredPurchases) : null,
+    [bomData, filteredSalesDetail, filteredPurchases]
+  );
+  const bomValidation = useMemo(
+    () => bomData.length > 0 ? validateBomData(bomData, materialMaster) : null,
+    [bomData, materialMaster]
+  );
+  const bomHealthScore = useMemo(
+    () => bomCoverage && bomValidation ? computeBomHealthScore(bomCoverage, bomValidation, bomVariance, insights?.bomConsumptionAnomaly || null) : null,
+    [bomCoverage, bomValidation, bomVariance, insights?.bomConsumptionAnomaly]
+  );
+  const salesConsumption = useMemo(
+    () => (filteredSalesDetail.length > 0 && bomData.length > 0) ? computeSalesBasedConsumption(filteredSalesDetail, bomData, materialMaster) : [],
+    [filteredSalesDetail, bomData, materialMaster]
+  );
+  const consumptionVariance = useMemo(
+    () => salesConsumption.length > 0 ? computeConsumptionVariance(salesConsumption, filteredPurchases, materialMaster) : null,
+    [salesConsumption, filteredPurchases, materialMaster]
   );
   const yieldTracking = useMemo(
     () => (filteredProduction.length > 0 && filteredPurchases.length > 0) ? computeYieldTracking(filteredProduction, filteredPurchases, config) : null,
@@ -94,7 +119,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
   // BOM 오차 정렬: 기본=|차이금액| 내림차순, 토글=연결메뉴수 오름차순
   const [bomSortByMenu, setBomSortByMenu] = useState(false);
 
-  // 선택된 자재의 메뉴별 상세 데이터 (BOM 기준)
+  // 선택된 자재의 메뉴별 상세 데이터 (판매 기반)
   const materialDrilldown = useMemo(() => {
     if (!selectedMaterial || bomData.length === 0) return null;
     const code = selectedMaterial.productCode;
@@ -103,31 +128,35 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
     const relatedBom = bomData.filter(b => b.materialCode?.trim() === code);
     if (relatedBom.length === 0) return null;
 
-    // 총 생산량 → BOM 제품수로 균등 분배
-    const totalProdQty = filteredProduction.reduce((s, p) => s + p.prodQtyTotal, 0);
-    const uniqueBomProducts = new Set(bomData.map(b => b.productCode?.trim()).filter(Boolean));
-    const perProductProd = totalProdQty / (uniqueBomProducts.size || 1);
+    // 판매 데이터 기반 제품별 수량
+    const salesByProduct = new Map<string, number>();
+    for (const s of filteredSalesDetail) {
+      const prodCode = s.productCode?.trim();
+      if (prodCode) salesByProduct.set(prodCode, (salesByProduct.get(prodCode) || 0) + (s.quantity || 0));
+    }
 
     // 전체 구매량 (해당 자재)
     const actualPurchaseQty = filteredPurchases
       .filter(p => p.productCode === code)
       .reduce((s, p) => s + p.quantity, 0);
 
-    // 메뉴별 분석 (BOM consumptionQty 기준)
+    // 메뉴별 분석 (판매량 × BOM 레시피 비율)
     const menuDetails = relatedBom.map(bom => {
       const menuCode = bom.productCode?.trim() || '';
       const menuName = bom.productName || menuCode;
       const recipeQty = bom.consumptionQty || 0;
       const batchSize = bom.productionQty || 1;
+      const salesQty = salesByProduct.get(menuCode) || 0;
 
-      // 기준 소모량 = consumptionQty × (제품별 균등생산량 / 배치크기)
-      const standardConsumption = Math.round(recipeQty * (perProductProd / batchSize));
+      // 기준 소모량 = 판매량 × (소비량 / 배치크기)
+      const standardConsumption = Math.round(salesQty * (recipeQty / batchSize));
 
       return {
         menuCode,
         menuName: menuCode ? `[${menuCode}] ${menuName}` : menuName,
         recipeQty,
         batchSize,
+        salesQty,
         standardConsumption,
       };
     });
@@ -149,7 +178,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
       totalActual: actualPurchaseQty,
       unit: selectedMaterial.unit,
     };
-  }, [selectedMaterial, bomData, filteredProduction, filteredPurchases]);
+  }, [selectedMaterial, bomData, filteredSalesDetail, filteredPurchases]);
 
   const categoryFilters = [
     { key: 'all', label: '전체', color: CATEGORY_COLORS.all },
@@ -189,17 +218,265 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
   const bomAnomaly = insights?.bomConsumptionAnomaly || null;
 
   const tabs = [
+    { key: 'overview', label: 'BOM 개요', icon: 'assessment' },
     { key: 'production', label: '생산 현황', icon: 'precision_manufacturing' },
     { key: 'waste', label: '폐기 분석', icon: 'delete_outline' },
     { key: 'efficiency', label: '생산성 분석', icon: 'speed' },
     { key: 'bomAnomaly', label: 'BOM 이상 감지', icon: 'warning' },
-    { key: 'bomVariance', label: 'BOM 오차', icon: 'compare_arrows' },
+    { key: 'bomVariance', label: '투입오차 분석', icon: 'compare_arrows' },
     { key: 'yield', label: '수율 추적', icon: 'science' },
   ];
 
   return (
     <SubTabLayout title="생산/BOM 관리" tabs={tabs} onTabChange={onTabChange}>
       {(activeTab) => {
+        // ========== BOM 개요 (US-005) ==========
+        if (activeTab === 'overview') {
+          const healthScore = bomHealthScore;
+          const coverage = bomCoverage;
+          const validation = bomValidation;
+
+          // 건전성 점수 색상
+          const scoreColor = (s: number) => s >= 80 ? 'text-green-600' : s >= 60 ? 'text-yellow-600' : 'text-red-600';
+          const scoreBg = (s: number) => s >= 80 ? 'bg-green-50 dark:bg-green-900/10' : s >= 60 ? 'bg-yellow-50 dark:bg-yellow-900/10' : 'bg-red-50 dark:bg-red-900/10';
+
+          return (
+            <InsightSection id="bom-overview">
+            <div className="space-y-6">
+              {/* BOM 건전성 점수 */}
+              {healthScore ? (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <Card className={`p-4 ${scoreBg(healthScore.overall)} border-2 ${healthScore.overall >= 80 ? 'border-green-200 dark:border-green-800' : healthScore.overall >= 60 ? 'border-yellow-200 dark:border-yellow-800' : 'border-red-200 dark:border-red-800'}`}>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">종합 건전성</p>
+                    <p className={`text-3xl font-bold mt-1 ${scoreColor(healthScore.overall)}`}>{healthScore.overall}<span className="text-base font-normal">/100</span></p>
+                  </Card>
+                  {[
+                    { label: '데이터 품질', value: healthScore.dataQuality, icon: 'verified' },
+                    { label: 'BOM 커버리지', value: healthScore.coverageScore, icon: 'inventory_2' },
+                    { label: '차이 점수', value: healthScore.varianceScore, icon: 'compare_arrows' },
+                    { label: '이상 점수', value: healthScore.anomalyScore, icon: 'warning' },
+                  ].map(kpi => (
+                    <Card key={kpi.label} className="p-4">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <DynamicIcon name={kpi.icon} size={14} className="text-gray-400" />
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{kpi.label}</p>
+                      </div>
+                      <p className={`text-2xl font-bold mt-1 ${scoreColor(kpi.value)}`}>{kpi.value}</p>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card className="p-6 text-center">
+                  <DynamicIcon name="info" size={24} className="text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500">BOM 데이터가 부족하여 건전성 점수를 계산할 수 없습니다.</p>
+                </Card>
+              )}
+
+              {/* BOM 커버리지 */}
+              {coverage && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <DynamicIcon name="inventory_2" size={20} className="text-blue-500" />
+                      BOM 커버리지
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-blue-600">{coverage.completenessScore}%</p>
+                        <p className="text-xs text-gray-500 mt-1">커버리지율</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-green-600">{coverage.totalCovered}</p>
+                        <p className="text-xs text-gray-500 mt-1">BOM 등록</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-red-600">{coverage.uncoveredProducts.length}</p>
+                        <p className="text-xs text-gray-500 mt-1">미등록</p>
+                      </div>
+                    </div>
+                    {/* 프로그레스 바 */}
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                      <div
+                        className="bg-blue-600 h-3 rounded-full transition-all"
+                        style={{ width: `${coverage.completenessScore}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">판매 {coverage.totalProducts}개 제품 중 {coverage.totalCovered}개 BOM 등록</p>
+                  </Card>
+
+                  {/* 미등록 & 고아 자재 */}
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <DynamicIcon name="warning" size={20} className="text-orange-500" />
+                      주의 항목
+                    </h3>
+                    {coverage.uncoveredProducts.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-sm font-medium text-red-600 mb-2">BOM 미등록 판매 제품 ({coverage.uncoveredProducts.length}개)</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {coverage.uncoveredProducts.slice(0, 10).map(p => (
+                            <Badge key={p.code} className="px-2 py-0.5 text-[10px] bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border-0">
+                              {p.code} {p.name}
+                            </Badge>
+                          ))}
+                          {coverage.uncoveredProducts.length > 10 && (
+                            <span className="text-xs text-gray-400 self-center">외 {coverage.uncoveredProducts.length - 10}개</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {coverage.orphanMaterials.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-orange-600 mb-2">BOM 미등록 구매 자재 ({coverage.orphanMaterials.length}개)</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {coverage.orphanMaterials.slice(0, 10).map(m => (
+                            <Badge key={m.code} className="px-2 py-0.5 text-[10px] bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400 border-0">
+                              {m.code} {m.name}
+                            </Badge>
+                          ))}
+                          {coverage.orphanMaterials.length > 10 && (
+                            <span className="text-xs text-gray-400 self-center">외 {coverage.orphanMaterials.length - 10}개</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {coverage.uncoveredProducts.length === 0 && coverage.orphanMaterials.length === 0 && (
+                      <p className="text-green-600 text-sm flex items-center gap-2">
+                        <DynamicIcon name="check_circle" size={16} />
+                        주의 항목 없음
+                      </p>
+                    )}
+                  </Card>
+                </div>
+              )}
+
+              {/* SOP 코드 검증 결과 */}
+              {validation && (
+                <Card className="p-6">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <DynamicIcon name="verified" size={20} className="text-green-500" />
+                    SOP 코드 검증 (SOP-20-014)
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="text-center">
+                      <p className={`text-2xl font-bold ${validation.sopCompliance >= 80 ? 'text-green-600' : validation.sopCompliance >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                        {validation.sopCompliance}%
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">SOP 준수율</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white">{validation.totalEntries}</p>
+                      <p className="text-xs text-gray-500 mt-1">전체 항목</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-green-600">{validation.validCount}</p>
+                      <p className="text-xs text-gray-500 mt-1">유효</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-red-600">{validation.invalidCount}</p>
+                      <p className="text-xs text-gray-500 mt-1">오류</p>
+                    </div>
+                  </div>
+                  {Object.keys(validation.errorSummary).length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">오류 유형별 현황</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {Object.entries(validation.errorSummary).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                          <div key={type} className="flex items-center justify-between bg-red-50 dark:bg-red-900/10 rounded px-3 py-1.5">
+                            <span className="text-xs text-gray-700 dark:text-gray-300">{type}</span>
+                            <Badge className="px-1.5 py-0.5 text-[10px] bg-red-100 text-red-700 dark:bg-red-800 dark:text-red-300 border-0">{count}건</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {/* 투입 오차 요약 (consumptionVariance) */}
+              {consumptionVariance && consumptionVariance.items.length > 0 && (
+                <Card className="p-6">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <DynamicIcon name="compare_arrows" size={20} className="text-purple-500" />
+                    판매 기반 투입 오차 요약
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="text-center">
+                      <p className={`text-xl font-bold ${consumptionVariance.totalVariance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {consumptionVariance.totalVariance > 0 ? '+' : ''}{formatCurrency(consumptionVariance.totalVariance)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">총 차이</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-gray-900 dark:text-white">{consumptionVariance.analyzedMaterials}</p>
+                      <p className="text-xs text-gray-500 mt-1">분석 자재</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-green-600">{consumptionVariance.favorableCount}</p>
+                      <p className="text-xs text-gray-500 mt-1">유리</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-red-600">{consumptionVariance.unfavorableCount}</p>
+                      <p className="text-xs text-gray-500 mt-1">불리</p>
+                    </div>
+                  </div>
+                  {/* Top 5 차이 항목 */}
+                  <Table className="text-xs">
+                    <TableHeader>
+                      <TableRow className="border-b border-gray-200 dark:border-gray-700">
+                        <TableHead className="text-left py-1.5 px-2">자재명</TableHead>
+                        <TableHead className="text-right py-1.5 px-2">예상 투입</TableHead>
+                        <TableHead className="text-right py-1.5 px-2">실제 구매</TableHead>
+                        <TableHead className="text-right py-1.5 px-2">수량차이(%)</TableHead>
+                        <TableHead className="text-right py-1.5 px-2">가격차이</TableHead>
+                        <TableHead className="text-right py-1.5 px-2">투입차이</TableHead>
+                        <TableHead className="text-right py-1.5 px-2">총 차이</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {consumptionVariance.items.slice(0, 10).map(item => (
+                        <TableRow key={item.materialCode} className="border-b border-gray-100 dark:border-gray-800">
+                          <TableCell className="py-1.5 px-2 text-gray-800 dark:text-gray-200">
+                            <div className="font-medium">{item.materialName}</div>
+                            <div className="text-[10px] text-gray-400">{item.materialCode}</div>
+                          </TableCell>
+                          <TableCell className="py-1.5 px-2 text-right text-gray-500">{formatQty(item.expectedQty)}</TableCell>
+                          <TableCell className="py-1.5 px-2 text-right text-gray-700 dark:text-gray-300">{formatQty(item.actualQty)}</TableCell>
+                          <TableCell className={`py-1.5 px-2 text-right font-medium ${item.qtyDiffPct > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {item.qtyDiffPct > 0 ? '+' : ''}{item.qtyDiffPct}%
+                          </TableCell>
+                          <TableCell className={`py-1.5 px-2 text-right ${item.priceVariance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {formatCurrency(item.priceVariance)}
+                          </TableCell>
+                          <TableCell className={`py-1.5 px-2 text-right ${item.qtyVariance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {formatCurrency(item.qtyVariance)}
+                          </TableCell>
+                          <TableCell className={`py-1.5 px-2 text-right font-bold ${item.totalVariance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {item.totalVariance > 0 ? '+' : ''}{formatCurrency(item.totalVariance)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {consumptionVariance.items.length > 10 && (
+                    <p className="text-xs text-gray-400 text-center mt-2">상위 10건 표시 (전체 {consumptionVariance.items.length}건) — 투입오차 분석 탭에서 상세 확인</p>
+                  )}
+                </Card>
+              )}
+
+              {/* 데이터 없음 */}
+              {!healthScore && !coverage && !validation && (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
+                  <DynamicIcon name="assessment" size={48} className="mb-3" />
+                  <p className="text-lg font-medium">BOM 데이터를 불러오는 중이거나 연결되지 않았습니다</p>
+                  <p className="text-sm mt-1">ECOUNT 연동에서 BOM 데이터를 확인해주세요</p>
+                </div>
+              )}
+            </div>
+            </InsightSection>
+          );
+        }
+
         // ========== 생산 현황 ==========
         if (activeTab === 'production') {
           const totalProd = prodEfficiency?.totalProduction || 0;
@@ -456,6 +733,14 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, insi
                 <Card className="p-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">추정 폐기비용</p>
                   <p className="text-2xl font-bold text-orange-600 mt-1">{formatCurrency(totalCost)}</p>
+                  <Badge className={`mt-1 px-1.5 py-0.5 text-[10px] border-0 ${
+                    wasteAnalysis?.actualUnitCostUsed
+                      ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                      : 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'
+                  }`}>
+                    {wasteAnalysis?.actualUnitCostUsed ? '실제원가 기반' : '설정값 기반'}
+                    {wasteAnalysis?.unitCostUsed ? ` (${formatCurrency(wasteAnalysis.unitCostUsed)}/EA)` : ''}
+                  </Badge>
                 </Card>
               </div>
 

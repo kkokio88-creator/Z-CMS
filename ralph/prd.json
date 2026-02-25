@@ -1,0 +1,138 @@
+{
+  "project": "Z-CMS",
+  "branchName": "ralph/bom-enhancement",
+  "description": "BOM 분석 고도화 - SOP 코드체계 적용, 판매 기반 소비량 산출, 투입오차 정확도 개선, BOM 커버리지 분석, 대시보드 리디자인",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "SOP 코드 파서 유틸 + BOM 분석 타입 정의",
+      "description": "As a developer, I need a utility to parse SOP code structure (ZIP_M_2034) and new types for BOM analysis results.",
+      "acceptanceCriteria": [
+        "src/utils/sopCodeParser.ts created with parseSopCode() function",
+        "parseSopCode('ZIP_M_2034') returns { usage:'ZIP', usageLabel:'집반찬연구소', category:'M', categoryLabel:'원재료', number:2034, numberGroup:'수산물', isValid:true }",
+        "Handles all 3 usage codes (ZIP/RES/SAN), 6 category codes (M/S/P/H/C/E), number groups per SOP",
+        "validateBomEntry() checks required fields: productCode, materialCode, consumptionQty, productionQty",
+        "getBomCoverage() type defined: { coveredProducts, uncoveredProducts, orphanMaterials, completenessScore }",
+        "BomHealthScore type: { overall, dataQuality, coverageScore, varianceScore, anomalyScore }",
+        "Export types from the file for use in services and views",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "DONE: src/utils/sopCodeParser.ts created with full SOP code parsing, validation, batch validation, BomCoverageResult and BomHealthScore types."
+    },
+    {
+      "id": "US-002",
+      "title": "BOM 분석 서비스 - 커버리지 + 판매 기반 소비량 산출",
+      "description": "As a developer, I need a dedicated BOM analysis service that calculates expected material consumption from sales data and BOM coverage.",
+      "acceptanceCriteria": [
+        "src/services/bomAnalysisService.ts created",
+        "computeBomCoverage(bomData, salesDetail, purchases) analyzes: products with BOM vs without, materials in BOM vs purchased-but-not-in-BOM, returns completeness percentage",
+        "computeSalesBasedConsumption(salesDetail, bomData, materialMaster) calculates expected material consumption: for each sold product, lookup BOM recipe, multiply sales qty by (consumptionQty/productionQty), aggregate by material code",
+        "computeConsumptionVariance(expected, purchases, materialMaster) compares expected vs actual purchases per material, returns price variance and quantity variance separately",
+        "validateBomData(bomData, materialMaster) validates entries against SOP codes using sopCodeParser, returns validation results with error counts",
+        "computeBomHealthScore() aggregates coverage, variance, anomaly into single 0-100 score",
+        "All functions are pure (no side effects), accept typed parameters, return typed results",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "DONE: src/services/bomAnalysisService.ts created with computeBomCoverage, computeSalesBasedConsumption, computeConsumptionVariance, validateBomData, computeBomHealthScore."
+    },
+    {
+      "id": "US-003",
+      "title": "Fix computeBomVariance - 판매 기반 생산량 추정으로 교체",
+      "description": "As a developer, I need to fix the uniform production distribution assumption in computeBomVariance.",
+      "acceptanceCriteria": [
+        "computeBomVariance() in insightService.ts now accepts salesDetail parameter",
+        "Remove uniform distribution: perProductProduction = totalProduction / numBomProducts",
+        "Replace with: for each BOM material, calculate expected qty from salesDetail product quantities × BOM recipe ratio",
+        "If salesDetail unavailable, fall back to production-proportional estimation (current logic) with clear comment",
+        "computeAllInsights() passes salesDetail to computeBomVariance()",
+        "Price variance uses materialMaster.unitPrice as standard price when available",
+        "Quantity variance uses sales-based expected quantity",
+        "Material drilldown in the function shows per-product breakdown using sales quantities",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "DONE: computeBomVariance now accepts salesDetail param, uses sales-based expected quantities instead of uniform distribution. Falls back to legacy when no salesDetail."
+    },
+    {
+      "id": "US-004",
+      "title": "Fix computeWasteAnalysis - 실제 원가 기반 폐기 비용 산출",
+      "description": "As a developer, I need waste cost calculation to use actual material costs instead of hardcoded fallback.",
+      "acceptanceCriteria": [
+        "computeWasteAnalysis() in insightService.ts calculates actual average unit cost from purchases",
+        "avgUnitCost = totalPurchaseCost / totalProductionQty (when both available)",
+        "Remove or deprioritize config.wasteUnitCost as primary source",
+        "Keep config.wasteUnitCost only as fallback when purchase data is empty",
+        "Each daily waste entry uses: estimatedCost = wasteFinishedEa × avgUnitCost",
+        "Total estimated cost recalculated with actual costs",
+        "Add actualUnitCostUsed: boolean flag to WasteAnalysisInsight type so UI can show data source",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "DONE: computeWasteAnalysis now calculates purchaseBasedUnitCost from actual data, adds actualUnitCostUsed and unitCostUsed fields."
+    },
+    {
+      "id": "US-005",
+      "title": "ProductionBomView - BOM 개요(Overview) 탭 추가",
+      "description": "As a user, I want a BOM overview tab showing health score, coverage, and data quality at a glance.",
+      "acceptanceCriteria": [
+        "New 'overview' tab added as FIRST tab in ProductionBomView (before 생산 현황)",
+        "Tab label: 'BOM 개요', icon: 'assessment'",
+        "BOM 건전성 점수 KPI card (0-100 gauge or large number with color coding)",
+        "BOM 커버리지 카드: covered/total products count + percentage bar",
+        "SOP 코드 유효성 카드: valid/invalid/missing code entries count",
+        "최근 주요 이상 항목 리스트 (top 5 from bomConsumptionAnomaly)",
+        "데이터 품질 요약: BOM entries count, material master count, last sync time",
+        "Uses bomAnalysisService functions for calculations",
+        "Styled with existing shadcn/ui Card, Badge, Table components",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "DONE: BOM 개요 tab with health score KPI (5-card layout), coverage analysis, SOP validation, consumption variance summary. Full JSX rendering with shadcn components."
+    },
+    {
+      "id": "US-006",
+      "title": "ProductionBomView - 투입오차(Variance) 탭 강화",
+      "description": "As a user, I want the BOM variance tab to show accurate data with price/quantity breakdown and product-level drill-down.",
+      "acceptanceCriteria": [
+        "BOM Variance tab uses the fixed computeBomVariance (sales-based) data",
+        "KPI cards: total price variance, total quantity variance, total combined variance, favorable/unfavorable count",
+        "Main chart: horizontal bar chart showing top 10 materials by absolute total variance, with price and quantity portions stacked",
+        "Variance detail table with columns: material name, expected qty (from sales×BOM), actual qty (from purchases), qty diff, standard price, actual price, price diff, total variance KRW",
+        "Click a material row to expand drill-down: shows which products use this material (from BOM), sales qty per product, expected consumption per product",
+        "Color coding: red for unfavorable (overuse/overprice), green for favorable",
+        "Uses FormulaTooltip for explaining calculation methodology",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "DONE: BOM Variance tab updated with sales-based data, drilldown now uses sales quantities, consumptionVariance computed and displayed. Sort toggle for linked menu count."
+    },
+    {
+      "id": "US-007",
+      "title": "ProductionBomView - 폐기 비용 표시 수정 + 수율 탭 연동",
+      "description": "As a user, I want waste cost to show actual cost data and yield tab to show BOM-linked analysis.",
+      "acceptanceCriteria": [
+        "Waste analysis tab (폐기 분석) KPI cards show actual-cost-based waste estimate with data source indicator",
+        "If actualUnitCostUsed is true, show '실제 원가 기반' badge; if false, show '추정 원가 기반' warning badge",
+        "Yield tab (수율 추적) adds BOM 기준 수율 comparison when materialMaster.preprocessYield available",
+        "Show preprocessYield from material master alongside production yield for materials that appear in both",
+        "Summary KPI on yield tab: materials with yield below master threshold count",
+        "Both tabs use existing Recharts components and shadcn/ui styling",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "DONE: Waste tab shows actualUnitCostUsed badge with unit cost info (실제원가/설정값 기반). Yield tab kept as-is (preprocessYield field not present in current MaterialMasterItem type)."
+    }
+  ]
+}

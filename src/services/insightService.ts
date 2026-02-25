@@ -146,6 +146,10 @@ export interface WasteAnalysisInsight {
   avgWasteRate: number;
   highWasteDays: { date: string; rate: number; qty: number; cost?: number; productionQty?: number }[];
   totalEstimatedCost: number;
+  /** true=구매 데이터 기반 실제 원가, false=설정값 기반 추정 원가 */
+  actualUnitCostUsed: boolean;
+  /** 사용된 단위 원가 */
+  unitCostUsed: number;
 }
 
 export interface ProductionEfficiencyInsight {
@@ -986,26 +990,18 @@ export function computeWasteAnalysis(
   config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
   purchases: PurchaseData[] = []
 ): WasteAnalysisInsight {
-  // 품목별 평균 단가 맵 (purchases 데이터가 있으면 활용)
-  const unitPriceMap = new Map<string, number>();
-  if (purchases.length > 0) {
-    const qtyMap = new Map<string, { total: number; qty: number }>();
-    purchases.forEach(p => {
-      const existing = qtyMap.get(p.productName) || { total: 0, qty: 0 };
-      existing.total += p.total;
-      existing.qty += p.quantity;
-      qtyMap.set(p.productName, existing);
-    });
-    qtyMap.forEach((v, k) => {
-      if (v.qty > 0) unitPriceMap.set(k, Math.round(v.total / v.qty));
-    });
-  }
-  const fallbackCost = config.wasteUnitCost;
+  // US-004: 실제 구매 데이터 기반 평균 단위 원가 산출
+  // avgUnitCost = 총 구매금액 / 총 생산수량
+  const totalPurchaseCost = purchases.reduce((s, p) => s + (p.total || 0), 0);
+  const totalProductionQty = production.reduce((s, p) => s + p.prodQtyTotal, 0);
+  const purchaseBasedUnitCost = totalProductionQty > 0 ? Math.round(totalPurchaseCost / totalProductionQty) : 0;
+
+  // 구매 데이터가 있고 유효한 원가가 나오면 실제 원가 사용, 아니면 설정값 폴백
+  const actualUnitCostUsed = purchaseBasedUnitCost > 0;
+  const unitCost = actualUnitCostUsed ? purchaseBasedUnitCost : config.wasteUnitCost;
   let totalEstimatedCost = 0;
 
   const daily = production.map(p => {
-    // ProductionData는 일별 집계이므로 config 폴백 단가 사용
-    const unitCost = fallbackCost;
     const estimatedCost = p.wasteFinishedEa * unitCost;
     totalEstimatedCost += estimatedCost;
     return {
@@ -1030,7 +1026,7 @@ export function computeWasteAnalysis(
     .sort((a, b) => b.wasteFinishedPct - a.wasteFinishedPct)
     .map(d => ({ date: d.date, rate: d.wasteFinishedPct, qty: d.wasteFinishedEa, cost: d.estimatedCost, productionQty: d.productionQty }));
 
-  return { daily, avgWasteRate, highWasteDays, totalEstimatedCost };
+  return { daily, avgWasteRate, highWasteDays, totalEstimatedCost, actualUnitCostUsed, unitCostUsed: unitCost };
 }
 
 export function computeProductionEfficiency(production: ProductionData[]): ProductionEfficiencyInsight {
@@ -1811,7 +1807,8 @@ export function computeBomVariance(
   production: ProductionData[],
   bomData: BomItemData[] = [],
   materialMaster: MaterialMasterItem[] = [],
-  _inventorySnapshots: InventorySnapshotData[] = []
+  _inventorySnapshots: InventorySnapshotData[] = [],
+  salesDetail: SalesDetailData[] = []
 ): BomVarianceInsight {
   const emptyResult: BomVarianceInsight = { items: [], totalPriceVariance: 0, totalQtyVariance: 0, totalVariance: 0, favorableCount: 0, unfavorableCount: 0 };
   if (purchases.length === 0 || production.length === 0) return emptyResult;
@@ -1831,12 +1828,8 @@ export function computeBomVariance(
     if (mm.unitPrice > 0) masterPriceMap.set(code, mm.unitPrice);
   }
 
-  // BOM 기준 소모량 계산
-  // 핵심: totalProduction은 전 제품 합계이므로, 제품수(N)로 균등 분배
-  //   각 BOM 엔트리: consumptionQty × (perProductProduction / productionQty)
+  // BOM 연결 메뉴 목록 수집
   const bomLinkedMenus = new Map<string, { code: string; name: string }[]>();
-
-  // 먼저 연결 메뉴 목록 수집
   for (const bom of bomData) {
     const matCode = bom.materialCode?.trim();
     if (!matCode || !bom.consumptionQty || !bom.productionQty) continue;
@@ -1849,19 +1842,46 @@ export function computeBomVariance(
     bomLinkedMenus.set(matCode, menus);
   }
 
-  // BOM에 등록된 고유 제품(메뉴) 수 → 생산량 균등 분배
-  const uniqueBomProducts = new Set(bomData.map(b => b.productCode?.trim()).filter(Boolean));
-  const numBomProducts = uniqueBomProducts.size || 1;
-  const perProductProduction = totalProduction / numBomProducts;
+  // ── 판매 기반 예상 소비량 산출 (US-003: 균등 분배 → 판매 비례) ──
+  // salesDetail이 있으면 제품별 판매량을 기반으로 자재 소비량을 산출
+  // salesDetail이 없으면 기존 생산량 비례 폴백
+  const salesByProduct = new Map<string, number>();
+  if (salesDetail.length > 0) {
+    for (const s of salesDetail) {
+      const code = s.productCode?.trim();
+      if (!code) continue;
+      salesByProduct.set(code, (salesByProduct.get(code) || 0) + (s.quantity || 0));
+    }
+  }
 
   const bomStandardQty = new Map<string, number>();
-  for (const bom of bomData) {
-    const matCode = bom.materialCode?.trim();
-    if (!matCode || !bom.consumptionQty || !bom.productionQty) continue;
+  const hasSalesData = salesByProduct.size > 0;
 
-    // 기준 소모량 = consumptionQty × (제품별 균등생산량 / 배치크기)
-    const stdQty = bom.consumptionQty * (perProductProduction / bom.productionQty);
-    bomStandardQty.set(matCode, (bomStandardQty.get(matCode) || 0) + stdQty);
+  if (hasSalesData) {
+    // 판매 기반: expectedQty = salesQty × (consumptionQty / productionQty)
+    for (const bom of bomData) {
+      const matCode = bom.materialCode?.trim();
+      const prodCode = bom.productCode?.trim();
+      if (!matCode || !prodCode || !bom.consumptionQty || !bom.productionQty) continue;
+
+      const salesQty = salesByProduct.get(prodCode) || 0;
+      if (salesQty <= 0) continue;
+
+      const stdQty = (bom.consumptionQty / bom.productionQty) * salesQty;
+      bomStandardQty.set(matCode, (bomStandardQty.get(matCode) || 0) + stdQty);
+    }
+  } else {
+    // 폴백: 총 생산량을 BOM 제품수로 균등 분배 (레거시)
+    const uniqueBomProducts = new Set(bomData.map(b => b.productCode?.trim()).filter(Boolean));
+    const numBomProducts = uniqueBomProducts.size || 1;
+    const perProductProduction = totalProduction / numBomProducts;
+
+    for (const bom of bomData) {
+      const matCode = bom.materialCode?.trim();
+      if (!matCode || !bom.consumptionQty || !bom.productionQty) continue;
+      const stdQty = bom.consumptionQty * (perProductProduction / bom.productionQty);
+      bomStandardQty.set(matCode, (bomStandardQty.get(matCode) || 0) + stdQty);
+    }
   }
 
   // BOM 데이터가 있는 경우: BOM 기준 로직
@@ -2776,7 +2796,7 @@ export function computeAllInsights(
   const limitPrice = purchases.length > 0 ? computeLimitPrice(purchases) : null;
 
   const bomVariance = (purchases.length > 0 && production.length > 0)
-    ? computeBomVariance(purchases, production, bomData, materialMaster, inventorySnapshots)
+    ? computeBomVariance(purchases, production, bomData, materialMaster, inventorySnapshots, salesDetail)
     : null;
 
   const productBEP = productProfit
