@@ -1,0 +1,132 @@
+{
+  "project": "Z-CMS",
+  "branchName": "ralph/orphan-views-activation",
+  "description": "미연결 뷰 활성화 — BomIntegrityAuditView, BudgetExpenseView 데이터 연결 + Skeleton 로딩 + 대시보드 강화",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "computeBomYieldAnalysis 함수 추가",
+      "description": "As a developer, I need a function to compute BomYieldAnalysisItem[] from production + BOM data for the integrity audit view.",
+      "acceptanceCriteria": [
+        "insightService.ts에 computeBomYieldAnalysis(production, bomData, materialMaster) 함수 추가",
+        "ProductionData[] + BomItemData[]에서 제품별 표준수율 vs 실제수율 비교",
+        "stdYield: BomItemData의 표준 수율, actualYield: 실제 생산량/투입량 × 100",
+        "yieldGap: actualYield - stdYield, anomalyLevel: gap > 5%이면 critical, 3%이면 warning, else normal",
+        "costImpact: yieldGap × 해당 자재 단가 × 투입량",
+        "DashboardInsights 인터페이스에 bomYieldAnalysis: BomYieldAnalysisItem[] | null 추가",
+        "computeAllInsights()에서 호출하여 결과 포함",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "BomYieldAnalysisItem type already exists in types.ts (line 206). BomItemData has: productCode, materialCode, stdQty, unit. ProductionData has: date, productCode, prodQtyTotal. MaterialMasterItem has: materialCode, unitPrice, preprocessYield."
+    },
+    {
+      "id": "US-002",
+      "title": "computeInventoryDiscrepancy 함수 추가",
+      "description": "As a developer, I need a function to compute InventoryDiscrepancyItem[] from inventory snapshots + purchase data.",
+      "acceptanceCriteria": [
+        "insightService.ts에 computeInventoryDiscrepancy(snapshots, purchases) 함수 추가",
+        "InventorySnapshotData[]에서 동일 자재의 시간순 재고 변화량 추적",
+        "전표상 수량(purchases qty) vs 실제 재고 변동의 차이 = discrepancyQty",
+        "discrepancyRate: discrepancyQty / transactionQty × 100",
+        "anomalyLevel: rate > 10%이면 critical, 5%이면 warning, else normal",
+        "DashboardInsights 인터페이스에 inventoryDiscrepancy: InventoryDiscrepancyItem[] | null 추가",
+        "computeAllInsights()에서 호출",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "InventoryDiscrepancyItem type exists in types.ts (line 221). Fields: id, materialCode, materialName, warehouse, transactionQty, actualChangeQty, discrepancyQty, discrepancyRate, anomalyLevel, reasoning. InventorySnapshotData has: productCode, productName, balanceQty, warehouseCode, snapshotDate."
+    },
+    {
+      "id": "US-003",
+      "title": "BomIntegrityAuditView → ProductionBomView 탭 연결",
+      "description": "As a user, I want to see BOM integrity audit data in the production view.",
+      "acceptanceCriteria": [
+        "ProductionBomView의 tabs 배열에 { key: 'integrity', label: 'BOM 정합성', icon: 'verified' } 추가",
+        "routeConfig.ts production 탭에 { key: 'integrity', path: 'integrity' } 추가",
+        "activeTab === 'integrity' 시 BomIntegrityAuditView 렌더링",
+        "yieldData: insights?.bomYieldAnalysis, discrepancyData: insights?.inventoryDiscrepancy 전달",
+        "데이터 없을 때 'BOM 및 재고 데이터를 연동하면 정합성 분석을 제공합니다' 안내 표시",
+        "BomIntegrityAuditView는 default export → import BomIntegrityAuditView from './BomIntegrityAuditView' 사용",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "BomIntegrityAuditView is at src/components/views/BomIntegrityAuditView.tsx. It's a default export. Props: { yieldData?: BomYieldAnalysisItem[], discrepancyData?: InventoryDiscrepancyItem[], onItemClick? }. ProductionBomView uses SubTabLayout with children function pattern: {(activeTab) => { if (activeTab === 'key') return <JSX/>; }}"
+    },
+    {
+      "id": "US-004",
+      "title": "computeBudgetExpense 함수 추가",
+      "description": "As a developer, I need a function to compute BudgetItem[], ExpenseSummary, and BudgetAlert[] from purchase + config data.",
+      "acceptanceCriteria": [
+        "insightService.ts에 computeBudgetExpense(purchases, config) 함수 추가",
+        "PurchaseData[]를 카테고리(원재료/부재료/기타)별로 분류하여 BudgetItem[] 생성",
+        "각 BudgetItem: budgetAmount는 config의 월예산 설정, usedAmount는 실제 구매금액 합계",
+        "usageRate: usedAmount / budgetAmount × 100, status: 90% 초과 critical, 80% 초과 warning, else normal",
+        "ExpenseSummary: 전체 예산 대비 사용 합계, 달성률, 잔여액",
+        "BudgetAlert: usageRate > 80%인 항목에 대해 경고 생성",
+        "DashboardInsights에 budgetExpense 추가",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "BudgetItem, ExpenseSummary, BudgetAlert types exist in types.ts. BudgetCategory: 'rawMaterial' | 'subMaterial' | 'labor' | 'overhead' | 'logistics' | 'marketing' | 'other'. PurchaseData has productName, total, date. Config from useBusinessConfig has defaultMarginRate, channelCosts etc — budget amounts may need defaults like monthlyBudget in config or use reasonable fallback calculations."
+    },
+    {
+      "id": "US-005",
+      "title": "BudgetExpenseView → CostManagementView 탭 연결",
+      "description": "As a user, I want to see detailed budget expense tracking in the cost management view.",
+      "acceptanceCriteria": [
+        "CostManagementView의 tabs 배열에 { key: 'budgetExpense', label: '예산 경비', icon: 'receipt_long' } 추가",
+        "routeConfig.ts cost 탭에 { key: 'budgetExpense', path: 'budget-expense' } 추가",
+        "activeTab === 'budgetExpense' 시 BudgetExpenseView 렌더링",
+        "budgets: insights?.budgetExpense?.items, summary: insights?.budgetExpense?.summary, alerts: insights?.budgetExpense?.alerts 전달",
+        "데이터 없을 때 '구매 데이터를 연동하면 예산 대비 경비 분석을 제공합니다' 안내 표시",
+        "BudgetExpenseView는 default export → import BudgetExpenseView from './BudgetExpenseView' 사용",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "BudgetExpenseView is at src/components/views/BudgetExpenseView.tsx. Default export. Props: { budgets?: BudgetItem[], summary?: ExpenseSummary | null, alerts?: BudgetAlert[], onItemClick? }. CostManagementView uses SubTabLayout with {(activeTab) => { ... }} pattern."
+    },
+    {
+      "id": "US-006",
+      "title": "ViewSkeleton 로딩 컴포넌트 생성 + 적용",
+      "description": "As a user, I want to see skeleton loading indicators instead of blank screens while data loads.",
+      "acceptanceCriteria": [
+        "src/components/common/ViewSkeleton.tsx 생성: 재사용 가능한 KPI 카드 + 차트 + 테이블 스켈레톤",
+        "KPI 스켈레톤: 4개 카드 그리드, 애니메이션 pulse 효과",
+        "차트 스켈레톤: h-72 회색 박스 + pulse",
+        "테이블 스켈레톤: 헤더 + 5행 pulse 행",
+        "DashboardHomeView에서 데이터 로딩 중일 때 ViewSkeleton 표시",
+        "ProfitAnalysisView에서 channelRevenue 계산 전 ViewSkeleton 표시",
+        "CostManagementView에서 insights 없을 때 ViewSkeleton 표시",
+        "export { ViewSkeleton } from './ViewSkeleton' 를 src/components/common/index.ts에 추가",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Use Tailwind animate-pulse for skeleton effect. Keep it simple — gray rounded boxes. src/components/common/ already has FormulaTooltip and an index.ts. Add ViewSkeleton there. Skeleton should accept optional props like rows?: number, showChart?: boolean, kpiCount?: number for flexibility."
+    },
+    {
+      "id": "US-007",
+      "title": "대시보드 홈에 일별 성과 + 단가 영향 요약 카드 추가",
+      "description": "As a user, I want to see daily performance and material price impact summaries on the dashboard home.",
+      "acceptanceCriteria": [
+        "DashboardHomeView Props에 insights?: DashboardInsights | null 추가",
+        "App.tsx에서 DashboardHomeView에 insights={insights} prop 전달",
+        "대시보드에 '일별 성과 요약' 카드 추가: 평균 노무비율, 평균 원재료비율, 목표 달성일수/총일수",
+        "대시보드에 '단가 변동 경보' 카드 추가: 긴급 항목 수, 총 원가 영향, 최대 변동 자재명",
+        "insights?.dailyPerformance가 null이면 해당 카드 숨김",
+        "insights?.materialPriceImpact가 null이면 해당 카드 숨김",
+        "카드 클릭 시 해당 상세 뷰로 navigate (onNavigate prop 활용)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "DashboardHomeView is at src/components/views/DashboardHomeView.tsx. Named export. Currently receives: onSync, isSyncing, lastSyncTime, dailySales, salesDetail, production, purchases, onNavigate, dataSource, syncStatus, profitCenterScore. insights prop is new. DashboardInsights has dailyPerformance (DailyPerformanceInsight | null) and materialPriceImpact (MaterialPriceImpactInsight | null)."
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "project": "Z-CMS",
+  "branchName": "ralph/frontend-routing",
+  "description": "Frontend URL-based routing - Replace state-based view switching with React Router for URL navigation, deep linking, and browser history support",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Install React Router and create route configuration",
+      "description": "As a developer, I need React Router installed and a centralized route config so all views have URL paths.",
+      "acceptanceCriteria": [
+        "react-router (v7) installed as dependency",
+        "src/config/routeConfig.ts created with route definitions for all 7 views: home(/), profit(/profit), sales(/sales), cost(/cost), production(/production), inventory(/inventory), settings(/settings)",
+        "Route config reuses existing viewConfig.ts metadata (titles, icons)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "react-router@7.13.1 installed. routeConfig.ts created with full tab definitions for all 5 tabbed views."
+    },
+    {
+      "id": "US-002",
+      "title": "Set up BrowserRouter and route outlet in App.tsx",
+      "description": "As a developer, I need the router provider wrapping the app and an outlet replacing the switch statement.",
+      "acceptanceCriteria": [
+        "BrowserRouter wraps the app in main.tsx (or App.tsx entry)",
+        "renderActiveView() switch statement replaced with <Outlet /> or route-based rendering",
+        "All 7 views render at their URL paths (/, /profit, /sales, /cost, /production, /inventory, /settings)",
+        "Existing React.lazy() code splitting preserved for each view",
+        "Suspense fallback still shows loading state",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "BrowserRouter in index.tsx. App.tsx switch → <Routes>/<Route> with all 7 views + wildcard. React.lazy preserved."
+    },
+    {
+      "id": "US-003",
+      "title": "Convert Sidebar navigation to use router links",
+      "description": "As a user, I want clicking sidebar items to navigate via URL instead of state changes.",
+      "acceptanceCriteria": [
+        "Sidebar NavItems use <Link> or <NavLink> from react-router instead of onClick state updates",
+        "Active view highlighting works via URL matching (NavLink activeClassName or equivalent)",
+        "aria-current='page' still applied to active nav item",
+        "Mobile sidebar still closes on navigation",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "NavItem uses NavLink with isActive render prop. aria-current via NavLink. Mobile close via closeMobile callback."
+    },
+    {
+      "id": "US-004",
+      "title": "Remove activeView state from UIContext",
+      "description": "As a developer, I want to eliminate the redundant activeView state now that the URL is the source of truth.",
+      "acceptanceCriteria": [
+        "activeView useState removed from UIContext",
+        "handleSetActiveView removed or replaced with useNavigate hook",
+        "pendingView / confirmNavigateAway logic adapted to work with router (or removed if no longer needed)",
+        "Any component reading activeView from context now uses useLocation or useMatch instead",
+        "Header page title derived from current route, not context state",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "activeView derived from useLocation via viewFromPath(). setActiveView uses navigate(). pendingView/confirm adapted to use navigate."
+    },
+    {
+      "id": "US-005",
+      "title": "Add sub-tab routing for tabbed views",
+      "description": "As a user, I want sub-tabs to be part of the URL so I can bookmark a specific tab.",
+      "acceptanceCriteria": [
+        "Tabbed views (profit, sales, cost, production, inventory) support nested routes or URL params for tabs",
+        "Example: /profit/channel, /profit/ranking, /production/bom-error",
+        "Default tab loads when visiting parent route (e.g., /profit redirects to /profit/channel)",
+        "SubTabLayout component reads active tab from URL instead of local state",
+        "Tab switching updates URL without full page reload",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "SubTabLayout reads URL segments. Auto-redirect to default tab. Route paths use /* wildcard in App.tsx."
+    },
+    {
+      "id": "US-006",
+      "title": "Add 404 catch-all route",
+      "description": "As a user, I want to see a helpful message when I navigate to an invalid URL.",
+      "acceptanceCriteria": [
+        "A catch-all route ('*') renders a NotFound component",
+        "NotFound component shows Korean message indicating page not found",
+        "NotFound includes a link/button to navigate back to home (/)",
+        "Styled consistently with existing shadcn/ui design system",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "NotFoundView.tsx created with Korean text, DynamicIcon, shadcn Button+Link. Route path='*' in App.tsx."
+    },
+    {
+      "id": "US-007",
+      "title": "Update Vercel config for SPA client-side routing",
+      "description": "As a developer, I need the deployment to serve index.html for all routes so client-side routing works.",
+      "acceptanceCriteria": [
+        "vercel.json rewrites all non-API, non-asset paths to /index.html",
+        "Existing cache headers and API rewrites preserved",
+        "Direct URL access (e.g., pasting /profit in browser) loads the correct view",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "vercel.json already had SPA rewrite: /((?!assets/).*) → /index.html. No change needed."
+    }
+  ]
+}

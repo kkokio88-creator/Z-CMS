@@ -1,0 +1,43 @@
+# Ralph Progress: frontend-routing
+# Started: 2026-02-25
+
+## Iteration 1 — All 7 stories completed
+
+### US-001 ✅ Install React Router + route config
+- react-router@7.13.1 installed
+- src/config/routeConfig.ts: ROUTES record with 7 views + tab definitions
+- Helper functions: viewFromPath(), tabPathFromKey(), tabKeyFromPath()
+
+### US-002 ✅ BrowserRouter + Routes in App.tsx
+- BrowserRouter wraps app in index.tsx
+- App.tsx: switch statement → <Routes>/<Route> with /* wildcards for tabbed views
+- React.lazy code splitting preserved
+
+### US-003 ✅ Sidebar → NavLink
+- NavItem uses <NavLink> with render-prop for isActive styling
+- Z-CMS logo is a NavLink to "/"
+- Settings gear button uses asChild + NavLink
+- closeMobile() on all links
+
+### US-004 ✅ UIContext: URL as source of truth
+- activeView = useMemo(() => viewFromPath(location.pathname))
+- activeSubTab derived from URL segments via tabKeyFromPath()
+- setActiveView uses navigate(), setActiveSubTab uses navigate(replace)
+- pendingView/confirmNavigateAway adapted to use navigate()
+
+### US-005 ✅ Sub-tab routing
+- SubTabLayout reads URL path for active tab
+- Auto-redirect to default tab if no tab segment in URL
+- Tab change updates URL with replace:true
+
+### US-006 ✅ 404 NotFoundView
+- src/components/views/NotFoundView.tsx
+- Korean text, DynamicIcon (search_off), Link to "/"
+
+### US-007 ✅ Vercel SPA config
+- Already configured: /((?!assets/).*) → /index.html
+- No changes needed
+
+### Verification
+- TypeScript: 0 errors (npx tsc --noEmit)
+- Production build: ✅ success (56s, all chunks generated)
