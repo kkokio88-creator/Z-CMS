@@ -15,7 +15,7 @@ import type {
   InventorySnapshotData,
 } from './googleSheetService';
 import { getZScore } from './orderingService';
-import type { InventorySafetyItem } from '../types';
+import type { InventorySafetyItem, DailyPerformanceMetric, StaffingSuggestion, MaterialPriceHistory, MaterialCostImpact, AffectedProduct, PricePoint } from '../types';
 import { BusinessConfig, DEFAULT_BUSINESS_CONFIG, ProfitCenterGoal } from '../config/businessConfig';
 import type { ChannelCostSummary } from '../components/domain';
 import { interpolateBracket } from '../utils/costScoring';
@@ -498,6 +498,24 @@ export interface DashboardInsights {
   inventoryCost: InventoryCostInsight | null;
   profitCenterScore: ProfitCenterScoreInsight | null;
   bomConsumptionAnomaly: BomConsumptionAnomalyInsight | null;
+  dailyPerformance: DailyPerformanceInsight | null;
+  materialPriceImpact: MaterialPriceImpactInsight | null;
+}
+
+export interface DailyPerformanceInsight {
+  metrics: DailyPerformanceMetric[];
+  staffingSuggestions: StaffingSuggestion[];
+  avgLaborRatio: number;
+  avgMaterialRatio: number;
+  onTargetDays: number;
+  totalDays: number;
+}
+
+export interface MaterialPriceImpactInsight {
+  priceHistory: MaterialPriceHistory[];
+  impacts: MaterialCostImpact[];
+  totalImpact: number;
+  highUrgencyCount: number;
 }
 
 export interface YieldDailyItem {
@@ -2848,6 +2866,14 @@ export function computeAllInsights(
     ? computeBomConsumptionAnomaly(purchases, production, bomData, materialMaster, inventorySnapshots, config)
     : null;
 
+  const dailyPerformance = (labor.length > 0 && dailySales.length > 0)
+    ? computeDailyPerformance(labor, production, dailySales, purchases, config)
+    : null;
+
+  const materialPriceImpact = purchases.length > 0
+    ? computeMaterialPriceImpact(purchases, bomData, materialMaster)
+    : null;
+
   return {
     channelRevenue,
     productProfit,
@@ -2869,6 +2895,8 @@ export function computeAllInsights(
     inventoryCost,
     profitCenterScore,
     bomConsumptionAnomaly,
+    dailyPerformance,
+    materialPriceImpact,
   };
 }
 
@@ -3169,4 +3197,272 @@ export function computeCostVarianceBreakdown(
   const reconciled = Math.abs(categorySum - totalExcess) < 10000; // 1만원 이내 오차 허용
 
   return { totalExcess, targetTotal, actualTotal, categories, reconciled };
+}
+
+// ──── US-001: 일별 성과 분석 ────
+
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+
+function determineStatus(actual: number, target: number, tolerance: number = 5): import('../types').PerformanceStatus {
+  const diff = actual - target;
+  if (Math.abs(diff) <= tolerance) return 'on-target';
+  return diff > 0 ? 'above-target' : 'below-target';
+}
+
+export function computeDailyPerformance(
+  labor: LaborDailyData[],
+  production: ProductionData[],
+  dailySales: DailySalesData[],
+  purchases: PurchaseData[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG
+): DailyPerformanceInsight | null {
+  if (labor.length === 0 || dailySales.length === 0) return null;
+
+  const targetLaborRatio = (config as any).targetLaborRatio ?? 25;
+  const targetMaterialRatio = (config as any).targetMaterialRatio ?? 45;
+
+  // 일별 매출 맵
+  const salesByDate = new Map<string, number>();
+  for (const s of dailySales) salesByDate.set(s.date, (salesByDate.get(s.date) || 0) + s.totalRevenue);
+
+  // 일별 노무비 맵
+  const laborByDate = new Map<string, { totalPay: number; headcount: number; departments: Set<string> }>();
+  for (const l of labor) {
+    const agg = laborByDate.get(l.date) || { totalPay: 0, headcount: 0, departments: new Set<string>() };
+    agg.totalPay += l.totalPay;
+    agg.headcount += l.headcount;
+    agg.departments.add(l.department);
+    laborByDate.set(l.date, agg);
+  }
+
+  // 일별 구매비 맵
+  const purchaseByDate = new Map<string, number>();
+  for (const p of purchases) purchaseByDate.set(p.date, (purchaseByDate.get(p.date) || 0) + p.total);
+
+  // 일별 생산량 맵
+  const prodByDate = new Map<string, number>();
+  for (const p of production) prodByDate.set(p.date, (prodByDate.get(p.date) || 0) + p.prodQtyTotal);
+
+  // 전체 날짜 집합 (매출 기준)
+  const allDates = [...salesByDate.keys()].sort();
+
+  const metrics: DailyPerformanceMetric[] = [];
+  const suggestions: StaffingSuggestion[] = [];
+
+  for (const date of allDates) {
+    const revenue = salesByDate.get(date) || 0;
+    if (revenue <= 0) continue;
+
+    const laborData = laborByDate.get(date);
+    const laborCost = laborData?.totalPay || 0;
+    const materialCost = purchaseByDate.get(date) || 0;
+    const productionQty = prodByDate.get(date) || 0;
+
+    const actualLaborRatio = revenue > 0 ? Math.round((laborCost / revenue) * 1000) / 10 : 0;
+    const actualMaterialRatio = revenue > 0 ? Math.round((materialCost / revenue) * 1000) / 10 : 0;
+
+    const laborVariance = Math.round((actualLaborRatio - targetLaborRatio) * 10) / 10;
+    const materialVariance = Math.round((actualMaterialRatio - targetMaterialRatio) * 10) / 10;
+
+    const laborStatus = determineStatus(actualLaborRatio, targetLaborRatio);
+    const materialStatus = determineStatus(actualMaterialRatio, targetMaterialRatio);
+
+    const efficiency = productionQty > 0 && revenue > 0
+      ? Math.round((productionQty / (revenue / 10000)) * 10) / 10 // 만원당 생산량
+      : 0;
+
+    const overallStatus = laborStatus === 'on-target' && materialStatus === 'on-target'
+      ? 'on-target'
+      : (laborStatus === 'above-target' || materialStatus === 'above-target') ? 'above-target' : 'below-target';
+
+    const dayOfWeek = DAY_NAMES[new Date(date).getDay()];
+
+    metrics.push({
+      date,
+      dayOfWeek,
+      productionQty,
+      productionTarget: 0, // 생산 목표는 설정에 없으므로 0
+      productionAchievement: 0,
+      targetLaborRatio,
+      actualLaborRatio,
+      laborCost,
+      laborVariance,
+      laborStatus,
+      targetMaterialRatio,
+      actualMaterialRatio,
+      materialCost,
+      materialVariance,
+      materialStatus,
+      efficiency,
+      overallStatus,
+    });
+
+    // 노무비 목표 초과 시 인력 조정 제안
+    if (laborStatus === 'above-target' && laborData) {
+      const suggestedCost = revenue * (targetLaborRatio / 100);
+      const reduction = Math.ceil((laborCost - suggestedCost) / (laborCost / laborData.headcount));
+      if (reduction > 0) {
+        suggestions.push({
+          date,
+          department: [...laborData.departments].join(', '),
+          currentHeadcount: laborData.headcount,
+          suggestedHeadcount: Math.max(1, laborData.headcount - reduction),
+          reason: `노무비율 ${actualLaborRatio}% (목표 ${targetLaborRatio}%)`,
+          priority: laborVariance > 10 ? 'high' : laborVariance > 5 ? 'medium' : 'low',
+        });
+      }
+    }
+  }
+
+  const avgLaborRatio = metrics.length > 0
+    ? Math.round(metrics.reduce((s, m) => s + m.actualLaborRatio, 0) / metrics.length * 10) / 10
+    : 0;
+  const avgMaterialRatio = metrics.length > 0
+    ? Math.round(metrics.reduce((s, m) => s + m.actualMaterialRatio, 0) / metrics.length * 10) / 10
+    : 0;
+  const onTargetDays = metrics.filter(m => m.overallStatus === 'on-target').length;
+
+  return {
+    metrics,
+    staffingSuggestions: suggestions,
+    avgLaborRatio,
+    avgMaterialRatio,
+    onTargetDays,
+    totalDays: metrics.length,
+  };
+}
+
+// ──── US-002: 자재 단가 영향 분석 ────
+
+export function computeMaterialPriceImpact(
+  purchases: PurchaseData[],
+  bomData: BomItemData[],
+  materialMaster: MaterialMasterItem[]
+): MaterialPriceImpactInsight | null {
+  if (purchases.length === 0) return null;
+
+  // 자재별 일별 단가 이력 수집
+  const materialMap = new Map<string, {
+    name: string; category: string; unit: string;
+    points: PricePoint[];
+  }>();
+
+  for (const p of purchases) {
+    const code = p.productCode?.trim();
+    if (!code || p.quantity <= 0) continue;
+    const unitPrice = Math.round(p.total / p.quantity);
+    let entry = materialMap.get(code);
+    if (!entry) {
+      const mm = materialMaster.find(m => m.materialCode?.trim() === code);
+      entry = {
+        name: p.productName || code,
+        category: mm?.category || '',
+        unit: mm?.unit || '',
+        points: [],
+      };
+      materialMap.set(code, entry);
+    }
+    entry.points.push({ date: p.date, unitPrice, supplierName: p.supplierName });
+  }
+
+  const now = new Date();
+  const oneWeekAgo = new Date(now); oneWeekAgo.setDate(now.getDate() - 7);
+  const oneMonthAgo = new Date(now); oneMonthAgo.setDate(now.getDate() - 30);
+  const weekStr = oneWeekAgo.toISOString().slice(0, 10);
+  const monthStr = oneMonthAgo.toISOString().slice(0, 10);
+
+  const priceHistory: MaterialPriceHistory[] = [];
+
+  for (const [code, entry] of materialMap) {
+    if (entry.points.length < 2) continue;
+    const sorted = [...entry.points].sort((a, b) => a.date.localeCompare(b.date));
+    const currentPrice = sorted[sorted.length - 1].unitPrice;
+
+    // 최근 1주/1개월 평균
+    const weekPoints = sorted.filter(p => p.date >= weekStr);
+    const monthPoints = sorted.filter(p => p.date >= monthStr);
+    const olderWeekPoints = sorted.filter(p => p.date < weekStr);
+    const olderMonthPoints = sorted.filter(p => p.date < monthStr);
+
+    const previousWeekPrice = olderWeekPoints.length > 0
+      ? Math.round(olderWeekPoints.slice(-5).reduce((s, p) => s + p.unitPrice, 0) / Math.min(olderWeekPoints.length, 5))
+      : currentPrice;
+    const previousMonthPrice = olderMonthPoints.length > 0
+      ? Math.round(olderMonthPoints.slice(-10).reduce((s, p) => s + p.unitPrice, 0) / Math.min(olderMonthPoints.length, 10))
+      : currentPrice;
+
+    const avgPrice30Days = monthPoints.length > 0
+      ? Math.round(monthPoints.reduce((s, p) => s + p.unitPrice, 0) / monthPoints.length)
+      : currentPrice;
+
+    const priceChangeWeek = previousWeekPrice > 0
+      ? Math.round((currentPrice - previousWeekPrice) / previousWeekPrice * 1000) / 10
+      : 0;
+    const priceChangeMonth = previousMonthPrice > 0
+      ? Math.round((currentPrice - previousMonthPrice) / previousMonthPrice * 1000) / 10
+      : 0;
+
+    priceHistory.push({
+      materialCode: code,
+      materialName: entry.name,
+      category: entry.category,
+      unit: entry.unit,
+      priceHistory: sorted,
+      currentPrice,
+      previousWeekPrice,
+      previousMonthPrice,
+      priceChangeWeek,
+      priceChangeMonth,
+      avgPrice30Days,
+    });
+  }
+
+  // 단가 변동 5% 이상인 자재의 BOM 연결 제품 영향 분석
+  const impacts: MaterialCostImpact[] = [];
+
+  for (const mat of priceHistory) {
+    if (Math.abs(mat.priceChangeMonth) < 5) continue;
+
+    const priceIncrease = mat.currentPrice - mat.previousMonthPrice;
+
+    // BOM에서 해당 자재를 사용하는 제품 조회
+    const relatedBom = bomData.filter(b => b.materialCode?.trim() === mat.materialCode);
+    const affectedProducts: AffectedProduct[] = relatedBom.map(bom => {
+      const bomQty = (bom.consumptionQty || 0) / (bom.productionQty || 1);
+      const currentCost = Math.round(bomQty * mat.previousMonthPrice);
+      const newCost = Math.round(bomQty * mat.currentPrice);
+      return {
+        productCode: bom.productCode || '',
+        productName: bom.productName || bom.productCode || '',
+        bomQty: Math.round(bomQty * 100) / 100,
+        currentCost,
+        newCost,
+        deltaCost: newCost - currentCost,
+        deltaPercent: currentCost > 0 ? Math.round((newCost - currentCost) / currentCost * 1000) / 10 : 0,
+      };
+    });
+
+    const totalDeltaCost = affectedProducts.reduce((s, p) => s + p.deltaCost, 0);
+    const absPct = Math.abs(mat.priceChangeMonth);
+    const urgencyLevel: import('../types').AnomalyLevel = absPct >= 10 ? 'critical' : absPct >= 5 ? 'warning' : 'normal';
+
+    impacts.push({
+      materialCode: mat.materialCode,
+      materialName: mat.materialName,
+      priceIncrease,
+      priceIncreasePercent: mat.priceChangeMonth,
+      affectedProducts,
+      totalDeltaCost,
+      urgencyLevel,
+    });
+  }
+
+  impacts.sort((a, b) => Math.abs(b.totalDeltaCost) - Math.abs(a.totalDeltaCost));
+
+  return {
+    priceHistory: priceHistory.sort((a, b) => Math.abs(b.priceChangeMonth) - Math.abs(a.priceChangeMonth)),
+    impacts,
+    totalImpact: impacts.reduce((s, i) => s + i.totalDeltaCost, 0),
+    highUrgencyCount: impacts.filter(i => i.urgencyLevel === 'critical').length,
+  };
 }

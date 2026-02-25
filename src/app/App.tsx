@@ -377,6 +377,7 @@ function AppContent() {
                           purchases={gsPurchases}
                           insights={insights}
                           inventoryAdjustment={inventoryAdjustment}
+                          channelProfit={gsChannelProfit}
                           onItemClick={handleItemClick}
                           onTabChange={setActiveSubTab}
                         />
@@ -434,6 +435,7 @@ function AppContent() {
                           purchases={gsPurchases}
                           insights={insights}
                           stocktakeAnomalies={stocktakeAnomalies}
+                          inventorySnapshots={gsInventorySnapshots}
                           onItemClick={handleItemClick}
                           onTabChange={setActiveSubTab}
                         />

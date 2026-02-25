@@ -1,138 +1,127 @@
 {
   "project": "Z-CMS",
-  "branchName": "ralph/bom-enhancement",
-  "description": "BOM 분석 고도화 - SOP 코드체계 적용, 판매 기반 소비량 산출, 투입오차 정확도 개선, BOM 커버리지 분석, 대시보드 리디자인",
+  "branchName": "ralph/view-data-enhancement",
+  "description": "기존 뷰 개선 + 데이터 연동 강화 — 미연결 뷰 활성화, 미사용 데이터 연동, 하드코딩 제거",
   "userStories": [
     {
       "id": "US-001",
-      "title": "SOP 코드 파서 유틸 + BOM 분석 타입 정의",
-      "description": "As a developer, I need a utility to parse SOP code structure (ZIP_M_2034) and new types for BOM analysis results.",
+      "title": "insightService에 computeDailyPerformance 함수 추가",
+      "description": "As a developer, I need a function to compute DailyPerformanceMetric[] from gsLabor + gsProduction + gsDailySales data.",
       "acceptanceCriteria": [
-        "src/utils/sopCodeParser.ts created with parseSopCode() function",
-        "parseSopCode('ZIP_M_2034') returns { usage:'ZIP', usageLabel:'집반찬연구소', category:'M', categoryLabel:'원재료', number:2034, numberGroup:'수산물', isValid:true }",
-        "Handles all 3 usage codes (ZIP/RES/SAN), 6 category codes (M/S/P/H/C/E), number groups per SOP",
-        "validateBomEntry() checks required fields: productCode, materialCode, consumptionQty, productionQty",
-        "getBomCoverage() type defined: { coveredProducts, uncoveredProducts, orphanMaterials, completenessScore }",
-        "BomHealthScore type: { overall, dataQuality, coverageScore, varianceScore, anomalyScore }",
-        "Export types from the file for use in services and views",
+        "computeDailyPerformance(labor, production, dailySales, config) 함수를 insightService.ts에 추가",
+        "LaborDailyData[] + ProductionData[] + DailySalesData[] → DailyPerformanceMetric[] 변환",
+        "일별 노무비율 = 해당일 totalPay / 해당일 매출 × 100",
+        "일별 원재료비율 = 해당일 구매비용(purchases) / 해당일 매출 × 100",
+        "laborStatus/materialStatus/overallStatus 판정: target 대비 ±5% 이내 on-target, 초과 above-target, 미달 below-target",
+        "StaffingSuggestion[] 생성: 노무비율 목표 초과일에 인력 조정 제안",
+        "computeAllInsights()에 dailyPerformance 추가",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "DONE: src/utils/sopCodeParser.ts created with full SOP code parsing, validation, batch validation, BomCoverageResult and BomHealthScore types."
+      "notes": "LaborDailyData has: date, department, headcount, totalPay, weekdayTotalHours etc. ProductionData has: date, prodQtyTotal. DailySalesData has: date, totalAmount. targets default: laborRatio=25, materialRatio=45 (from SettingsContext config)."
     },
     {
       "id": "US-002",
-      "title": "BOM 분석 서비스 - 커버리지 + 판매 기반 소비량 산출",
-      "description": "As a developer, I need a dedicated BOM analysis service that calculates expected material consumption from sales data and BOM coverage.",
+      "title": "insightService에 computeMaterialPriceImpact 함수 추가",
+      "description": "As a developer, I need a function to compute MaterialPriceHistory[] and MaterialCostImpact[] from purchase history.",
       "acceptanceCriteria": [
-        "src/services/bomAnalysisService.ts created",
-        "computeBomCoverage(bomData, salesDetail, purchases) analyzes: products with BOM vs without, materials in BOM vs purchased-but-not-in-BOM, returns completeness percentage",
-        "computeSalesBasedConsumption(salesDetail, bomData, materialMaster) calculates expected material consumption: for each sold product, lookup BOM recipe, multiply sales qty by (consumptionQty/productionQty), aggregate by material code",
-        "computeConsumptionVariance(expected, purchases, materialMaster) compares expected vs actual purchases per material, returns price variance and quantity variance separately",
-        "validateBomData(bomData, materialMaster) validates entries against SOP codes using sopCodeParser, returns validation results with error counts",
-        "computeBomHealthScore() aggregates coverage, variance, anomaly into single 0-100 score",
-        "All functions are pure (no side effects), accept typed parameters, return typed results",
+        "computeMaterialPriceImpact(purchases, bomData, materialMaster) 함수를 insightService.ts에 추가",
+        "PurchaseData[]에서 자재별 일별 단가 이력(PricePoint[]) 추출",
+        "MaterialPriceHistory: currentPrice, previousWeekPrice, previousMonthPrice, priceChangeWeek/Month, avgPrice30Days 계산",
+        "MaterialCostImpact: 단가 변동이 5% 이상인 자재에 대해 BOM 연결 제품의 원가 영향 산출",
+        "AffectedProduct[]: bomQty × (newPrice - oldPrice) = deltaCost per product",
+        "urgencyLevel 판정: 10%이상=high, 5~10%=medium, 그 외=low",
+        "computeAllInsights()에 materialPriceImpact 추가",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "DONE: src/services/bomAnalysisService.ts created with computeBomCoverage, computeSalesBasedConsumption, computeConsumptionVariance, validateBomData, computeBomHealthScore."
+      "notes": "PurchaseData has: date, productCode, productName, quantity, unitPrice, total. BomItemData links material→product. Use last 30 days of purchases for price history. Group by productCode, sort by date."
     },
     {
       "id": "US-003",
-      "title": "Fix computeBomVariance - 판매 기반 생산량 추정으로 교체",
-      "description": "As a developer, I need to fix the uniform production distribution assumption in computeBomVariance.",
+      "title": "DailyPerformanceView 라우팅 연결 + 데이터 전달",
+      "description": "As a user, I want to access the daily performance tracking view from the main navigation.",
       "acceptanceCriteria": [
-        "computeBomVariance() in insightService.ts now accepts salesDetail parameter",
-        "Remove uniform distribution: perProductProduction = totalProduction / numBomProducts",
-        "Replace with: for each BOM material, calculate expected qty from salesDetail product quantities × BOM recipe ratio",
-        "If salesDetail unavailable, fall back to production-proportional estimation (current logic) with clear comment",
-        "computeAllInsights() passes salesDetail to computeBomVariance()",
-        "Price variance uses materialMaster.unitPrice as standard price when available",
-        "Quantity variance uses sales-based expected quantity",
-        "Material drilldown in the function shows per-product breakdown using sales quantities",
+        "routeConfig.ts cost 탭에 { key: 'dailyPerformance', path: 'daily-performance' } 추가",
+        "App.tsx에서 CostManagementView에 dailyPerformance prop 전달 (insights?.dailyPerformance)",
+        "CostManagementView에서 activeTab === 'dailyPerformance' 시 DailyPerformanceView 렌더링",
+        "DailyPerformanceView에 data, staffingSuggestions, targets props 전달",
+        "targets는 SettingsContext의 config에서 laborRatio, materialRatio 가져오기",
+        "데이터 없을 때 '노무비 데이터를 연동하면 일별 성과를 분석합니다' 안내 표시",
         "Typecheck passes"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "DONE: computeBomVariance now accepts salesDetail param, uses sales-based expected quantities instead of uniform distribution. Falls back to legacy when no salesDetail."
+      "notes": "DailyPerformanceView is already built at src/components/views/DailyPerformanceView.tsx. Just need to wire it into routing and pass data. CostManagementView renders tabs via SubTabLayout children function pattern."
     },
     {
       "id": "US-004",
-      "title": "Fix computeWasteAnalysis - 실제 원가 기반 폐기 비용 산출",
-      "description": "As a developer, I need waste cost calculation to use actual material costs instead of hardcoded fallback.",
+      "title": "MaterialPriceImpactView 라우팅 연결 + 데이터 전달",
+      "description": "As a user, I want to access material price impact analysis from the cost management view.",
       "acceptanceCriteria": [
-        "computeWasteAnalysis() in insightService.ts calculates actual average unit cost from purchases",
-        "avgUnitCost = totalPurchaseCost / totalProductionQty (when both available)",
-        "Remove or deprioritize config.wasteUnitCost as primary source",
-        "Keep config.wasteUnitCost only as fallback when purchase data is empty",
-        "Each daily waste entry uses: estimatedCost = wasteFinishedEa × avgUnitCost",
-        "Total estimated cost recalculated with actual costs",
-        "Add actualUnitCostUsed: boolean flag to WasteAnalysisInsight type so UI can show data source",
+        "routeConfig.ts cost 탭에 { key: 'priceImpact', path: 'price-impact' } 추가",
+        "App.tsx에서 CostManagementView에 materialPriceImpact prop 전달",
+        "CostManagementView에서 activeTab === 'priceImpact' 시 MaterialPriceImpactView 렌더링",
+        "MaterialPriceImpactView에 priceHistory, impacts, onItemClick props 전달",
+        "데이터 없을 때 '구매 데이터를 연동하면 단가 변동 분석을 제공합니다' 안내 표시",
         "Typecheck passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "DONE: computeWasteAnalysis now calculates purchaseBasedUnitCost from actual data, adds actualUnitCostUsed and unitCostUsed fields."
+      "notes": "MaterialPriceImpactView is already built at src/components/views/MaterialPriceImpactView.tsx. Wire into cost view tabs. CostManagementView already has tabs array in render."
     },
     {
       "id": "US-005",
-      "title": "ProductionBomView - BOM 개요(Overview) 탭 추가",
-      "description": "As a user, I want a BOM overview tab showing health score, coverage, and data quality at a glance.",
+      "title": "InventoryOrderView 공급업체 목록 동적 추출",
+      "description": "As a user, I want the supplier list to be derived from actual purchase data instead of being hardcoded.",
       "acceptanceCriteria": [
-        "New 'overview' tab added as FIRST tab in ProductionBomView (before 생산 현황)",
-        "Tab label: 'BOM 개요', icon: 'assessment'",
-        "BOM 건전성 점수 KPI card (0-100 gauge or large number with color coding)",
-        "BOM 커버리지 카드: covered/total products count + percentage bar",
-        "SOP 코드 유효성 카드: valid/invalid/missing code entries count",
-        "최근 주요 이상 항목 리스트 (top 5 from bomConsumptionAnomaly)",
-        "데이터 품질 요약: BOM entries count, material master count, last sync time",
-        "Uses bomAnalysisService functions for calculations",
-        "Styled with existing shadcn/ui Card, Badge, Table components",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "InventoryOrderView에서 하드코딩된 supplierList 상수 제거",
+        "PurchaseData[]에서 고유 supplierName 추출하여 동적 공급업체 목록 생성",
+        "공급업체별 최근 거래 횟수, 최근 거래일, 총 거래 금액 계산",
+        "기존 주문 모달에서 동적 공급업체 목록 사용",
+        "공급업체 데이터 없으면 '구매 데이터에서 공급업체 정보를 추출합니다' 안내",
+        "하드코딩된 전화번호/이메일은 공급업체 정보가 없으면 빈값 처리",
+        "Typecheck passes"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "DONE: BOM 개요 tab with health score KPI (5-card layout), coverage analysis, SOP validation, consumption variance summary. Full JSX rendering with shadcn components."
+      "notes": "Current hardcoded suppliers in InventoryOrderView: 6 items with phone/email. PurchaseData doesn't have supplierName field — check the actual PurchaseData interface. If no supplier field, extract from productName patterns or add comment explaining limitation."
     },
     {
       "id": "US-006",
-      "title": "ProductionBomView - 투입오차(Variance) 탭 강화",
-      "description": "As a user, I want the BOM variance tab to show accurate data with price/quantity breakdown and product-level drill-down.",
+      "title": "gsInventorySnapshots 재고 추이 분석 연동",
+      "description": "As a user, I want to see inventory level trends over time using snapshot data.",
       "acceptanceCriteria": [
-        "BOM Variance tab uses the fixed computeBomVariance (sales-based) data",
-        "KPI cards: total price variance, total quantity variance, total combined variance, favorable/unfavorable count",
-        "Main chart: horizontal bar chart showing top 10 materials by absolute total variance, with price and quantity portions stacked",
-        "Variance detail table with columns: material name, expected qty (from sales×BOM), actual qty (from purchases), qty diff, standard price, actual price, price diff, total variance KRW",
-        "Click a material row to expand drill-down: shows which products use this material (from BOM), sales qty per product, expected consumption per product",
-        "Color coding: red for unfavorable (overuse/overprice), green for favorable",
-        "Uses FormulaTooltip for explaining calculation methodology",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "insightService.ts에 computeInventoryTrend(snapshots: InventorySnapshotData[]) 함수 추가",
+        "자재별 일별 재고 수량 추이 계산 (snapshotDate 기준 그룹핑)",
+        "재고 회전율 = 기간 출고량 / 평균 재고량 (purchases 데이터 활용)",
+        "InventoryOrderView의 'inventoryCost' 탭에 재고 추이 차트 추가",
+        "App.tsx에서 gsInventorySnapshots를 InventoryOrderView에 전달",
+        "InventoryOrderView Props에 inventorySnapshots?: InventorySnapshotData[] 추가",
+        "Typecheck passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "DONE: BOM Variance tab updated with sales-based data, drilldown now uses sales quantities, consumptionVariance computed and displayed. Sort toggle for linked menu count."
+      "notes": "InventorySnapshotData: { productCode, productName, balanceQty, warehouseCode, snapshotDate }. Currently gsInventorySnapshots is fetched by useSyncManager but never passed to any view. Add line chart showing balanceQty over time per material."
     },
     {
       "id": "US-007",
-      "title": "ProductionBomView - 폐기 비용 표시 수정 + 수율 탭 연동",
-      "description": "As a user, I want waste cost to show actual cost data and yield tab to show BOM-linked analysis.",
+      "title": "gsChannelProfit 채널 수익 실데이터 연동",
+      "description": "As a user, I want the profit analysis to use actual channel profit allocation data instead of computed estimates.",
       "acceptanceCriteria": [
-        "Waste analysis tab (폐기 분석) KPI cards show actual-cost-based waste estimate with data source indicator",
-        "If actualUnitCostUsed is true, show '실제 원가 기반' badge; if false, show '추정 원가 기반' warning badge",
-        "Yield tab (수율 추적) adds BOM 기준 수율 comparison when materialMaster.preprocessYield available",
-        "Show preprocessYield from material master alongside production yield for materials that appear in both",
-        "Summary KPI on yield tab: materials with yield below master threshold count",
-        "Both tabs use existing Recharts components and shadcn/ui styling",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "App.tsx에서 gsChannelProfit을 ProfitAnalysisView에 전달",
+        "ProfitAnalysisView Props에 channelProfit?: ChannelProfitData[] 추가",
+        "channelProfit 데이터가 있으면 computeChannelRevenue 대신 실데이터 우선 사용",
+        "채널별 실제 수익 vs 계산 수익 비교 뱃지 표시 (실데이터 기반 / 계산 기반)",
+        "실데이터와 계산값의 차이가 10% 이상이면 경고 표시",
+        "channelProfit 없으면 기존 computeChannelRevenue 로직 유지 (하위 호환)",
+        "Typecheck passes"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "DONE: Waste tab shows actualUnitCostUsed badge with unit cost info (실제원가/설정값 기반). Yield tab kept as-is (preprocessYield field not present in current MaterialMasterItem type)."
+      "notes": "gsChannelProfit is fetched via Google Sheets sync but never used in any view. ChannelProfitData type should already exist in googleSheetService.ts. Check the actual type and see how it maps to ProfitAnalysisView's channel breakdown."
     }
   ]
 }

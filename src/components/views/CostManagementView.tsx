@@ -23,6 +23,8 @@ import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { DynamicIcon } from '../ui/icon';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import DailyPerformanceView from './DailyPerformanceView';
+import MaterialPriceImpactView from './MaterialPriceImpactView';
 import { Button } from '../ui/button';
 
 interface Props {
@@ -434,6 +436,8 @@ export const CostManagementView: React.FC<Props> = ({
     { key: 'sub', label: '부재료', icon: 'category' },
     { key: 'labor', label: '노무비', icon: 'people' },
     { key: 'overhead', label: '수도광열전력', icon: 'bolt' },
+    { key: 'dailyPerformance', label: '일별 성과', icon: 'trending_up' },
+    { key: 'priceImpact', label: '단가 영향', icon: 'price_change' },
   ];
 
   // 현재 활성 탭 추적 (인사이트 필터링용)
@@ -1608,6 +1612,48 @@ export const CostManagementView: React.FC<Props> = ({
           </div>
           </InsightSection>
         );
+        // ========== 일별 성과 (US-003) ==========
+        if (activeTab === 'dailyPerformance') {
+          const dp = insights?.dailyPerformance;
+          if (!dp || dp.metrics.length === 0) {
+            return (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
+                <DynamicIcon name="trending_up" size={48} className="mb-3" />
+                <p className="text-lg font-medium">노무비 데이터를 연동하면 일별 성과를 분석합니다</p>
+                <p className="text-sm mt-1">Google Sheets에서 노무비(Labor) 데이터를 연결해주세요</p>
+              </div>
+            );
+          }
+          return (
+            <DailyPerformanceView
+              data={dp.metrics}
+              staffingSuggestions={dp.staffingSuggestions}
+              targets={{ laborRatio: dp.avgLaborRatio > 0 ? dp.metrics[0]?.targetLaborRatio ?? 25 : 25, materialRatio: dp.metrics[0]?.targetMaterialRatio ?? 45 }}
+            />
+          );
+        }
+
+        // ========== 단가 영향 (US-004) ==========
+        if (activeTab === 'priceImpact') {
+          const mpi = insights?.materialPriceImpact;
+          if (!mpi || mpi.priceHistory.length === 0) {
+            return (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
+                <DynamicIcon name="price_change" size={48} className="mb-3" />
+                <p className="text-lg font-medium">구매 데이터를 연동하면 단가 변동 분석을 제공합니다</p>
+                <p className="text-sm mt-1">충분한 구매 이력이 필요합니다 (최소 2건 이상의 거래)</p>
+              </div>
+            );
+          }
+          return (
+            <MaterialPriceImpactView
+              priceHistory={mpi.priceHistory}
+              impacts={mpi.impacts}
+              onItemClick={onItemClick as any}
+            />
+          );
+        }
+
         } catch (err) {
           console.error('[CostManagementView] 렌더링 오류:', err);
           return (

@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { SubTabLayout } from '../layout';
 import { formatCurrency, formatAxisKRW, formatPercent } from '../../utils/format';
-import type { DailySalesData, SalesDetailData, PurchaseData } from '../../services/googleSheetService';
+import type { DailySalesData, SalesDetailData, PurchaseData, ChannelProfitItem } from '../../services/googleSheetService';
 import type { DashboardInsights } from '../../services/insightService';
 import {
   computeChannelRevenue,
@@ -33,6 +33,7 @@ interface Props {
   purchases: PurchaseData[];
   insights: DashboardInsights | null;
   inventoryAdjustment?: InventoryAdjustment | null;
+  channelProfit?: ChannelProfitItem[];
   onItemClick: (item: import('../../types').ModalItem) => void;
   onTabChange?: (tab: string) => void;
 }
@@ -41,7 +42,7 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 const CHANNEL_COLORS = ['#3B82F6', '#10B981', '#F59E0B'];
 const BUDGET_COLORS = { rawMaterial: '#3B82F6', subMaterial: '#10B981', labor: '#F59E0B', overhead: '#EF4444' };
 
-export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, purchases, insights, inventoryAdjustment = null, onItemClick, onTabChange }) => {
+export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, purchases, insights, inventoryAdjustment = null, channelProfit = [], onItemClick, onTabChange }) => {
   const config = useBusinessConfig();
   const { dateRange } = useUI();
 
@@ -879,6 +880,31 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
                 </div>
               ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
             </Card>
+
+            {/* 일별 채널별 매출 추이 (gsChannelProfit) */}
+            {channelProfit.length > 0 && (
+              <Card className="p-6">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <DynamicIcon name="stacked_line_chart" size={20} className="text-blue-500" />
+                  일별 채널별 매출 추이
+                  <span className="text-xs font-normal text-gray-400 ml-2">Google Sheet 데이터</span>
+                </h3>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={channelProfit.slice(-30)} margin={{ left: 10, right: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" height={45} />
+                      <YAxis tick={{ fontSize: 10 }} tickFormatter={formatAxisKRW} />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="channels.jasa" name="자사몰" fill="#3B82F6" stackId="ch" />
+                      <Bar dataKey="channels.coupang" name="쿠팡" fill="#10B981" stackId="ch" />
+                      <Bar dataKey="channels.kurly" name="컬리" fill="#F59E0B" stackId="ch" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
 
             {/* 주간 요약 테이블 */}
             <Card className="p-6">

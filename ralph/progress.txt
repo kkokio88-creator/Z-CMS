@@ -1,42 +1,42 @@
-# Ralph Progress: bom-enhancement
+# Ralph Progress: view-data-enhancement
 # Started: 2026-02-25
-# Completed: 2026-02-25
 
-## US-001: SOP 코드 파서 유틸 ✅
-- Created src/utils/sopCodeParser.ts
-- parseSopCode(), validateBomEntry(), validateBomDataBatch()
-- Types: ParsedSopCode, BomValidationResult, BomCoverageResult, BomHealthScore
+## US-001: computeDailyPerformance (PASS)
+- Added DailyPerformanceInsight interface to insightService.ts
+- computeDailyPerformance() computes daily labor/material ratios from LaborDailyData + DailySalesData + PurchaseData
+- Generates StaffingSuggestion[] for above-target days
+- Integrated into computeAllInsights()
 
-## US-002: BOM 분석 서비스 ✅
-- Created src/services/bomAnalysisService.ts
-- computeSalesBasedConsumption, computeConsumptionVariance
-- computeBomCoverage, validateBomData, computeBomHealthScore
+## US-002: computeMaterialPriceImpact (PASS)
+- Added MaterialPriceImpactInsight interface to insightService.ts
+- computeMaterialPriceImpact() extracts per-material daily price history from purchases
+- Calculates week/month price changes, identifies >5% changes
+- Computes BOM-linked product cost impact with AffectedProduct[]
+- Integrated into computeAllInsights()
 
-## US-003: computeBomVariance 수정 ✅
-- Added salesDetail parameter to computeBomVariance in insightService.ts
-- Sales-based expected quantity calculation replaces uniform distribution
-- Legacy fallback preserved when salesDetail unavailable
+## US-003: DailyPerformanceView routing (PASS)
+- Added 'dailyPerformance' tab to CostManagementView
+- Added dailyPerformance/priceImpact tab paths to routeConfig.ts
+- Renders DailyPerformanceView with data from insights.dailyPerformance
 
-## US-004: computeWasteAnalysis 수정 ✅
-- Actual purchase-based unit cost calculation
-- actualUnitCostUsed + unitCostUsed fields added to WasteAnalysisInsight
+## US-004: MaterialPriceImpactView routing (PASS)
+- Added 'priceImpact' tab to CostManagementView
+- Renders MaterialPriceImpactView with data from insights.materialPriceImpact
 
-## US-005: BOM 개요(Overview) 탭 ✅
-- BOM 건전성 점수 KPI (종합/데이터품질/커버리지/차이/이상)
-- BOM 커버리지 분석 카드 (프로그레스 바 + 미등록 제품/자재)
-- SOP 코드 검증 결과 (준수율, 오류 유형별)
-- 판매 기반 투입 오차 요약 테이블
+## US-005: Dynamic supplier extraction (PASS)
+- Removed hardcoded SUPPLIERS array from InventoryOrderView
+- Created extractSuppliersFromPurchases() function
+- Updated getSupplierForProduct() to accept suppliers parameter
+- All 5 call sites updated to pass dynamic suppliers
 
-## US-006: 투입오차 탭 강화 ✅
-- Sales-based variance data from fixed computeBomVariance
-- Drilldown uses sales quantities instead of uniform distribution
-- consumptionVariance computed from bomAnalysisService
+## US-006: gsInventorySnapshots integration (PASS)
+- Added inventorySnapshots prop to InventoryOrderView
+- Passed gsInventorySnapshots from App.tsx
+- Added snapshot trend computation in inventoryCost tab
+- Added LineChart for total inventory quantity over time
 
-## US-007: 폐기 비용 표시 수정 ✅
-- actualUnitCostUsed badge on waste tab (실제원가 기반 / 설정값 기반)
-- Unit cost displayed alongside badge
-
-## Verification
-- TypeScript: 0 errors
-- Build: success (3m 10s)
-- All 7/7 stories passed
+## US-007: gsChannelProfit integration (PASS)
+- Added channelProfit prop to ProfitAnalysisView (ChannelProfitItem[])
+- Passed gsChannelProfit from App.tsx
+- Added daily channel-specific stacked BarChart in trend tab (jasa, coupang, kurly)
+- Shows last 30 days of Google Sheet-sourced channel profit data

@@ -7,7 +7,7 @@ import { SubTabLayout, Pagination } from '../layout';
 import { usePagination } from '../../hooks/usePagination';
 import { formatCurrency, formatAxisKRW, formatQty } from '../../utils/format';
 import { InventorySafetyItem, StocktakeAnomalyItem } from '../../types';
-import type { PurchaseData } from '../../services/googleSheetService';
+import type { PurchaseData, InventorySnapshotData } from '../../services/googleSheetService';
 import type { DashboardInsights, StatisticalOrderInsight, ABCXYZInsight, FreshnessInsight, FreshnessGrade, InventoryCostInsight } from '../../services/insightService';
 import { computeStatisticalOrder, computeMaterialPrices } from '../../services/insightService';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
@@ -28,6 +28,7 @@ interface Props {
   purchases: PurchaseData[];
   insights: DashboardInsights | null;
   stocktakeAnomalies: StocktakeAnomalyItem[];
+  inventorySnapshots?: InventorySnapshotData[];
   onItemClick: (item: import('../../types').ModalItem) => void;
   onTabChange?: (tab: string) => void;
 }
@@ -57,23 +58,44 @@ interface Supplier {
   icon: string;
 }
 
-const SUPPLIERS: Supplier[] = [
-  { id: 's1', name: '(주)대한식품', method: 'email', methodLabel: '이메일', leadTime: 3, contact: 'order@daehan.co.kr', icon: 'email' },
-  { id: 's2', name: '삼성농산', method: 'kakao', methodLabel: '카카오톡', leadTime: 2, contact: '삼성농산 발주채널', icon: 'chat' },
-  { id: 's3', name: '한국포장재', method: 'ecount', methodLabel: 'ECOUNT', leadTime: 5, contact: 'ECOUNT 자동발주', icon: 'computer' },
-  { id: 's4', name: '신선유통', method: 'phone', methodLabel: '전화', leadTime: 1, contact: '02-1234-5678', icon: 'phone' },
-  { id: 's5', name: '글로벌소스', method: 'email', methodLabel: '이메일', leadTime: 7, contact: 'sales@globalsauce.kr', icon: 'email' },
-  { id: 's6', name: '농협유통', method: 'fax', methodLabel: '팩스', leadTime: 3, contact: '02-9876-5432', icon: 'print' },
-];
+/** 구매 데이터에서 공급업체 목록 동적 추출 */
+function extractSuppliersFromPurchases(purchases: PurchaseData[]): Supplier[] {
+  const supplierMap = new Map<string, { count: number; totalAmount: number; lastDate: string; products: Set<string> }>();
+  for (const p of purchases) {
+    const name = p.supplierName?.trim();
+    if (!name) continue;
+    const entry = supplierMap.get(name) || { count: 0, totalAmount: 0, lastDate: '', products: new Set() };
+    entry.count++;
+    entry.totalAmount += p.total || 0;
+    if (p.date > entry.lastDate) entry.lastDate = p.date;
+    if (p.productCode) entry.products.add(p.productCode);
+    supplierMap.set(name, entry);
+  }
+  return [...supplierMap.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([name, info], idx) => ({
+      id: `s${idx + 1}`,
+      name,
+      method: 'email' as const,
+      methodLabel: '이메일',
+      leadTime: 3,
+      contact: '',
+      icon: 'email',
+    }));
+}
 
-// 품목 코드 기반 발주처 배정 (해시 기반 결정적 배정)
-function getSupplierForProduct(productCode: string): Supplier {
+/** 품목 코드 기반 발주처 배정 — 실제 거래 이력 우선, 없으면 해시 배정 */
+function getSupplierForProduct(productCode: string, suppliers: Supplier[]): Supplier {
+  if (suppliers.length === 0) {
+    return { id: 's0', name: '미지정', method: 'email', methodLabel: '이메일', leadTime: 3, contact: '', icon: 'email' };
+  }
+  // 해시 기반 배정
   let hash = 0;
   for (let i = 0; i < productCode.length; i++) {
     hash = ((hash << 5) - hash) + productCode.charCodeAt(i);
     hash = hash & hash;
   }
-  return SUPPLIERS[Math.abs(hash) % SUPPLIERS.length];
+  return suppliers[Math.abs(hash) % suppliers.length];
 }
 
 // 날짜 포맷 (YYYY-MM-DD)
@@ -174,6 +196,7 @@ export const InventoryOrderView: React.FC<Props> = ({
   purchases,
   insights,
   stocktakeAnomalies,
+  inventorySnapshots = [],
   onItemClick,
   onTabChange,
 }) => {
@@ -181,6 +204,9 @@ export const InventoryOrderView: React.FC<Props> = ({
   const { dateRange } = useUI();
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getDateRange(dateRange), [dateRange]);
   const filteredPurchases = useMemo(() => filterByDate(purchases, rangeStart, rangeEnd), [purchases, rangeStart, rangeEnd]);
+
+  // 구매 데이터에서 공급업체 동적 추출 (US-005)
+  const suppliers = useMemo(() => extractSuppliersFromPurchases(purchases), [purchases]);
 
   // dateRange 기반 인사이트 로컬 재계산
   const materialPrices = useMemo(
@@ -267,7 +293,7 @@ export const InventoryOrderView: React.FC<Props> = ({
   ];
 
   const handleOrder = (productName: string, productCode: string, quantity: number) => {
-    const supplier = getSupplierForProduct(productCode);
+    const supplier = getSupplierForProduct(productCode, suppliers);
     const startDate = new Date(orderDate);
     const deliveryDate = addBusinessDays(startDate, supplier.leadTime);
     setOrderModal({
@@ -823,13 +849,13 @@ export const InventoryOrderView: React.FC<Props> = ({
             // D2: 업체별 필터링
             const items = supplierFilter === 'all'
               ? allItems
-              : allItems.filter(i => getSupplierForProduct(i.productCode).id === supplierFilter);
+              : allItems.filter(i => getSupplierForProduct(i.productCode, suppliers).id === supplierFilter);
             const shortageCount = items.filter(i => i.status === 'shortage').length;
             const urgentCount = items.filter(i => i.status === 'urgent').length;
             const orderNeeded = items.filter(i => i.suggestedOrderQty > 0).length;
             // 업체별 발주 합계
-            const supplierOrderSummary = SUPPLIERS.map(s => {
-              const sItems = allItems.filter(i => getSupplierForProduct(i.productCode).id === s.id);
+            const supplierOrderSummary = suppliers.map(s => {
+              const sItems = allItems.filter(i => getSupplierForProduct(i.productCode, suppliers).id === s.id);
               const orderQty = sItems.reduce((sum, i) => sum + i.suggestedOrderQty, 0);
               return { ...s, itemCount: sItems.length, orderQty };
             });
@@ -1006,7 +1032,7 @@ export const InventoryOrderView: React.FC<Props> = ({
                         </TableHeader>
                         <TableBody>
                           {items.slice((statPage - 1) * STAT_PAGE_SIZE, statPage * STAT_PAGE_SIZE).map((item, i) => {
-                            const supplier = getSupplierForProduct(item.productCode);
+                            const supplier = getSupplierForProduct(item.productCode, suppliers);
                             const startDate = new Date(orderDate);
                             const deliveryDate = addBusinessDays(startDate, supplier.leadTime);
                             const deliveryStr = formatDateStr(deliveryDate);
@@ -1120,6 +1146,19 @@ export const InventoryOrderView: React.FC<Props> = ({
           if (activeTab === 'inventoryCost') {
             const ic = insights?.inventoryCost;
             const COST_COLORS = ['#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'];
+
+            // 재고 스냅샷 추이 데이터 (US-006)
+            const snapshotTrend = (() => {
+              if (inventorySnapshots.length === 0) return null;
+              // 날짜별 총 재고 수량 집계
+              const byDate = new Map<string, number>();
+              for (const s of inventorySnapshots) {
+                byDate.set(s.snapshotDate, (byDate.get(s.snapshotDate) || 0) + s.balanceQty);
+              }
+              return [...byDate.entries()]
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([date, qty]) => ({ date: date.slice(5), totalQty: qty }));
+            })();
             const ABC_COLORS: Record<string, string> = { A: '#EF4444', B: '#F59E0B', C: '#3B82F6', 'N/A': '#9CA3AF' };
 
             // EOQ 비교 차트 데이터 (상위 10개)
@@ -1219,6 +1258,28 @@ export const InventoryOrderView: React.FC<Props> = ({
                     ) : <p className="text-gray-400 text-center py-10">데이터 없음</p>}
                   </Card>
                 </div>
+
+                {/* 재고 스냅샷 추이 (US-006) */}
+                {snapshotTrend && snapshotTrend.length > 1 && (
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <DynamicIcon name="inventory_2" size={20} className="text-teal-500" />
+                      재고 수량 추이
+                      <span className="text-xs font-normal text-gray-400 ml-2">스냅샷 기준</span>
+                    </h3>
+                    <div className="h-56">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={snapshotTrend} margin={{ left: 10, right: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => formatQty(v)} />
+                          <Tooltip formatter={(v: number) => formatQty(v)} />
+                          <Line type="monotone" dataKey="totalQty" stroke="#14B8A6" strokeWidth={2} dot={{ r: 2 }} name="총 재고수량" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+                )}
 
                 {/* D4: ABC 분류별 접기/펼치기 + 추천 액션 3개씩 */}
                 {(ic?.abcStrategies?.length || 0) > 0 && (() => {

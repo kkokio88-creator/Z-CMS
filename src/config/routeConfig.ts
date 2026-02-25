@@ -49,6 +49,8 @@ export const ROUTES: Record<ViewType, RouteDefinition> = {
       { key: 'sub', path: 'sub' },
       { key: 'labor', path: 'labor' },
       { key: 'overhead', path: 'overhead' },
+      { key: 'dailyPerformance', path: 'daily-performance' },
+      { key: 'priceImpact', path: 'price-impact' },
     ],
   },
   production: {
