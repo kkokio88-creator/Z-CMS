@@ -51,6 +51,7 @@ export const ROUTES: Record<ViewType, RouteDefinition> = {
       { key: 'overhead', path: 'overhead' },
       { key: 'dailyPerformance', path: 'daily-performance' },
       { key: 'priceImpact', path: 'price-impact' },
+      { key: 'budgetExpense', path: 'budget-expense' },
     ],
   },
   production: {
@@ -65,6 +66,7 @@ export const ROUTES: Record<ViewType, RouteDefinition> = {
       { key: 'bomAnomaly', path: 'bom-anomaly' },
       { key: 'bomVariance', path: 'bom-variance' },
       { key: 'yield', path: 'yield' },
+      { key: 'integrity', path: 'integrity' },
     ],
   },
   inventory: {

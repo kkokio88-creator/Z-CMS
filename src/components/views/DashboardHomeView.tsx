@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from 'recharts';
-import { KPICard } from '../common';
+import { KPICard, ViewSkeleton } from '../common';
 import type { SyncStatusInfo } from '../../services/supabaseClient';
 import { formatCurrency } from '../../utils/format';
 import type { ProfitCenterScoreInsight, ProfitCenterScoreMetric } from '../../services/insightService';
@@ -27,6 +27,7 @@ interface DashboardHomeViewProps {
   dataSource?: 'backend' | 'direct' | false;
   syncStatus?: SyncStatusInfo | null;
   profitCenterScore?: ProfitCenterScoreInsight | null;
+  insights?: import('../../services/insightService').DashboardInsights | null;
 }
 
 /** 지표 카드 — 호버 시 공식+세부점수 툴팁 */
@@ -118,6 +119,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   dataSource,
   syncStatus,
   profitCenterScore,
+  insights,
   onNavigate,
 }) => {
   const { dateRange } = useUI();
@@ -226,6 +228,10 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       .map(d => ({ value: d.wasteFinishedEa || 0 })),
     [filteredProduction]
   );
+
+  if (isSyncing && dailySales.length === 0) {
+    return <ViewSkeleton kpiCount={4} showChart rows={3} />;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -409,6 +415,70 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           </div>
         </Card>
       </InsightSection>
+      )}
+
+      {/* 인사이트 요약 카드 */}
+      {(insights?.dailyPerformance || insights?.materialPriceImpact) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {insights?.dailyPerformance && (
+            <Card
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => onNavigate?.('cost')}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <DynamicIcon name="trending_up" size={18} className="text-blue-500" />
+                <span className="text-sm font-bold text-gray-900 dark:text-white">일별 성과 요약</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500">평균 노무비율</p>
+                  <p className={`text-lg font-bold ${insights.dailyPerformance.avgLaborRatio <= 25 ? 'text-green-600' : 'text-orange-600'}`}>
+                    {insights.dailyPerformance.avgLaborRatio.toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">평균 원재료비율</p>
+                  <p className={`text-lg font-bold ${insights.dailyPerformance.avgMaterialRatio <= 45 ? 'text-green-600' : 'text-orange-600'}`}>
+                    {insights.dailyPerformance.avgMaterialRatio.toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">목표 달성</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">
+                    {insights.dailyPerformance.onTargetDays}/{insights.dailyPerformance.totalDays}일
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+          {insights?.materialPriceImpact && insights.materialPriceImpact.highUrgencyCount > 0 && (
+            <Card
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-400"
+              onClick={() => onNavigate?.('cost')}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <DynamicIcon name="price_change" size={18} className="text-red-500" />
+                <span className="text-sm font-bold text-gray-900 dark:text-white">단가 변동 경보</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500">긴급 항목</p>
+                  <p className="text-lg font-bold text-red-600">{insights.materialPriceImpact.highUrgencyCount}건</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">총 원가 영향</p>
+                  <p className={`text-lg font-bold ${insights.materialPriceImpact.totalImpact > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(Math.abs(insights.materialPriceImpact.totalImpact))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">분석 대상</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">{insights.materialPriceImpact.impacts.length}개</p>
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Quick Actions */}

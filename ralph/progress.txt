@@ -1,42 +1,50 @@
-# Ralph Progress: view-data-enhancement
-# Started: 2026-02-25
+# Ralph Progress: orphan-views-activation
+# Started: 2026-02-26
 
-## US-001: computeDailyPerformance (PASS)
-- Added DailyPerformanceInsight interface to insightService.ts
-- computeDailyPerformance() computes daily labor/material ratios from LaborDailyData + DailySalesData + PurchaseData
-- Generates StaffingSuggestion[] for above-target days
-- Integrated into computeAllInsights()
+## US-001: computeBomYieldAnalysis (PASS)
+- insightService.ts에 computeBomYieldAnalysis() 추가
+- ProductionData + BomItemData에서 제품별 표준수율 vs 실제수율 비교
+- anomalyLevel: gap > 5% → critical, > 3% → warning
+- costImpact 계산 포함
+- DashboardInsights에 bomYieldAnalysis 추가
 
-## US-002: computeMaterialPriceImpact (PASS)
-- Added MaterialPriceImpactInsight interface to insightService.ts
-- computeMaterialPriceImpact() extracts per-material daily price history from purchases
-- Calculates week/month price changes, identifies >5% changes
-- Computes BOM-linked product cost impact with AffectedProduct[]
-- Integrated into computeAllInsights()
+## US-002: computeInventoryDiscrepancy (PASS)
+- insightService.ts에 computeInventoryDiscrepancy() 추가
+- InventorySnapshotData 시간순 재고 변동 vs 전표 수량 비교
+- discrepancyRate > 10% → critical, > 5% → warning
+- DashboardInsights에 inventoryDiscrepancy 추가
 
-## US-003: DailyPerformanceView routing (PASS)
-- Added 'dailyPerformance' tab to CostManagementView
-- Added dailyPerformance/priceImpact tab paths to routeConfig.ts
-- Renders DailyPerformanceView with data from insights.dailyPerformance
+## US-003: BomIntegrityAuditView → ProductionBomView (PASS)
+- ProductionBomView에 'integrity' 탭 추가
+- routeConfig.ts production에 integrity path 추가
+- BomIntegrityAuditView에 yieldData, discrepancyData 전달
+- 데이터 없을 때 빈 상태 안내 표시
 
-## US-004: MaterialPriceImpactView routing (PASS)
-- Added 'priceImpact' tab to CostManagementView
-- Renders MaterialPriceImpactView with data from insights.materialPriceImpact
+## US-004: computeBudgetExpense (PASS)
+- insightService.ts에 computeBudgetExpense() 추가
+- BudgetExpenseInsight 인터페이스 추가 (items, summary, alerts)
+- 공급처별 집계 → BudgetItem (fixed/variable 분류)
+- burnRate, projectedTotal, projectedOverrun 계산
+- ExpenseSummary: 전체 소진율, 고정/변동 분리, healthScore
+- BudgetAlert: 80% 초과 항목 경고
+- DashboardInsights에 budgetExpense 추가
 
-## US-005: Dynamic supplier extraction (PASS)
-- Removed hardcoded SUPPLIERS array from InventoryOrderView
-- Created extractSuppliersFromPurchases() function
-- Updated getSupplierForProduct() to accept suppliers parameter
-- All 5 call sites updated to pass dynamic suppliers
+## US-005: BudgetExpenseView → CostManagementView (PASS)
+- CostManagementView에 'budgetExpense' 탭 추가
+- routeConfig.ts cost에 budget-expense path 추가
+- BudgetExpenseView에 budgets, summary, alerts 전달
+- 데이터 없을 때 빈 상태 안내 표시
 
-## US-006: gsInventorySnapshots integration (PASS)
-- Added inventorySnapshots prop to InventoryOrderView
-- Passed gsInventorySnapshots from App.tsx
-- Added snapshot trend computation in inventoryCost tab
-- Added LineChart for total inventory quantity over time
+## US-006: ViewSkeleton 로딩 컴포넌트 (PASS)
+- src/components/common/ViewSkeleton.tsx 생성 (KPI + 차트 + 테이블 스켈레톤)
+- common/index.ts에 export 추가
+- DashboardHomeView: isSyncing && dailySales 없을 때 스켈레톤
+- ProfitAnalysisView: channelRevenue 계산 중 스켈레톤
+- CostManagementView: insights 없을 때 스켈레톤
 
-## US-007: gsChannelProfit integration (PASS)
-- Added channelProfit prop to ProfitAnalysisView (ChannelProfitItem[])
-- Passed gsChannelProfit from App.tsx
-- Added daily channel-specific stacked BarChart in trend tab (jasa, coupang, kurly)
-- Shows last 30 days of Google Sheet-sourced channel profit data
+## US-007: 대시보드 홈 인사이트 요약 카드 (PASS)
+- DashboardHomeView Props에 insights 추가
+- App.tsx에서 insights prop 전달
+- 일별 성과 요약 카드: 평균 노무비율, 원재료비율, 목표 달성일수
+- 단가 변동 경보 카드: 긴급 항목수, 총 원가 영향, 분석 대상 수
+- 카드 클릭 시 onNavigate('cost')로 원가관리 이동

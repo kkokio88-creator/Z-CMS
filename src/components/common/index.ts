@@ -7,3 +7,5 @@ export type { KPICardProps } from './KPICard';
 export { ErrorBoundary } from './ErrorBoundary';
 
 export { default as FormulaTooltip } from './FormulaTooltip';
+
+export { ViewSkeleton } from './ViewSkeleton';

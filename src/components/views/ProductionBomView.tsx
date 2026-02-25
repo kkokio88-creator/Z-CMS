@@ -21,6 +21,7 @@ import { Badge } from '../ui/badge';
 import { DynamicIcon } from '../ui/icon';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
 import { Button } from '../ui/button';
+import BomIntegrityAuditView from './BomIntegrityAuditView';
 
 interface Props {
   production: ProductionData[];
@@ -225,6 +226,7 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, sale
     { key: 'bomAnomaly', label: 'BOM 이상 감지', icon: 'warning' },
     { key: 'bomVariance', label: '투입오차 분석', icon: 'compare_arrows' },
     { key: 'yield', label: '수율 추적', icon: 'science' },
+    { key: 'integrity', label: 'BOM 정합성', icon: 'verified' },
   ];
 
   return (
@@ -1716,6 +1718,27 @@ export const ProductionBomView: React.FC<Props> = ({ production, purchases, sale
               )}
             </div>
             </InsightSection>
+          );
+        }
+
+        // ========== BOM 정합성 ==========
+        if (activeTab === 'integrity') {
+          const yieldData = insights?.bomYieldAnalysis;
+          const discrepancyData = insights?.inventoryDiscrepancy;
+          if ((!yieldData || yieldData.length === 0) && (!discrepancyData || discrepancyData.length === 0)) {
+            return (
+              <div className="text-center py-20">
+                <DynamicIcon name="verified" size={48} className="text-gray-300 mb-3 mx-auto" />
+                <p className="text-gray-500 dark:text-gray-400">BOM 및 재고 데이터를 연동하면 정합성 분석을 제공합니다.</p>
+                <p className="text-xs text-gray-400 mt-1">BOM 데이터 + 재고 스냅샷이 필요합니다.</p>
+              </div>
+            );
+          }
+          return (
+            <BomIntegrityAuditView
+              yieldData={yieldData || []}
+              discrepancyData={discrepancyData || []}
+            />
           );
         }
 

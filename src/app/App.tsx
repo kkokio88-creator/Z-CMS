@@ -366,6 +366,7 @@ function AppContent() {
                           dataSource={dataSource}
                           syncStatus={syncStatus}
                           profitCenterScore={filteredProfitCenterScore}
+                          insights={insights}
                         />
                       </ErrorBoundary>
                     } />

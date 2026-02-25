@@ -18,13 +18,14 @@ import { computeWeeklyCostScores } from '../../utils/costScoring';
 import { FormulaTooltip } from '../common';
 import { FORMULAS } from '../../constants/formulaDescriptions';
 import { InsightSection } from '../insight';
-import { FilterBar } from '../common';
+import { FilterBar, ViewSkeleton } from '../common';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { DynamicIcon } from '../ui/icon';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
 import DailyPerformanceView from './DailyPerformanceView';
 import MaterialPriceImpactView from './MaterialPriceImpactView';
+import BudgetExpenseView from './BudgetExpenseView';
 import { Button } from '../ui/button';
 
 interface Props {
@@ -438,6 +439,7 @@ export const CostManagementView: React.FC<Props> = ({
     { key: 'overhead', label: '수도광열전력', icon: 'bolt' },
     { key: 'dailyPerformance', label: '일별 성과', icon: 'trending_up' },
     { key: 'priceImpact', label: '단가 영향', icon: 'price_change' },
+    { key: 'budgetExpense', label: '예산 경비', icon: 'receipt_long' },
   ];
 
   // 현재 활성 탭 추적 (인사이트 필터링용)
@@ -506,6 +508,10 @@ export const CostManagementView: React.FC<Props> = ({
 
     <SubTabLayout title="원가 관리" tabs={tabs} onTabChange={(tab) => { setCurrentTab(tab); onTabChange?.(tab); }}>
       {(activeTab) => {
+        if (purchases.length > 0 && !insights) {
+          return <ViewSkeleton kpiCount={4} showChart rows={5} />;
+        }
+
         try {
         // ========== 원가 총괄 ==========
         if (activeTab === 'overview') {
@@ -1650,6 +1656,26 @@ export const CostManagementView: React.FC<Props> = ({
               priceHistory={mpi.priceHistory}
               impacts={mpi.impacts}
               onItemClick={onItemClick as any}
+            />
+          );
+        }
+
+        if (activeTab === 'budgetExpense') {
+          const be = insights?.budgetExpense;
+          if (!be || be.items.length === 0) {
+            return (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
+                <DynamicIcon name="receipt_long" size={48} className="mb-3" />
+                <p className="text-lg font-medium">구매 데이터를 연동하면 예산 대비 경비 분석을 제공합니다</p>
+                <p className="text-sm mt-1">구매 이력 데이터가 필요합니다.</p>
+              </div>
+            );
+          }
+          return (
+            <BudgetExpenseView
+              budgets={be.items}
+              summary={be.summary}
+              alerts={be.alerts}
             />
           );
         }

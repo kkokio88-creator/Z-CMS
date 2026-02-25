@@ -15,7 +15,7 @@ import type {
   InventorySnapshotData,
 } from './googleSheetService';
 import { getZScore } from './orderingService';
-import type { InventorySafetyItem, DailyPerformanceMetric, StaffingSuggestion, MaterialPriceHistory, MaterialCostImpact, AffectedProduct, PricePoint } from '../types';
+import type { InventorySafetyItem, DailyPerformanceMetric, StaffingSuggestion, MaterialPriceHistory, MaterialCostImpact, AffectedProduct, PricePoint, BomYieldAnalysisItem, InventoryDiscrepancyItem, BudgetItem, ExpenseSummary, BudgetAlert } from '../types';
 import { BusinessConfig, DEFAULT_BUSINESS_CONFIG, ProfitCenterGoal } from '../config/businessConfig';
 import type { ChannelCostSummary } from '../components/domain';
 import { interpolateBracket } from '../utils/costScoring';
@@ -500,6 +500,9 @@ export interface DashboardInsights {
   bomConsumptionAnomaly: BomConsumptionAnomalyInsight | null;
   dailyPerformance: DailyPerformanceInsight | null;
   materialPriceImpact: MaterialPriceImpactInsight | null;
+  bomYieldAnalysis: BomYieldAnalysisItem[] | null;
+  inventoryDiscrepancy: InventoryDiscrepancyItem[] | null;
+  budgetExpense: BudgetExpenseInsight | null;
 }
 
 export interface DailyPerformanceInsight {
@@ -516,6 +519,12 @@ export interface MaterialPriceImpactInsight {
   impacts: MaterialCostImpact[];
   totalImpact: number;
   highUrgencyCount: number;
+}
+
+export interface BudgetExpenseInsight {
+  items: BudgetItem[];
+  summary: ExpenseSummary;
+  alerts: BudgetAlert[];
 }
 
 export interface YieldDailyItem {
@@ -2874,6 +2883,18 @@ export function computeAllInsights(
     ? computeMaterialPriceImpact(purchases, bomData, materialMaster)
     : null;
 
+  const bomYieldAnalysis = (production.length > 0 && bomData.length > 0)
+    ? computeBomYieldAnalysis(production, bomData, materialMaster)
+    : null;
+
+  const inventoryDiscrepancy = (inventorySnapshots.length > 0 && purchases.length > 0)
+    ? computeInventoryDiscrepancy(inventorySnapshots, purchases)
+    : null;
+
+  const budgetExpense = purchases.length > 0
+    ? computeBudgetExpense(purchases, config)
+    : null;
+
   return {
     channelRevenue,
     productProfit,
@@ -2897,6 +2918,9 @@ export function computeAllInsights(
     bomConsumptionAnomaly,
     dailyPerformance,
     materialPriceImpact,
+    bomYieldAnalysis,
+    inventoryDiscrepancy,
+    budgetExpense,
   };
 }
 
@@ -3465,4 +3489,272 @@ export function computeMaterialPriceImpact(
     totalImpact: impacts.reduce((s, i) => s + i.totalDeltaCost, 0),
     highUrgencyCount: impacts.filter(i => i.urgencyLevel === 'critical').length,
   };
+}
+
+// ==============================
+// US-001: BOM Yield Analysis
+// ==============================
+
+export function computeBomYieldAnalysis(
+  production: ProductionData[],
+  bomData: BomItemData[],
+  materialMaster: MaterialMasterItem[],
+): BomYieldAnalysisItem[] {
+  if (production.length === 0 || bomData.length === 0) return [];
+
+  // 제품코드 → BOM 자재 목록
+  const bomByProduct = new Map<string, BomItemData[]>();
+  for (const b of bomData) {
+    const list = bomByProduct.get(b.productCode) || [];
+    list.push(b);
+    bomByProduct.set(b.productCode, list);
+  }
+
+  // 자재코드 → 단가
+  const priceMap = new Map<string, number>();
+  for (const m of materialMaster) {
+    if (m.materialCode && m.unitPrice > 0) priceMap.set(m.materialCode.trim(), m.unitPrice);
+  }
+
+  // 자재코드 → 표준 수율(preprocessYield)
+  const yieldMap = new Map<string, number>();
+  for (const m of materialMaster) {
+    if (m.materialCode && m.preprocessYield > 0) yieldMap.set(m.materialCode.trim(), m.preprocessYield);
+  }
+
+  const results: BomYieldAnalysisItem[] = [];
+  let idx = 0;
+
+  // 생산일별 제품별 수율 분석
+  const prodByDate = new Map<string, ProductionData[]>();
+  for (const p of production) {
+    const list = prodByDate.get(p.date) || [];
+    list.push(p);
+    prodByDate.set(p.date, list);
+  }
+
+  for (const [date, prods] of prodByDate) {
+    const totalProdQty = prods.reduce((s, p) => s + p.prodQtyTotal, 0);
+    if (totalProdQty <= 0) continue;
+
+    // BOM 기준 총 투입 예정량 vs 실제 생산량으로 수율 추정
+    for (const [productCode, bomItems] of bomByProduct) {
+      const totalBomInput = bomItems.reduce((s, b) => s + b.consumptionQty * b.productionQty, 0);
+      if (totalBomInput <= 0) continue;
+
+      const stdYield = bomItems[0]?.productionQty > 0
+        ? yieldMap.get(bomItems[0].materialCode.trim()) ?? 95
+        : 95;
+
+      // 실제 수율: 생산량 / (BOM 투입량) × 100 (간소 추정)
+      const actualYield = Math.min(100, Math.round((totalProdQty / totalBomInput) * 100 * 10) / 10);
+      const yieldGap = Math.round((actualYield - stdYield) * 10) / 10;
+      const absGap = Math.abs(yieldGap);
+
+      const anomalyLevel: import('../types').AnomalyLevel =
+        absGap > 5 ? 'critical' : absGap > 3 ? 'warning' : 'normal';
+
+      // 원가 영향: 수율 차이 × 자재 단가 × 투입량
+      const avgUnitPrice = bomItems.reduce((s, b) => s + (priceMap.get(b.materialCode.trim()) || 0), 0) / bomItems.length;
+      const costImpact = Math.round(Math.abs(yieldGap / 100) * avgUnitPrice * totalBomInput);
+
+      results.push({
+        id: `yield-${++idx}`,
+        productCode,
+        productName: bomItems[0]?.productName || productCode,
+        process: bomItems[0]?.location || '일반',
+        stdYield,
+        actualYield,
+        yieldGap,
+        transactionDate: date,
+        anomalyLevel,
+        costImpact,
+      });
+    }
+  }
+
+  return results.sort((a, b) => Math.abs(b.yieldGap) - Math.abs(a.yieldGap));
+}
+
+// ==============================
+// US-002: Inventory Discrepancy
+// ==============================
+
+export function computeInventoryDiscrepancy(
+  snapshots: InventorySnapshotData[],
+  purchases: PurchaseData[],
+): InventoryDiscrepancyItem[] {
+  if (snapshots.length === 0) return [];
+
+  // 자재코드별 스냅샷 시간순 정렬
+  const byMaterial = new Map<string, InventorySnapshotData[]>();
+  for (const s of snapshots) {
+    const list = byMaterial.get(s.productCode) || [];
+    list.push(s);
+    byMaterial.set(s.productCode, list);
+  }
+
+  // 자재코드별 구매 수량 집계
+  const purchaseQtyByMaterial = new Map<string, number>();
+  for (const p of purchases) {
+    purchaseQtyByMaterial.set(p.productCode, (purchaseQtyByMaterial.get(p.productCode) || 0) + p.quantity);
+  }
+
+  const results: InventoryDiscrepancyItem[] = [];
+  let idx = 0;
+
+  for (const [materialCode, snaps] of byMaterial) {
+    if (snaps.length < 2) continue;
+    const sorted = [...snaps].sort((a, b) => a.snapshotDate.localeCompare(b.snapshotDate));
+
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const actualChange = last.balanceQty - first.balanceQty;
+
+    // 전표상 수량: 해당 자재의 구매량 (기간 내)
+    const transactionQty = purchaseQtyByMaterial.get(materialCode) || 0;
+    if (transactionQty === 0 && actualChange === 0) continue;
+
+    const discrepancyQty = actualChange - transactionQty;
+    const discrepancyRate = transactionQty !== 0
+      ? Math.round(Math.abs(discrepancyQty) / Math.abs(transactionQty) * 1000) / 10
+      : (discrepancyQty !== 0 ? 100 : 0);
+
+    const absRate = Math.abs(discrepancyRate);
+    const anomalyLevel: import('../types').AnomalyLevel =
+      absRate > 10 ? 'critical' : absRate > 5 ? 'warning' : 'normal';
+
+    if (anomalyLevel === 'normal' && Math.abs(discrepancyQty) < 1) continue;
+
+    results.push({
+      id: `disc-${++idx}`,
+      materialCode,
+      materialName: first.productName || materialCode,
+      warehouse: first.warehouseCode || '',
+      transactionQty,
+      physicalQty: last.balanceQty,
+      discrepancyQty,
+      discrepancyRate,
+      actionStatus: 'pending',
+      lastCheckedDate: last.snapshotDate,
+    });
+  }
+
+  return results.sort((a, b) => Math.abs(b.discrepancyRate) - Math.abs(a.discrepancyRate));
+}
+
+// ==============================
+// US-004: Budget Expense Analysis
+// ==============================
+
+export function computeBudgetExpense(
+  purchases: PurchaseData[],
+  config: BusinessConfig = DEFAULT_BUSINESS_CONFIG,
+): BudgetExpenseInsight {
+  // 공급처별 집계 → BudgetItem으로 변환
+  // 변동비(원재료/부재료): 대부분 구매 항목, 고정비: 임대/관리 등
+  const isFixed = (name: string): boolean => {
+    const n = name.toLowerCase();
+    return n.includes('임대') || n.includes('보험') || n.includes('감가') || n.includes('리스');
+  };
+
+  // 공급처별 집계
+  const vendorTotals = new Map<string, { name: string; total: number; category: 'fixed' | 'variable' }>();
+  for (const p of purchases) {
+    const vendorKey = p.supplierName || p.productName || '기타';
+    const existing = vendorTotals.get(vendorKey);
+    if (existing) {
+      existing.total += p.total;
+    } else {
+      vendorTotals.set(vendorKey, {
+        name: vendorKey,
+        total: p.total,
+        category: isFixed(p.productName) ? 'fixed' : 'variable',
+      });
+    }
+  }
+
+  // 월간 예산 추정 (실적의 110%)
+  const totalUsed = purchases.reduce((s, p) => s + p.total, 0);
+  const monthlyBudget = (config as any).monthlyBudget ?? Math.round(totalUsed * 1.1);
+
+  // 경과일 / 잔여일 계산
+  const now = new Date();
+  const daysElapsed = now.getDate();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysRemaining = lastDay - daysElapsed;
+
+  const items: BudgetItem[] = [];
+  let itemIdx = 0;
+  for (const [vendorKey, vendor] of vendorTotals) {
+    const budgetRatio = totalUsed > 0 ? vendor.total / totalUsed : 0;
+    const budget = Math.round(monthlyBudget * budgetRatio);
+    const burnRate = budget > 0 ? Math.round(vendor.total / budget * 1000) / 10 : 0;
+    const dailyBurn = daysElapsed > 0 ? Math.round(vendor.total / daysElapsed) : 0;
+    const projectedTotal = dailyBurn * lastDay;
+    const projectedOverrun = Math.max(0, projectedTotal - budget);
+    const status: import('../types').BudgetStatus = burnRate > 90 ? 'critical' : burnRate > 80 ? 'warning' : 'normal';
+
+    items.push({
+      id: `budget-${++itemIdx}`,
+      category: vendor.category,
+      accountCode: `ACC-${String(itemIdx).padStart(3, '0')}`,
+      accountName: vendor.name,
+      vendorId: vendorKey,
+      vendorName: vendor.name,
+      budgetAmount: budget,
+      usedAmount: vendor.total,
+      remainingAmount: budget - vendor.total,
+      burnRate,
+      dailyBurnRate: dailyBurn,
+      projectedTotal,
+      projectedOverrun,
+      daysElapsed,
+      daysRemaining,
+      status,
+      lastUpdated: now.toISOString(),
+    });
+  }
+
+  items.sort((a, b) => b.burnRate - a.burnRate);
+
+  const fixedItems = items.filter(i => i.category === 'fixed');
+  const variableItems = items.filter(i => i.category === 'variable');
+  const totalBudget = items.reduce((s, i) => s + i.budgetAmount, 0);
+  const totalUsedAmt = items.reduce((s, i) => s + i.usedAmount, 0);
+  const overallBurnRate = totalBudget > 0 ? Math.round(totalUsedAmt / totalBudget * 1000) / 10 : 0;
+  const dailyAvgAll = daysElapsed > 0 ? Math.round(totalUsedAmt / daysElapsed) : 0;
+  const projectedMonthEnd = dailyAvgAll * lastDay;
+
+  const summary: ExpenseSummary = {
+    period: now.toISOString().slice(0, 7),
+    totalBudget,
+    totalUsed: totalUsedAmt,
+    totalRemaining: totalBudget - totalUsedAmt,
+    overallBurnRate,
+    fixedCostBudget: fixedItems.reduce((s, i) => s + i.budgetAmount, 0),
+    fixedCostUsed: fixedItems.reduce((s, i) => s + i.usedAmount, 0),
+    variableCostBudget: variableItems.reduce((s, i) => s + i.budgetAmount, 0),
+    variableCostUsed: variableItems.reduce((s, i) => s + i.usedAmount, 0),
+    overrunRisk: projectedMonthEnd > totalBudget,
+    projectedMonthEnd,
+    healthScore: Math.max(0, Math.min(100, Math.round(100 - overallBurnRate + 10))),
+  };
+
+  const alerts: BudgetAlert[] = items
+    .filter(i => i.burnRate > 80)
+    .map((i, idx) => ({
+      id: `alert-${idx + 1}`,
+      budgetItemId: i.id,
+      accountName: i.accountName,
+      alertType: (i.burnRate > 100 ? 'exceeded' : 'approaching') as 'approaching' | 'exceeded' | 'irregular',
+      message: i.burnRate > 100
+        ? `${i.accountName} 예산 초과 (${i.burnRate}%)`
+        : `${i.accountName} 예산 소진율 ${i.burnRate}% 도달`,
+      severity: (i.burnRate > 90 ? 'critical' : 'warning') as import('../types').BudgetStatus,
+      createdAt: now.toISOString(),
+      acknowledged: false,
+    }));
+
+  return { items, summary, alerts };
 }

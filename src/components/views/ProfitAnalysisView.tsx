@@ -21,7 +21,7 @@ import { groupByWeek, weekKeyToLabel, getSortedWeekEntries } from '../../utils/w
 import { useUI } from '../../contexts/UIContext';
 import { InsightSection } from '../insight';
 import { getDateRange, filterByDate, getRangeLabel } from '../../utils/dateRange';
-import { FormulaTooltip } from '../common';
+import { FormulaTooltip, ViewSkeleton } from '../common';
 import { FORMULAS } from '../../constants/formulaDescriptions';
 import { Card } from '../ui/card';
 import { DynamicIcon } from '../ui/icon';
@@ -162,6 +162,10 @@ export const ProfitAnalysisView: React.FC<Props> = ({ dailySales, salesDetail, p
   return (
     <SubTabLayout title="수익 분석" tabs={tabs} onTabChange={onTabChange}>
       {(activeTab) => {
+        if (dailySales.length > 0 && !channelRevenue && !revenueTrend) {
+          return <ViewSkeleton kpiCount={3} showChart rows={4} />;
+        }
+
         if (activeTab === 'channel') {
           const hasProfit = channelRevenue?.channels?.some(ch => ch.profit1 !== ch.revenue) ?? false;
           const channels = channelRevenue?.channels || [];
