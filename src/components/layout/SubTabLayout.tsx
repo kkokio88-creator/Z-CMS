@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { DynamicIcon } from '../ui/icon';
 import { cn } from '../../lib/utils';
+import { useUI } from '../../contexts/UIContext';
+import { ROUTES, tabKeyFromPath, tabPathFromKey } from '../../config/routeConfig';
 
 interface SubTab {
   key: string;
@@ -18,14 +21,35 @@ interface SubTabLayoutProps {
 }
 
 export const SubTabLayout: React.FC<SubTabLayoutProps> = ({ title, tabs, defaultTab, onTabChange, headerRight, children }) => {
-  const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.key || '');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { activeView } = useUI();
 
+  // URL에서 현재 탭 결정
+  const segments = location.pathname.split('/').filter(Boolean);
+  const urlTabSegment = segments[1]; // e.g., /profit/channel → "channel"
+  const urlTabKey = urlTabSegment ? tabKeyFromPath(activeView, urlTabSegment) : undefined;
+  const activeTab = urlTabKey ?? defaultTab ?? tabs[0]?.key ?? '';
+
+  // 탭 경로 없이 상위 URL 접근 시 기본 탭으로 리다이렉트
+  useEffect(() => {
+    if (!urlTabSegment && tabs.length > 0) {
+      const firstTab = defaultTab ?? tabs[0].key;
+      const route = ROUTES[activeView];
+      const path = tabPathFromKey(activeView, firstTab);
+      navigate(`${route.path}/${path}`, { replace: true });
+    }
+  }, [urlTabSegment, tabs, defaultTab, activeView, navigate]);
+
+  // 외부에 현재 탭 알림
   useEffect(() => {
     onTabChange?.(activeTab);
-  }, []);
+  }, [activeTab]);
 
   const handleTabChange = (key: string) => {
-    setActiveTab(key);
+    const route = ROUTES[activeView];
+    const path = tabPathFromKey(activeView, key);
+    navigate(`${route.path}/${path}`, { replace: true });
     onTabChange?.(key);
   };
 

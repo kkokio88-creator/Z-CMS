@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { Routes, Route, Navigate } from 'react-router';
 import { Sidebar, Header } from '../components/layout';
 import { NotificationPanel, Modal, ModalManager } from '../components/modals';
 const DashboardHomeView = React.lazy(() => import('../components/views/DashboardHomeView').then(m => ({ default: m.DashboardHomeView })));
@@ -31,6 +32,7 @@ import { exportViewToCsv } from '../utils/csvExport';
 import { loadBusinessConfig } from '../config/businessConfig';
 import { getPageTitle } from '../config/viewConfig';
 import { useSyncManager } from '../hooks/useSyncManager';
+import { NotFoundView } from '../components/views/NotFoundView';
 
 type ViewType = UIViewType;
 
@@ -248,12 +250,14 @@ function AppContent() {
     }
   }, [dateRange, gsDailySales, gsSalesDetail, gsPurchases, gsProduction, gsUtilities, gsLabor, inventoryAdjustment, bizConfig, channelCosts]);
 
-  const renderActiveView = () => {
-    if (!initialLoadDone && isSyncing) {
+  // Loading / no-data guards
+  const isLoading = !initialLoadDone && isSyncing;
+  const hasData = profitData.length > 0 || inventoryData.length > 0 || gsDailySales.length > 0 || gsPurchases.length > 0 || gsProduction.length > 0;
+
+  const renderLoadingOrEmpty = () => {
+    if (isLoading) {
       return <div className="p-10 text-center text-gray-500">ECOUNT ERP 데이터 동기화 중...</div>;
     }
-
-    const hasData = profitData.length > 0 || inventoryData.length > 0 || gsDailySales.length > 0 || gsPurchases.length > 0 || gsProduction.length > 0;
     if (initialLoadDone && !hasData && activeView !== 'settings') {
       return (
         <div className="flex flex-col items-center justify-center h-full p-10 text-center">
@@ -278,108 +282,7 @@ function AppContent() {
         </div>
       );
     }
-
-    switch (activeView) {
-      case 'home':
-      default:
-        return (
-          <ErrorBoundary fallbackTitle="대시보드 로드 중 오류" key="home">
-            <DashboardHomeView
-              onSync={handleEcountSync}
-              isSyncing={isSyncing}
-              lastSyncTime={lastSyncTime}
-              dailySales={gsDailySales}
-              salesDetail={gsSalesDetail}
-              production={gsProduction}
-              purchases={gsPurchases}
-              onNavigate={view => handleSetActiveView(view as ViewType)}
-              dataSource={dataSource}
-              syncStatus={syncStatus}
-              profitCenterScore={filteredProfitCenterScore}
-            />
-          </ErrorBoundary>
-        );
-      case 'profit':
-        return (
-          <ErrorBoundary fallbackTitle="수익 분석 로드 중 오류" key="profit">
-            <ProfitAnalysisView
-              dailySales={gsDailySales}
-              salesDetail={gsSalesDetail}
-              purchases={gsPurchases}
-              insights={insights}
-              inventoryAdjustment={inventoryAdjustment}
-              onItemClick={handleItemClick}
-              onTabChange={setActiveSubTab}
-            />
-          </ErrorBoundary>
-        );
-      case 'sales':
-        return (
-          <ErrorBoundary fallbackTitle="매출 분석 로드 중 오류" key="sales">
-            <SalesAnalysisView
-              dailySales={gsDailySales}
-              salesDetail={gsSalesDetail}
-              purchases={gsPurchases}
-              insights={insights}
-              onItemClick={handleItemClick}
-              onTabChange={setActiveSubTab}
-            />
-          </ErrorBoundary>
-        );
-      case 'cost':
-        return (
-          <ErrorBoundary fallbackTitle="원가 관리 로드 중 오류" key="cost">
-            <CostManagementView
-              purchases={gsPurchases}
-              utilities={gsUtilities}
-              production={gsProduction}
-              dailySales={gsDailySales}
-              salesDetail={gsSalesDetail}
-              labor={gsLabor}
-              insights={insights}
-              profitCenterScore={filteredProfitCenterScore}
-              inventoryAdjustment={inventoryAdjustment}
-              bomData={gsBom}
-              materialMaster={gsMaterialMaster}
-              onItemClick={handleItemClick}
-              onTabChange={setActiveSubTab}
-            />
-          </ErrorBoundary>
-        );
-      case 'production':
-        return (
-          <ErrorBoundary fallbackTitle="생산/BOM 로드 중 오류" key="production">
-            <ProductionBomView
-              production={gsProduction}
-              purchases={gsPurchases}
-              insights={insights}
-              bomData={gsBom}
-              materialMaster={gsMaterialMaster}
-              onItemClick={handleItemClick}
-              onTabChange={setActiveSubTab}
-            />
-          </ErrorBoundary>
-        );
-      case 'inventory':
-        return (
-          <ErrorBoundary fallbackTitle="재고/발주 로드 중 오류" key="inventory">
-            <InventoryOrderView
-              inventoryData={inventoryData}
-              purchases={gsPurchases}
-              insights={insights}
-              stocktakeAnomalies={stocktakeAnomalies}
-              onItemClick={handleItemClick}
-              onTabChange={setActiveSubTab}
-            />
-          </ErrorBoundary>
-        );
-      case 'settings':
-        return (
-          <ErrorBoundary fallbackTitle="설정 로드 중 오류" key="settings">
-            <SettingsView />
-          </ErrorBoundary>
-        );
-    }
+    return null;
   };
 
   const pageTitle = getPageTitle(activeView);
@@ -414,16 +317,14 @@ function AppContent() {
     [insightMode, activeView, activeSubTab, insights]
   );
 
+  const loadingOrEmpty = renderLoadingOrEmpty();
+
   return (
     <SyncProvider value={syncContextValue}>
     <DataProvider value={dataContextValue}>
       <div className="flex h-screen bg-background-light dark:bg-background-dark overflow-hidden font-sans">
         <Sidebar
-          activeView={activeView}
-          onNavigate={handleSetActiveView}
           dataAvailability={dataAvailability}
-          isOpen={isSidebarOpen}
-          onClose={() => toggleSidebar()}
         />
 
         <main className="flex-1 flex flex-col overflow-hidden relative">
@@ -449,7 +350,103 @@ function AppContent() {
           <div className={`flex-1 overflow-auto p-6 scroll-smooth transition-all duration-300 ${insightMode ? 'bg-gray-100/50 dark:bg-gray-950/50' : ''}`}>
             <InsightCardsProvider value={insightCards}>
               <React.Suspense fallback={<div className="p-10 text-center text-gray-500">로딩 중...</div>}>
-                {renderActiveView()}
+                {loadingOrEmpty || (
+                  <Routes>
+                    <Route path="/" element={
+                      <ErrorBoundary fallbackTitle="대시보드 로드 중 오류" key="home">
+                        <DashboardHomeView
+                          onSync={handleEcountSync}
+                          isSyncing={isSyncing}
+                          lastSyncTime={lastSyncTime}
+                          dailySales={gsDailySales}
+                          salesDetail={gsSalesDetail}
+                          production={gsProduction}
+                          purchases={gsPurchases}
+                          onNavigate={view => handleSetActiveView(view as ViewType)}
+                          dataSource={dataSource}
+                          syncStatus={syncStatus}
+                          profitCenterScore={filteredProfitCenterScore}
+                        />
+                      </ErrorBoundary>
+                    } />
+                    <Route path="/profit/*" element={
+                      <ErrorBoundary fallbackTitle="수익 분석 로드 중 오류" key="profit">
+                        <ProfitAnalysisView
+                          dailySales={gsDailySales}
+                          salesDetail={gsSalesDetail}
+                          purchases={gsPurchases}
+                          insights={insights}
+                          inventoryAdjustment={inventoryAdjustment}
+                          onItemClick={handleItemClick}
+                          onTabChange={setActiveSubTab}
+                        />
+                      </ErrorBoundary>
+                    } />
+                    <Route path="/sales/*" element={
+                      <ErrorBoundary fallbackTitle="매출 분석 로드 중 오류" key="sales">
+                        <SalesAnalysisView
+                          dailySales={gsDailySales}
+                          salesDetail={gsSalesDetail}
+                          purchases={gsPurchases}
+                          insights={insights}
+                          onItemClick={handleItemClick}
+                          onTabChange={setActiveSubTab}
+                        />
+                      </ErrorBoundary>
+                    } />
+                    <Route path="/cost/*" element={
+                      <ErrorBoundary fallbackTitle="원가 관리 로드 중 오류" key="cost">
+                        <CostManagementView
+                          purchases={gsPurchases}
+                          utilities={gsUtilities}
+                          production={gsProduction}
+                          dailySales={gsDailySales}
+                          salesDetail={gsSalesDetail}
+                          labor={gsLabor}
+                          insights={insights}
+                          profitCenterScore={filteredProfitCenterScore}
+                          inventoryAdjustment={inventoryAdjustment}
+                          bomData={gsBom}
+                          materialMaster={gsMaterialMaster}
+                          onItemClick={handleItemClick}
+                          onTabChange={setActiveSubTab}
+                        />
+                      </ErrorBoundary>
+                    } />
+                    <Route path="/production/*" element={
+                      <ErrorBoundary fallbackTitle="생산/BOM 로드 중 오류" key="production">
+                        <ProductionBomView
+                          production={gsProduction}
+                          purchases={gsPurchases}
+                          salesDetail={gsSalesDetail}
+                          insights={insights}
+                          bomData={gsBom}
+                          materialMaster={gsMaterialMaster}
+                          onItemClick={handleItemClick}
+                          onTabChange={setActiveSubTab}
+                        />
+                      </ErrorBoundary>
+                    } />
+                    <Route path="/inventory/*" element={
+                      <ErrorBoundary fallbackTitle="재고/발주 로드 중 오류" key="inventory">
+                        <InventoryOrderView
+                          inventoryData={inventoryData}
+                          purchases={gsPurchases}
+                          insights={insights}
+                          stocktakeAnomalies={stocktakeAnomalies}
+                          onItemClick={handleItemClick}
+                          onTabChange={setActiveSubTab}
+                        />
+                      </ErrorBoundary>
+                    } />
+                    <Route path="/settings" element={
+                      <ErrorBoundary fallbackTitle="설정 로드 중 오류" key="settings">
+                        <SettingsView />
+                      </ErrorBoundary>
+                    } />
+                    <Route path="*" element={<NotFoundView />} />
+                  </Routes>
+                )}
               </React.Suspense>
             </InsightCardsProvider>
           </div>
