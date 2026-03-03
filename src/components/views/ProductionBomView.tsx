@@ -8,7 +8,7 @@ import { formatCurrency, formatAxisKRW, formatPercent, formatQty } from '../../u
 import type { ProductionData, PurchaseData, SalesDetailData, BomItemData, MaterialMasterItem } from '../../services/googleSheetService';
 import type { DashboardInsights, BomVarianceInsight, BomVarianceItem, YieldTrackingInsight, BomConsumptionAnomalyInsight, BomConsumptionAnomalyItem } from '../../services/insightService';
 import { computeWasteAnalysis, computeProductionEfficiency, computeBomVariance, computeYieldTracking } from '../../services/insightService';
-import { computeBomCoverage, computeSalesBasedConsumption, computeConsumptionVariance, validateBomData, computeBomHealthScore } from '../../services/bomAnalysisService';
+import { computeBomCoverage, computeSalesBasedConsumption, computeConsumptionVariance, validateBomData, computeBomHealthScore } from '../../services/bomService';
 import { useBusinessConfig } from '../../contexts/SettingsContext';
 import { useUI } from '../../contexts/UIContext';
 import { getDateRange, filterByDate } from '../../utils/dateRange';

@@ -1,3 +1,12 @@
 # Ralph Progress Log
-Started: Thu Feb 26 07:50:00 KST 2026
+Started: Tue Mar 04 2026
+Feature: insightService Decomposition
+
+## Codebase Patterns
+- insightService.ts: 3,760줄, 30+ export 함수
+- barrel re-export 패턴: export { fn } from './domainService'
+- consumer import 경로 무변경이 핵심 제약
+- 빌드 검증: npx tsc --noEmit && npm run build
+- 중복 서비스: costAnalysisService.ts(428줄), bomAnalysisService.ts(386줄)
+
 ---
