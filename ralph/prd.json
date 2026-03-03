@@ -129,8 +129,8 @@
         "npm run build 통과"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "최종 검증. wc -l로 파일별 줄 수 확인. grep으로 unused import 스캔. 빌드 로그에서 circular dependency 경고 확인."
+      "passes": true,
+      "notes": "완료. 전체 검증: insightService 398줄, dead import 0건, circular dep 0건, tsc+build PASS. commit: 6c3b779"
     }
   ]
 }
