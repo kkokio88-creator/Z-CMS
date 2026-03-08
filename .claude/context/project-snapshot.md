@@ -2,21 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Compact Instructions
-
-### 자동 compact 규칙
-- Ralph Loop에서 User Story 1개를 완료하고 git commit한 직후, 반드시 /compact 실행
-- /compact 실행 시 보존할 핵심 정보:
-  - ralph/prd.json의 현재 passes 상태 (어떤 스토리가 true/false인지)
-  - ralph/progress.txt의 Codebase Patterns 섹션 전체
-  - 현재 브랜치명과 마지막 커밋 해시
-  - 직전 스토리에서 발생한 에러와 해결 방법
-- compact 후 첫 번째 행동: ralph/prd.json과 ralph/progress.txt를 다시 읽어서 상태 확인
-
-### 컨텍스트 위기 대응
-- /context 명령으로 남은 토큰이 30% 이하이면, 현재 작업을 즉시 중단하고 /compact를 먼저 실행
-- compact가 실패할 경우: 현재 진행 상황을 ralph/progress.txt에 기록한 뒤 /clear 실행
-
 ## Project Overview
 
 Z-CMS is a React-based production analytics dashboard for waste and BOM (Bill of Materials) difference analysis. It integrates with ECOUNT ERP for real-time monitoring of inventory, profitability, and order management.

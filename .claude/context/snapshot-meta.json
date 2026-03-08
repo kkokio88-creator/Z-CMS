@@ -1,0 +1,9 @@
+{
+  "id": "snap-20260226-080746",
+  "timestamp": "2026-02-26T08:07:46+09:00",
+  "git_commit": "64312fdd0700689b32873ce5241ac2b9f6e3b38b",
+  "git_branch": "main",
+  "git_dirty": true,
+  "node_version": "v20.20.0",
+  "typescript_version": "5.8.3"
+}

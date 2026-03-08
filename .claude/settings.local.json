@@ -1,4 +1,16 @@
 {
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'LAST_COMMIT=$(git log -1 --pretty=%s 2>/dev/null || echo \"\"); if echo \"$LAST_COMMIT\" | grep -qE \"^feat: \\[US-\"; then echo \"{\\\"decision\\\": \\\"block\\\", \\\"reason\\\": \\\"스토리 커밋 감지: $LAST_COMMIT. 다음 스토리 시작 전에 /compact를 실행하세요. 보존 대상: prd.json passes 상태, progress.txt Codebase Patterns, 현재 브랜치명.\\\"}\"; else echo \"{\\\"decision\\\": \\\"approve\\\"}\"; fi'"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(npm run dev:*)",
@@ -70,7 +82,8 @@
       "Bash(cmd /c \"taskkill /PID 14512 /F\")",
       "Bash(cmd /c \"taskkill /PID 14512 /F 2>&1\")",
       "Bash(cmd /c \"tasklist | findstr node.exe\")",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(git status:*)"
     ]
   }
 }
